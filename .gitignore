@@ -3,3 +3,10 @@
 
 # Dataset 파일 제외
 dataset/
+
+__pycache__/
+*.pyc
+
+artifacts/
+
+mlruns/
