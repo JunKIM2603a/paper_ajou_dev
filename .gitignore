@@ -1,2 +1,5 @@
 # VSCode 설정 파일 제외
 .vscode/
+
+# Dataset 파일 제외
+dataset/
