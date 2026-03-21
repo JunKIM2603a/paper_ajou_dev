@@ -1,0 +1,14 @@
+artifact_uri: file:///D:/00_project/paper_ajou_dev/mlruns/792817433360501923/580998df1c6a46ddbaf347ad757514b3/artifacts
+end_time: 1774043110372
+entry_point_name: ''
+experiment_id: '792817433360501923'
+lifecycle_stage: active
+run_id: 580998df1c6a46ddbaf347ad757514b3
+run_name: DenseNet-121_trial_002
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1774042913454
+status: 3
+tags: []
+user_id: junkim

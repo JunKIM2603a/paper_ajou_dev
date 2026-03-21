@@ -1,0 +1,14 @@
+artifact_uri: file:///D:/00_project/paper_ajou_dev/mlruns/792817433360501923/1170198759c447ea841e544e776b7445/artifacts
+end_time: 1774040346418
+entry_point_name: ''
+experiment_id: '792817433360501923'
+lifecycle_stage: active
+run_id: 1170198759c447ea841e544e776b7445
+run_name: BioMedCLIP_trial_002
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1774040006264
+status: 3
+tags: []
+user_id: junkim

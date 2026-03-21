@@ -1,0 +1,14 @@
+artifact_uri: file:///D:/00_project/paper_ajou_dev/mlruns/792817433360501923/ba872428114640faa177245e576e5b1f/artifacts
+end_time: 1774062113293
+entry_point_name: ''
+experiment_id: '792817433360501923'
+lifecycle_stage: active
+run_id: ba872428114640faa177245e576e5b1f
+run_name: EyePACS_trial_003
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1774061999463
+status: 3
+tags: []
+user_id: junkim

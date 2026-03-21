@@ -1,0 +1,14 @@
+artifact_uri: file:///D:/00_project/paper_ajou_dev/mlruns/792817433360501923/a5b07e43e3804c9eac276b3f6b7807cd/artifacts
+end_time: 1774058711292
+entry_point_name: ''
+experiment_id: '792817433360501923'
+lifecycle_stage: active
+run_id: a5b07e43e3804c9eac276b3f6b7807cd
+run_name: DINOv2_ViT-S
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1774058145782
+status: 3
+tags: []
+user_id: junkim

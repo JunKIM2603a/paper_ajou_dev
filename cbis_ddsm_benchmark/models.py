@@ -73,10 +73,16 @@ def _build_timm_model(model_config: dict[str, Any], num_classes: int) -> nn.Modu
     except ImportError as exc:
         raise ImportError("timm is required for this model backend.") from exc
 
+    image_size = model_config.get("image_size")
+    model_kwargs: dict[str, Any] = {}
+    if image_size is not None:
+        model_kwargs["img_size"] = int(image_size)
+
     model = timm.create_model(
         model_config["architecture"],
         pretrained=bool(model_config.get("pretrained", False)),
         num_classes=num_classes,
+        **model_kwargs,
     )
     checkpoint_path = model_config.get("checkpoint_path")
     if checkpoint_path:
@@ -94,10 +100,17 @@ def _build_open_clip_model(model_config: dict[str, Any], num_classes: int) -> nn
     model_name = model_config["model_name"]
     pretrained = model_config.get("pretrained")
     checkpoint_path = model_config.get("checkpoint_path")
-    model, _, _ = open_clip.create_model_and_transforms(
-        model_name=model_name,
-        pretrained=pretrained,
-    )
+    if isinstance(pretrained, str) and pretrained.startswith(("hf-hub:", "local-dir:")):
+        # open_clip 3.x에서는 hf/local schema를 pretrained가 아니라 model_name으로 받아들인다.
+        model = open_clip.create_model_from_pretrained(
+            pretrained,
+            return_transform=False,
+        )
+    else:
+        model, _, _ = open_clip.create_model_and_transforms(
+            model_name=model_name,
+            pretrained=pretrained,
+        )
 
     class OpenClipVisionEncoder(nn.Module):
         def __init__(self, clip_model: nn.Module) -> None:
@@ -108,7 +121,7 @@ def _build_open_clip_model(model_config: dict[str, Any], num_classes: int) -> nn
             return self.clip_model.encode_image(x)
 
     encoder = OpenClipVisionEncoder(model)
-    feature_dim = model.visual.output_dim
+    feature_dim = _infer_open_clip_feature_dim(model)
     classifier = EncoderClassifier(encoder, feature_dim, num_classes)
     if checkpoint_path:
         _load_checkpoint(classifier, checkpoint_path)
@@ -152,6 +165,27 @@ def _load_checkpoint(model: nn.Module, checkpoint_path: str) -> None:
         print(f"[checkpoint] Missing keys: {missing[:5]}{'...' if len(missing) > 5 else ''}")
     if unexpected:
         print(f"[checkpoint] Unexpected keys: {unexpected[:5]}{'...' if len(unexpected) > 5 else ''}")
+
+
+def _infer_open_clip_feature_dim(model: nn.Module) -> int:
+    visual = getattr(model, "visual", None)
+    if visual is not None:
+        output_dim = getattr(visual, "output_dim", None)
+        if isinstance(output_dim, int):
+            return output_dim
+
+        head = getattr(visual, "head", None)
+        proj = getattr(head, "proj", None)
+        out_features = getattr(proj, "out_features", None)
+        if isinstance(out_features, int):
+            return out_features
+
+    with torch.no_grad():
+        sample = torch.zeros(1, 3, 224, 224)
+        features = model.encode_image(sample)
+    if features.ndim != 2:
+        raise RuntimeError(f"Unexpected open_clip image feature shape: {tuple(features.shape)}")
+    return int(features.shape[-1])
 
 
 

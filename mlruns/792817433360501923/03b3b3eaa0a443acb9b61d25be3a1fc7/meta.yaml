@@ -1,0 +1,14 @@
+artifact_uri: file:///D:/00_project/paper_ajou_dev/mlruns/792817433360501923/03b3b3eaa0a443acb9b61d25be3a1fc7/artifacts
+end_time: 1774042701791
+entry_point_name: ''
+experiment_id: '792817433360501923'
+lifecycle_stage: active
+run_id: 03b3b3eaa0a443acb9b61d25be3a1fc7
+run_name: DeiT-S_trial_004
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1774042507950
+status: 3
+tags: []
+user_id: junkim

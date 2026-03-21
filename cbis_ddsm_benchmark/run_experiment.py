@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -10,7 +11,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from cbis_ddsm_benchmark.config_utils import expand_search_space, load_json, sanitize_run_name
-from cbis_ddsm_benchmark.data import CbisDdsmDataset, build_manifest, create_splits
+from cbis_ddsm_benchmark.data import CbisDdsmDataset, build_manifest, create_splits, resolve_dataset_root
 from cbis_ddsm_benchmark.models import build_model
 from cbis_ddsm_benchmark.trainer import run_training
 
@@ -48,6 +49,11 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    resolved_dataset_root = resolve_dataset_root(args.dataset_root)
+    _log(f"config={args.config}")
+    _log(f"requested dataset_root={args.dataset_root}")
+    _log(f"resolved dataset_root={resolved_dataset_root}")
+    _log(f"device={args.device}, output_root={args.output_root}")
     # 사전학습 가중치와 허깅페이스 캐시가 사용자 홈이 아닌 프로젝트 내부에 쌓이도록 고정한다.
     cache_root = Path(args.output_root) / "cache"
     cache_root.mkdir(parents=True, exist_ok=True)
@@ -61,13 +67,22 @@ def main() -> None:
     num_workers = int(config["dataset"].get("num_workers", 0))
     validation_ratio = float(config["dataset"].get("validation_ratio", 0.2))
     seed = int(config["dataset"].get("seed", 42))
+    _log(
+        f"loaded config for model={model_name}, image_size={image_size}, batch_size={batch_size}, "
+        f"num_workers={num_workers}, validation_ratio={validation_ratio}, seed={seed}"
+    )
 
     # CSV와 JPEG 매핑 정보를 한 번 정리한 뒤 캐시해 두면 반복 실행 시 로딩이 빨라진다.
+    _log("building manifest")
     manifest = build_manifest(
-        args.dataset_root,
+        resolved_dataset_root,
         cache_path=Path(args.output_root) / "cache" / "cbis_ddsm_manifest.json",
     )
+    _log(f"manifest ready: {len(manifest)} samples")
     splits = create_splits(manifest, validation_ratio=validation_ratio, seed=seed)
+    _log(
+        f"splits ready: train={len(splits['train'])}, val={len(splits['val'])}, test={len(splits['test'])}"
+    )
 
     train_dataset = CbisDdsmDataset(splits["train"], image_size=image_size, augment=True)
     val_dataset = CbisDdsmDataset(splits["val"], image_size=image_size, augment=False)
@@ -97,6 +112,7 @@ def main() -> None:
             pin_memory=args.device.startswith("cuda"),
         ),
     }
+    _log("dataloaders created")
 
     try:
         import mlflow
@@ -111,6 +127,7 @@ def main() -> None:
     parent_run_name = sanitize_run_name(model_name)
     search_space = config.get("search_space", {})
     combinations = expand_search_space(search_space)
+    _log(f"trial combinations={len(combinations)}")
     best_result = None
     best_run_name = None
 
@@ -126,6 +143,7 @@ def main() -> None:
         mlflow.log_params(
             {
                 "dataset_root": str(Path(args.dataset_root).resolve()),
+                "resolved_dataset_root": str(resolved_dataset_root.resolve()),
                 "image_size": image_size,
                 "batch_size": batch_size,
                 "validation_ratio": validation_ratio,
@@ -141,7 +159,17 @@ def main() -> None:
         for index, hyperparameters in enumerate(combinations, start=1):
             run_name = f"{parent_run_name}_trial_{index:03d}"
             output_dir = Path(args.output_root) / parent_run_name / run_name
-            model = build_model(config["model"], num_classes=2)
+            _log(f"trial {index}/{len(combinations)} start: {run_name}")
+            _log(f"trial hyperparameters={json.dumps(hyperparameters, ensure_ascii=False)}")
+            _log("building model")
+            model = build_model(
+                {
+                    **config["model"],
+                    "image_size": image_size,
+                },
+                num_classes=2,
+            )
+            _log("model ready")
 
             with mlflow.start_run(run_name=run_name, nested=True):
                 mlflow.set_tags(
@@ -163,6 +191,7 @@ def main() -> None:
                     output_dir=output_dir,
                     mlflow_client=mlflow,
                 )
+                _log(f"trial complete: {run_name}")
 
                 for metric_name, metric_value in summary["test_metrics"].items():
                     mlflow.log_metric(f"test_{metric_name}", float(metric_value))
@@ -216,6 +245,11 @@ def flatten_params(values: dict[str, Any], prefix: str) -> dict[str, Any]:
         else:
             flattened[name] = value
     return flattened
+
+
+def _log(message: str) -> None:
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[run_experiment {timestamp}] {message}", flush=True)
 
 
 if __name__ == "__main__":

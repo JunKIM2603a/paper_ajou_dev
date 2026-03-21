@@ -1,29 +1,30 @@
-﻿# CBIS-DDSM Model Benchmark
+# CBIS-DDSM Model Benchmark
 
-`1st_after` ?꾨옒 媛??대뜑???섎굹??紐⑤뜽 ?ㅽ뿕 ?⑥쐞?낅땲?? 紐⑤뱺 紐⑤뜽? ?숈씪??`CBIS-DDSM: Breast Cancer Image Dataset` ?щ∼ ?대?吏瑜??ъ슜???댁쭊 遺꾨쪟(`BENIGN/BENIGN_WITHOUT_CALLBACK` vs `MALIGNANT`)瑜??섑뻾?섍퀬, `Accuracy`, `Precision`, `Recall`, `F1-Score`, `AUC-ROC`瑜?`MLflow`??湲곕줉?⑸땲??
+`1st_after` 아래의 각 폴더는 하나의 모델 실험 단위입니다. 모든 모델은 동일한 `CBIS-DDSM: Breast Cancer Image Dataset` 크롭 이미지를 사용해 이진 분류(`BENIGN/BENIGN_WITHOUT_CALLBACK` vs `MALIGNANT`)를 수행하고, `Accuracy`, `Precision`, `Recall`, `F1-Score`, `AUC-ROC`를 `MLflow`에 기록합니다.
 
-## 援ъ꽦
+## 구성
 
 - `cbis_ddsm_benchmark/`
-- `1st_after/<紐⑤뜽紐?/config.json`
-- `1st_after/<紐⑤뜽紐?/run.ps1`
+- `1st_after/<모델명>/config.json`
+- `1st_after/<모델명>/run.ps1`
 - `run_all_models.py`
 
-## ?ㅽ뻾 以鍮?
+## 실행 준비
+
 ```powershell
 python -m pip install -r requirements.txt
 ```
 
-## ?⑥씪 紐⑤뜽 ?ㅽ뻾
+## 단일 모델 실행
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File ".\1st_after\ResNet-50\run.ps1"
 ```
 
-## ?꾩껜 紐⑤뜽 ?ㅽ뻾
+## 전체 모델 실행
 
 ```powershell
-python .\run_all_models.py
+python .\run_all_models.py --dataset-root ".\dataset\"
 ```
 
 ## MLflow UI
@@ -32,20 +33,19 @@ python .\run_all_models.py
 python -m mlflow ui --backend-store-uri ".\mlruns"
 ```
 
-遺紐???`tags.role = model_parent`)? 紐⑤뜽蹂?理쒓퀬 寃곌낵 鍮꾧탳, ?먯떇 ??`tags.role = hyperparameter_trial`)? ?섏씠?쇳뙆?쇰??곕퀎 ?곸꽭 寃곌낵 ?뺤씤?⑹엯?덈떎.
+부모 런(`tags.role = model_parent`)은 모델별 최고 결과 비교용이고, 자식 런(`tags.role = hyperparameter_trial`)은 하이퍼파라미터별 상세 결과 확인용입니다.
 
-## 由щ뜑蹂대뱶 CSV 異붿텧
+## 리더보드 CSV 추출
 
 ```powershell
 python -m cbis_ddsm_benchmark.mlflow_report
 ```
 
-## 泥댄겕?ъ씤??硫붾え
+## 체크포인트 메모
 
-?쇰? ?섎즺 ?ъ쟾?숈뒿 紐⑤뜽? 異붽? ?⑦궎吏 ?먮뒗 ?몃? 泥댄겕?ъ씤?멸? ?꾩슂?⑸땲??
+일부 사전학습 모델은 추가 패키지 또는 별도 체크포인트가 필요합니다.
 
 - `BioMedCLIP`, `CheXzero`: `open_clip_torch`
 - `MedCLIP`: `transformers`
 - `DeiT-S`, `DINOv2 ViT-S`, `RETFound`: `timm`
-- `EyePACS`, `HAM10000`, `TorchXRayVision`: ?ㅼ젣 ?꾩슜 泥댄겕?ъ씤?멸? ?덉쑝硫?`config.json`??`checkpoint_path`瑜?梨꾩썙 ?ｌ쑝硫??⑸땲??
-
+- `EyePACS`, `HAM10000`, `TorchXRayVision`: 별도 가중치 체크포인트가 있으면 `config.json`의 `checkpoint_path`를 채워 넣으면 됩니다.

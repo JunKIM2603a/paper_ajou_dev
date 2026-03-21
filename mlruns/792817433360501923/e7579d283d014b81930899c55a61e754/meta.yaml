@@ -1,0 +1,14 @@
+artifact_uri: file:///D:/00_project/paper_ajou_dev/mlruns/792817433360501923/e7579d283d014b81930899c55a61e754/artifacts
+end_time: 1774060735575
+entry_point_name: ''
+experiment_id: '792817433360501923'
+lifecycle_stage: active
+run_id: e7579d283d014b81930899c55a61e754
+run_name: EfficientNet-B0_trial_002
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1774060642926
+status: 3
+tags: []
+user_id: junkim

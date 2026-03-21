@@ -70,7 +70,7 @@ class CbisDdsmDataset(Dataset):
 
 # CBIS-DDSM의 CSV 설명 파일과 실제 JPEG 크롭 이미지를 연결해 학습용 매니페스트를 만든다.
 def build_manifest(dataset_root: str | Path, cache_path: str | Path | None = None) -> list[dict[str, Any]]:
-    dataset_root = Path(dataset_root)
+    dataset_root = resolve_dataset_root(dataset_root)
     if cache_path is not None:
         cache_path = Path(cache_path)
         if cache_path.exists():
@@ -188,6 +188,51 @@ def pathology_to_label(pathology: str) -> int | None:
     if pathology in MALIGNANT_LABELS:
         return 1
     return None
+
+
+def resolve_dataset_root(dataset_root: str | Path) -> Path:
+    dataset_root = Path(dataset_root)
+    candidate_roots = [dataset_root]
+
+    # 사용자가 dataset 상위 디렉터리를 넘겨도 archive 루트를 자동으로 찾는다.
+    if dataset_root.exists() and dataset_root.is_dir():
+        candidate_roots.extend(
+            child
+            for child in dataset_root.iterdir()
+            if child.is_dir() and "cbis" in child.name.lower() and "ddsm" in child.name.lower()
+        )
+
+    for candidate in candidate_roots:
+        if _has_expected_dataset_layout(candidate):
+            return candidate
+
+    searched = "\n".join(f"- {path.resolve()}" for path in candidate_roots)
+    raise FileNotFoundError(
+        "CBIS-DDSM dataset not found.\n"
+        "Expected a dataset root containing these files:\n"
+        "- csv/dicom_info.csv\n"
+        "- csv/mass_case_description_train_set.csv\n"
+        "- csv/mass_case_description_test_set.csv\n"
+        "- csv/calc_case_description_train_set.csv\n"
+        "- csv/calc_case_description_test_set.csv\n"
+        "- jpeg/\n"
+        f"Searched:\n{searched}\n"
+        "Pass the correct path with --dataset-root, for example:\n"
+        'python .\\run_all_models.py --dataset-root "D:\\path\\to\\archive_CBIS-DDSM_kaggle"'
+    )
+
+
+def _has_expected_dataset_layout(dataset_root: Path) -> bool:
+    csv_root = dataset_root / "csv"
+    jpeg_root = dataset_root / "jpeg"
+    required_csvs = [
+        "dicom_info.csv",
+        "mass_case_description_train_set.csv",
+        "mass_case_description_test_set.csv",
+        "calc_case_description_train_set.csv",
+        "calc_case_description_test_set.csv",
+    ]
+    return csv_root.is_dir() and jpeg_root.is_dir() and all((csv_root / name).exists() for name in required_csvs)
 
 
 # dicom_info.csv에서 cropped images만 골라 series UID -> JPEG 경로 매핑을 만든다.

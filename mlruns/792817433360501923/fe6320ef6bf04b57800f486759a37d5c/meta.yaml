@@ -1,0 +1,14 @@
+artifact_uri: file:///D:/00_project/paper_ajou_dev/mlruns/792817433360501923/fe6320ef6bf04b57800f486759a37d5c/artifacts
+end_time: 1774072763489
+entry_point_name: ''
+experiment_id: '792817433360501923'
+lifecycle_stage: active
+run_id: fe6320ef6bf04b57800f486759a37d5c
+run_name: ViT-B_16
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1774071751412
+status: 3
+tags: []
+user_id: junkim

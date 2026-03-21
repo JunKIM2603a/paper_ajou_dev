@@ -1,0 +1,14 @@
+artifact_uri: file:///D:/00_project/paper_ajou_dev/mlruns/792817433360501923/60910afbfa48404db622cd0ff65e8cdb/artifacts
+end_time: 1774068137260
+entry_point_name: ''
+experiment_id: '792817433360501923'
+lifecycle_stage: active
+run_id: 60910afbfa48404db622cd0ff65e8cdb
+run_name: TorchXRayVision_trial_003
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1774068015818
+status: 3
+tags: []
+user_id: junkim

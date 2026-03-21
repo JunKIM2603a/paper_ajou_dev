@@ -1,0 +1,14 @@
+artifact_uri: file:///D:/00_project/paper_ajou_dev/mlruns/792817433360501923/bfb61f8d1106473c95d293d80fa465d3/artifacts
+end_time: 1774064696158
+entry_point_name: ''
+experiment_id: '792817433360501923'
+lifecycle_stage: active
+run_id: bfb61f8d1106473c95d293d80fa465d3
+run_name: MedCLIP
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1774063657217
+status: 3
+tags: []
+user_id: junkim
