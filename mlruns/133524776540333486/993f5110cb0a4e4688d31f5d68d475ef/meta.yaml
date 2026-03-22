@@ -1,0 +1,14 @@
+artifact_uri: file:///D:/00_project/paper_ajou_dev/mlruns/133524776540333486/993f5110cb0a4e4688d31f5d68d475ef/artifacts
+end_time: 1774183065683
+entry_point_name: ''
+experiment_id: '133524776540333486'
+lifecycle_stage: active
+run_id: 993f5110cb0a4e4688d31f5d68d475ef
+run_name: ResNet-50_trial_004
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1774182941151
+status: 3
+tags: []
+user_id: junkim

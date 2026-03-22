@@ -1,0 +1,14 @@
+artifact_uri: file:///D:/00_project/paper_ajou_dev/mlruns/133524776540333486/b0e951ea79fd4ff59f4652e2d0750e2e/artifacts
+end_time: 1774181365853
+entry_point_name: ''
+experiment_id: '133524776540333486'
+lifecycle_stage: active
+run_id: b0e951ea79fd4ff59f4652e2d0750e2e
+run_name: HAM10000_trial_003
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1774181263329
+status: 3
+tags: []
+user_id: junkim

@@ -1,0 +1,14 @@
+artifact_uri: file:///D:/00_project/paper_ajou_dev/mlruns/133524776540333486/3c2d5615217446e9b1104ea50d1df486/artifacts
+end_time: 1774177935394
+entry_point_name: ''
+experiment_id: '133524776540333486'
+lifecycle_stage: active
+run_id: 3c2d5615217446e9b1104ea50d1df486
+run_name: CheXzero_trial_001
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1774177785212
+status: 3
+tags: []
+user_id: junkim

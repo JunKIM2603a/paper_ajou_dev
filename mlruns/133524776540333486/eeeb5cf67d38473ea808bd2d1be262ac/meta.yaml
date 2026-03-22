@@ -1,0 +1,14 @@
+artifact_uri: file:///D:/00_project/paper_ajou_dev/mlruns/133524776540333486/eeeb5cf67d38473ea808bd2d1be262ac/artifacts
+end_time: 1774184068820
+entry_point_name: ''
+experiment_id: '133524776540333486'
+lifecycle_stage: active
+run_id: eeeb5cf67d38473ea808bd2d1be262ac
+run_name: RETFound_trial_004
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1774183820116
+status: 3
+tags: []
+user_id: junkim

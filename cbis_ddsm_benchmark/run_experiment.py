@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -13,6 +14,12 @@ from torch.utils.data import DataLoader
 from cbis_ddsm_benchmark.config_utils import expand_search_space, load_json, sanitize_run_name
 from cbis_ddsm_benchmark.data import CbisDdsmDataset, build_manifest, create_splits, resolve_dataset_root
 from cbis_ddsm_benchmark.models import build_model
+from cbis_ddsm_benchmark.reproducibility import (
+    DEFAULT_SEED,
+    make_torch_generator,
+    make_worker_init_fn,
+    set_global_seed,
+)
 from cbis_ddsm_benchmark.trainer import run_training
 
 
@@ -31,7 +38,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--mlflow-tracking-uri",
-        default="file:./mlruns",
+        default=os.environ.get("MLFLOW_TRACKING_URI", "file:./mlruns"),
         help="MLflow tracking URI.",
     )
     parser.add_argument(
@@ -44,10 +51,21 @@ def parse_args() -> argparse.Namespace:
         default="cuda" if torch.cuda.is_available() else "cpu",
         help="Training device.",
     )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Override the seed in config.json. Defaults to the config seed or 42.",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
     args = parse_args()
     resolved_dataset_root = resolve_dataset_root(args.dataset_root)
     _log(f"config={args.config}")
@@ -66,7 +84,10 @@ def main() -> None:
     batch_size = int(config["dataset"].get("batch_size", 16))
     num_workers = int(config["dataset"].get("num_workers", 0))
     validation_ratio = float(config["dataset"].get("validation_ratio", 0.2))
-    seed = int(config["dataset"].get("seed", 42))
+    seed = int(args.seed if args.seed is not None else config["dataset"].get("seed", DEFAULT_SEED))
+    config.setdefault("dataset", {})
+    config["dataset"]["seed"] = seed
+    set_global_seed(seed)
     _log(
         f"loaded config for model={model_name}, image_size={image_size}, batch_size={batch_size}, "
         f"num_workers={num_workers}, validation_ratio={validation_ratio}, seed={seed}"
@@ -96,6 +117,8 @@ def main() -> None:
             shuffle=True,
             num_workers=num_workers,
             pin_memory=args.device.startswith("cuda"),
+            generator=make_torch_generator(seed),
+            worker_init_fn=make_worker_init_fn(seed),
         ),
         "val": DataLoader(
             val_dataset,
@@ -103,6 +126,8 @@ def main() -> None:
             shuffle=False,
             num_workers=num_workers,
             pin_memory=args.device.startswith("cuda"),
+            generator=make_torch_generator(seed + 1),
+            worker_init_fn=make_worker_init_fn(seed + 1000),
         ),
         "test": DataLoader(
             test_dataset,
@@ -110,6 +135,8 @@ def main() -> None:
             shuffle=False,
             num_workers=num_workers,
             pin_memory=args.device.startswith("cuda"),
+            generator=make_torch_generator(seed + 2),
+            worker_init_fn=make_worker_init_fn(seed + 2000),
         ),
     }
     _log("dataloaders created")
@@ -159,9 +186,12 @@ def main() -> None:
         for index, hyperparameters in enumerate(combinations, start=1):
             run_name = f"{parent_run_name}_trial_{index:03d}"
             output_dir = Path(args.output_root) / parent_run_name / run_name
+            trial_seed = seed + index - 1
             _log(f"trial {index}/{len(combinations)} start: {run_name}")
+            _log(f"trial seed={trial_seed}")
             _log(f"trial hyperparameters={json.dumps(hyperparameters, ensure_ascii=False)}")
             _log("building model")
+            set_global_seed(trial_seed)
             model = build_model(
                 {
                     **config["model"],
@@ -181,6 +211,7 @@ def main() -> None:
                 )
                 mlflow.log_params(flatten_params(config["model"], prefix="model"))
                 mlflow.log_params({f"hp_{key}": value for key, value in hyperparameters.items()})
+                mlflow.log_param("trial_seed", trial_seed)
 
                 # 각 trial의 산출물은 artifacts/<모델명>/<trial명> 아래에 저장된다.
                 summary = run_training(
@@ -210,6 +241,7 @@ def main() -> None:
                         "score": score,
                         "summary": summary,
                         "hyperparameters": hyperparameters,
+                        "trial_seed": trial_seed,
                     }
                     best_run_name = run_name
 
@@ -223,10 +255,12 @@ def main() -> None:
             }
         )
         mlflow.log_params({f"best_hp_{key}": value for key, value in best_result["hyperparameters"].items()})
+        mlflow.log_param("best_trial_seed", best_result["trial_seed"])
         mlflow.set_tag("best_child_run_name", best_run_name)
         mlflow.log_dict(
             {
                 "best_child_run_name": best_run_name,
+                "best_child_seed": best_result["trial_seed"],
                 "best_hyperparameters": best_result["hyperparameters"],
                 "best_summary": best_result["summary"],
             },

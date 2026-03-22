@@ -1,17 +1,24 @@
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
+
+from cbis_ddsm_benchmark.reproducibility import DEFAULT_SEED
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run every model config under 1st_after.")
     parser.add_argument("--dataset-root", default="dataset/archive_CBIS-DDSM_kaggle")
     parser.add_argument("--output-root", default="artifacts")
-    parser.add_argument("--tracking-uri", default="file:./mlruns")
+    parser.add_argument(
+        "--tracking-uri",
+        default=os.environ.get("MLFLOW_TRACKING_URI", "file:./mlruns"),
+    )
     parser.add_argument("--experiment-name", default="CBIS-DDSM-Benchmark")
+    parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     return parser.parse_args()
 
 
@@ -37,6 +44,8 @@ def main() -> None:
             args.tracking_uri,
             "--experiment-name",
             args.experiment_name,
+            "--seed",
+            str(args.seed),
         ]
         print(f"[run_all_models] Running {config_path.parent.name}")
         subprocess.run(command, check=True)

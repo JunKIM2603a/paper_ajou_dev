@@ -30,7 +30,7 @@ python .\run_all_models.py --dataset-root ".\dataset\"
 ## MLflow UI
 
 ```powershell
-python -m mlflow ui --backend-store-uri ".\mlruns"
+powershell -ExecutionPolicy Bypass -File ".\start_mlflow.ps1"
 ```
 
 부모 런(`tags.role = model_parent`)은 모델별 최고 결과 비교용이고, 자식 런(`tags.role = hyperparameter_trial`)은 하이퍼파라미터별 상세 결과 확인용입니다.
@@ -41,6 +41,12 @@ python -m mlflow ui --backend-store-uri ".\mlruns"
 python -m cbis_ddsm_benchmark.mlflow_report
 ```
 
+## HTML 리포트 추출
+
+```powershell
+python -m cbis_ddsm_benchmark.mlflow_html_report
+```
+
 ## 체크포인트 메모
 
 일부 사전학습 모델은 추가 패키지 또는 별도 체크포인트가 필요합니다.
@@ -49,3 +55,22 @@ python -m cbis_ddsm_benchmark.mlflow_report
 - `MedCLIP`: `transformers`
 - `DeiT-S`, `DINOv2 ViT-S`, `RETFound`: `timm`
 - `EyePACS`, `HAM10000`, `TorchXRayVision`: 별도 가중치 체크포인트가 있으면 `config.json`의 `checkpoint_path`를 채워 넣으면 됩니다.
+## Reset Results
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\reset_results.ps1"
+```
+
+`artifacts\cache`까지 함께 지우려면 아래처럼 실행합니다.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\reset_results.ps1" -ClearCache
+```
+
+## Reproducible Seed
+
+전체 실행을 항상 같은 seed로 고정하려면 아래처럼 실행합니다.
+
+```powershell
+python .\run_all_models.py --dataset-root ".\dataset\" --seed 42
+```
