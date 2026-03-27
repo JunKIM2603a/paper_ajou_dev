@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import csv
 import json
@@ -8,11 +8,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from PIL import Image
 import torch
+from PIL import Image
 from torch.utils.data import Dataset
 from torchvision import transforms
-
 
 BENIGN_LABELS = {"BENIGN", "BENIGN_WITHOUT_CALLBACK"}
 MALIGNANT_LABELS = {"MALIGNANT"}
@@ -29,9 +28,8 @@ class Sample:
     metadata: dict[str, Any]
 
 
-class CbisDdsmDataset(Dataset):
+class CbisDdsmDataset(Dataset[tuple[torch.Tensor, torch.Tensor]]):
     def __init__(self, samples: list[Sample], image_size: int, augment: bool) -> None:
-        # 학습 시에는 약한 증강을 적용하고, 검증/테스트 시에는 입력을 고정한다.
         if augment:
             self.transform = transforms.Compose(
                 [
@@ -68,9 +66,11 @@ class CbisDdsmDataset(Dataset):
         return self.transform(image), torch.tensor(sample.label, dtype=torch.long)
 
 
-# CBIS-DDSM의 CSV 설명 파일과 실제 JPEG 크롭 이미지를 연결해 학습용 매니페스트를 만든다.
-def build_manifest(dataset_root: str | Path, cache_path: str | Path | None = None) -> list[dict[str, Any]]:
-    dataset_root = resolve_dataset_root(dataset_root)
+def build_manifest(
+    dataset_root: str | Path,
+    cache_path: str | Path | None = None,
+) -> list[dict[str, Any]]:
+    dataset_root = Path(dataset_root)
     if cache_path is not None:
         cache_path = Path(cache_path)
         if cache_path.exists():
@@ -79,9 +79,9 @@ def build_manifest(dataset_root: str | Path, cache_path: str | Path | None = Non
 
     csv_root = dataset_root / "csv"
     jpeg_root = dataset_root / "jpeg"
-
     cropped_lookup = _build_cropped_lookup(csv_root / "dicom_info.csv", jpeg_root)
     manifest: list[dict[str, Any]] = []
+
     csv_files = [
         ("train", csv_root / "mass_case_description_train_set.csv"),
         ("test", csv_root / "mass_case_description_test_set.csv"),
@@ -98,7 +98,6 @@ def build_manifest(dataset_root: str | Path, cache_path: str | Path | None = Non
                 if label is None:
                     continue
 
-                # ROI mask가 아닌 병변 크롭 이미지를 기준으로 분류 입력을 만든다.
                 cropped_file = row["cropped image file path"].strip()
                 cropped_series_uid = _extract_series_uid(cropped_file)
                 image_path = cropped_lookup.get(cropped_series_uid)
@@ -136,22 +135,19 @@ def create_splits(
     validation_ratio: float,
     seed: int,
 ) -> dict[str, list[Sample]]:
-    # 같은 환자의 이미지가 train/val에 동시에 섞이지 않도록 patient 단위로 묶는다.
-    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    grouped: defaultdict[str, list[dict[str, Any]]] = defaultdict(list)
     for sample in manifest:
         grouped[sample["patient_id"]].append(sample)
 
     train_groups: list[list[dict[str, Any]]] = []
     test_samples: list[Sample] = []
-
     for patient_samples in grouped.values():
         sample_split = patient_samples[0]["source_split"]
         if sample_split == "test":
             test_samples.extend(_to_samples(patient_samples))
-        else:
-            train_groups.append(patient_samples)
+            continue
+        train_groups.append(patient_samples)
 
-    # 클래스 비율이 너무 치우치지 않도록 benign / malignant 그룹을 따로 섞는다.
     benign_groups: list[list[dict[str, Any]]] = []
     malignant_groups: list[list[dict[str, Any]]] = []
     for group in train_groups:
@@ -166,7 +162,7 @@ def create_splits(
 
     train_samples: list[Sample] = []
     val_samples: list[Sample] = []
-    for class_groups in [benign_groups, malignant_groups]:
+    for class_groups in (benign_groups, malignant_groups):
         val_count = max(1, int(len(class_groups) * validation_ratio))
         val_groups = class_groups[:val_count]
         train_part = class_groups[val_count:]
@@ -175,11 +171,7 @@ def create_splits(
         for group in val_groups:
             val_samples.extend(_to_samples(group))
 
-    return {
-        "train": train_samples,
-        "val": val_samples,
-        "test": test_samples,
-    }
+    return {"train": train_samples, "val": val_samples, "test": test_samples}
 
 
 def pathology_to_label(pathology: str) -> int | None:
@@ -190,52 +182,6 @@ def pathology_to_label(pathology: str) -> int | None:
     return None
 
 
-def resolve_dataset_root(dataset_root: str | Path) -> Path:
-    dataset_root = Path(dataset_root)
-    candidate_roots = [dataset_root]
-
-    # 사용자가 dataset 상위 디렉터리를 넘겨도 archive 루트를 자동으로 찾는다.
-    if dataset_root.exists() and dataset_root.is_dir():
-        candidate_roots.extend(
-            child
-            for child in dataset_root.iterdir()
-            if child.is_dir() and "cbis" in child.name.lower() and "ddsm" in child.name.lower()
-        )
-
-    for candidate in candidate_roots:
-        if _has_expected_dataset_layout(candidate):
-            return candidate
-
-    searched = "\n".join(f"- {path.resolve()}" for path in candidate_roots)
-    raise FileNotFoundError(
-        "CBIS-DDSM dataset not found.\n"
-        "Expected a dataset root containing these files:\n"
-        "- csv/dicom_info.csv\n"
-        "- csv/mass_case_description_train_set.csv\n"
-        "- csv/mass_case_description_test_set.csv\n"
-        "- csv/calc_case_description_train_set.csv\n"
-        "- csv/calc_case_description_test_set.csv\n"
-        "- jpeg/\n"
-        f"Searched:\n{searched}\n"
-        "Pass the correct path with --dataset-root, for example:\n"
-        'python .\\run_all_models.py --dataset-root "D:\\path\\to\\archive_CBIS-DDSM_kaggle"'
-    )
-
-
-def _has_expected_dataset_layout(dataset_root: Path) -> bool:
-    csv_root = dataset_root / "csv"
-    jpeg_root = dataset_root / "jpeg"
-    required_csvs = [
-        "dicom_info.csv",
-        "mass_case_description_train_set.csv",
-        "mass_case_description_test_set.csv",
-        "calc_case_description_train_set.csv",
-        "calc_case_description_test_set.csv",
-    ]
-    return csv_root.is_dir() and jpeg_root.is_dir() and all((csv_root / name).exists() for name in required_csvs)
-
-
-# dicom_info.csv에서 cropped images만 골라 series UID -> JPEG 경로 매핑을 만든다.
 def _build_cropped_lookup(dicom_info_path: Path, jpeg_root: Path) -> dict[str, Path]:
     lookup: dict[str, Path] = {}
     with dicom_info_path.open("r", encoding="utf-8-sig", newline="") as file:
@@ -272,11 +218,3 @@ def _to_samples(items: list[dict[str, Any]]) -> list[Sample]:
         )
         for item in items
     ]
-
-
-
-
-
-
-
-

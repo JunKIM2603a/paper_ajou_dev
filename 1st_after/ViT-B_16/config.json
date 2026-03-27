@@ -1,5 +1,34 @@
-﻿{
-  "model": {"display_name": "ViT-B_16", "backend": "torchvision", "architecture": "vit_b_16", "weights": "DEFAULT", "checkpoint_path": null},
-  "dataset": {"image_size": 224, "batch_size": 8, "num_workers": 0, "validation_ratio": 0.2, "seed": 42},
-  "search_space": {"epochs": [5], "learning_rate": [0.00005, 0.0001], "weight_decay": [0.0001, 0.001], "optimizer": ["adamw"]}
+{
+    "model":  {
+                  "display_name":  "ViT-B_16",
+                  "backend":  "torchvision",
+                  "architecture":  "vit_b_16",
+                  "weights":  "DEFAULT",
+                  "checkpoint_path":  null,
+                  "transfer_strategy":  "full_finetune",
+                  "strict_checkpoint":  false
+              },
+    "dataset":  {
+                    "image_size":  224,
+                    "batch_size":  8,
+                    "num_workers":  0,
+                    "validation_ratio":  0.2,
+                    "seed":  42
+                },
+    "search_space":  {
+                         "epochs":  [
+                                        5
+                                    ],
+                         "learning_rate":  [
+                                               0.00005,
+                                               0.0001
+                                           ],
+                         "weight_decay":  [
+                                              0.0001,
+                                              0.001
+                                          ],
+                         "optimizer":  [
+                                           "adamw"
+                                       ]
+                     }
 }

@@ -1,76 +1,126 @@
 # CBIS-DDSM Model Benchmark
 
-`1st_after` 아래의 각 폴더는 하나의 모델 실험 단위입니다. 모든 모델은 동일한 `CBIS-DDSM: Breast Cancer Image Dataset` 크롭 이미지를 사용해 이진 분류(`BENIGN/BENIGN_WITHOUT_CALLBACK` vs `MALIGNANT`)를 수행하고, `Accuracy`, `Precision`, `Recall`, `F1-Score`, `AUC-ROC`를 `MLflow`에 기록합니다.
+CBIS-DDSM binary classification benchmark for multiple pretrained backbones.
+The task is binary classification on CBIS-DDSM:
+`BENIGN` / `BENIGN_WITHOUT_CALLBACK` vs `MALIGNANT`.
 
-## 구성
+## What Changed
+
+- Every model config now uses `model.transfer_strategy = "full_finetune"` by default.
+- You can override transfer learning mode from CLI with `--transfer-strategy full_finetune|linear_probe`.
+- Relative `checkpoint_path` values are resolved relative to the config file directory.
+- External checkpoint example configs were added for `CheXzero` and `RETFound`.
+- A checkpoint guide was added: [docs/checkpoint_guide.md](docs/checkpoint_guide.md)
+
+## Project Layout
 
 - `cbis_ddsm_benchmark/`
-- `1st_after/<모델명>/config.json`
-- `1st_after/<모델명>/run.ps1`
+- `1st_after/<model>/config.json`
+- `1st_after/CheXzero/config.external_checkpoint.example.json`
+- `1st_after/RETFound/config.external_checkpoint.example.json`
 - `run_all_models.py`
 
-## 실행 준비
+## Install
 
 ```powershell
 python -m pip install -r requirements.txt
 ```
 
-## 단일 모델 실행
+## Run One Model
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File ".\1st_after\ResNet-50\run.ps1"
+python -m cbis_ddsm_benchmark.run_experiment `
+  --config .\1st_after\ResNet-50\config.json `
+  --dataset-root .\dataset\archive_CBIS-DDSM_kaggle `
+  --output-root .\artifacts
 ```
 
-## 전체 모델 실행
+## Override Transfer Strategy
+
+Full fine-tuning:
 
 ```powershell
-python .\run_all_models.py --dataset-root ".\dataset\"
+python -m cbis_ddsm_benchmark.run_experiment `
+  --config .\1st_after\ResNet-50\config.json `
+  --transfer-strategy full_finetune
 ```
 
-## MLflow UI
+Linear probe:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File ".\start_mlflow.ps1"
+python -m cbis_ddsm_benchmark.run_experiment `
+  --config .\1st_after\ResNet-50\config.json `
+  --transfer-strategy linear_probe
 ```
 
-부모 런(`tags.role = model_parent`)은 모델별 최고 결과 비교용이고, 자식 런(`tags.role = hyperparameter_trial`)은 하이퍼파라미터별 상세 결과 확인용입니다.
+## Run All Models
 
-## 리더보드 CSV 추출
+```powershell
+python .\run_all_models.py `
+  --dataset-root .\dataset\archive_CBIS-DDSM_kaggle `
+  --output-root .\artifacts
+```
+
+Run all models with linear probe:
+
+```powershell
+python .\run_all_models.py `
+  --dataset-root .\dataset\archive_CBIS-DDSM_kaggle `
+  --output-root .\artifacts `
+  --transfer-strategy linear_probe
+```
+
+## MLflow Report
 
 ```powershell
 python -m cbis_ddsm_benchmark.mlflow_report
 ```
 
-## HTML 리포트 추출
+## Checkpoint Policy
 
-```powershell
-python -m cbis_ddsm_benchmark.mlflow_html_report
-```
+The repository currently does not include tracked checkpoint files such as `.pt`, `.pth`, `.bin`, or `.safetensors`.
+If a model needs a domain-specific checkpoint, you need to place it yourself and set `model.checkpoint_path`.
 
-## 체크포인트 메모
+`checkpoint_path` rules:
 
-일부 사전학습 모델은 추가 패키지 또는 별도 체크포인트가 필요합니다.
+- Absolute paths are used as-is.
+- Relative paths are resolved from the folder that contains the `config.json` file.
+- `state_dict`, `model_state_dict`, and `model` checkpoint wrappers are supported.
+- `strict_checkpoint: false` allows partial loading.
 
-- `BioMedCLIP`, `CheXzero`: `open_clip_torch`
-- `MedCLIP`: `transformers`
-- `DeiT-S`, `DINOv2 ViT-S`, `RETFound`: `timm`
-- `EyePACS`, `HAM10000`, `TorchXRayVision`: 별도 가중치 체크포인트가 있으면 `config.json`의 `checkpoint_path`를 채워 넣으면 됩니다.
-## Reset Results
+## Model Status Summary
 
-```powershell
-powershell -ExecutionPolicy Bypass -File ".\reset_results.ps1"
-```
+Verified in this repository on 2026-03-27.
 
-`artifacts\cache`까지 함께 지우려면 아래처럼 실행합니다.
+| Model | Current init source in repo | Transfer status | External checkpoint needed later? | Notes |
+|---|---|---|---|---|
+| BioMedCLIP | Built-in `hf-hub` pretrained | `full_finetune` ready | No | Current config already points to a pretrained BioMedCLIP source |
+| CheXzero | No built-in pretrained source configured | `full_finetune` ready | Yes | Add external checkpoint to use actual CheXzero weights |
+| DeiT-S | `timm pretrained=true` | `full_finetune` ready | No | Built-in pretrained available |
+| DenseNet-121 | `torchvision DEFAULT` | `full_finetune` ready | No | Built-in ImageNet weights |
+| DINOv2 ViT-S | `timm pretrained=true` | `full_finetune` ready | No | Built-in pretrained available |
+| EfficientNet-B0 | `torchvision DEFAULT` | `full_finetune` ready | No | Built-in ImageNet weights |
+| EyePACS | `torchvision DEFAULT` | `full_finetune` ready | Optional | Current config uses generic ImageNet weights |
+| HAM10000 | `torchvision DEFAULT` | `full_finetune` ready | Optional | Current config uses generic ImageNet weights |
+| MedCLIP | `openai/clip-vit-base-patch16` | `full_finetune` ready | Optional | Works now, but not a MedCLIP-specific checkpoint |
+| ResNet-50 | `torchvision DEFAULT` | `full_finetune` ready | No | Built-in ImageNet weights |
+| RETFound | `pretrained=false` | `full_finetune` ready | Yes | Add external checkpoint to use actual RETFound weights |
+| TorchXRayVision | `torchvision DEFAULT` | `full_finetune` ready | Optional | Current config is not using torchxrayvision-native weights |
+| ViT-B_16 | `torchvision DEFAULT` | `full_finetune` ready | No | Built-in ImageNet weights |
 
-```powershell
-powershell -ExecutionPolicy Bypass -File ".\reset_results.ps1" -ClearCache
-```
+## External Checkpoint Examples
 
-## Reproducible Seed
+CheXzero example:
 
-전체 실행을 항상 같은 seed로 고정하려면 아래처럼 실행합니다.
+- `1st_after/CheXzero/config.external_checkpoint.example.json`
+- Example path: `../../external_checkpoints/CheXzero/chexzero_model.pt`
 
-```powershell
-python .\run_all_models.py --dataset-root ".\dataset\" --seed 42
-```
+RETFound example:
+
+- `1st_after/RETFound/config.external_checkpoint.example.json`
+- Example path: `../../external_checkpoints/RETFound/retfound_model.pth`
+
+## Notes
+
+- `CheXzero` and `RETFound` are the two models that are most clearly checkpoint-dependent in the current repo state.
+- If you later collect domain-specific weights for `EyePACS`, `HAM10000`, `MedCLIP`, or `TorchXRayVision`, you can reuse the same `checkpoint_path` mechanism.
