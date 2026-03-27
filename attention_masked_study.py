@@ -2,6 +2,10 @@ import math
 
 import numpy as np
 
+# Forward-only study example:
+# the weights are fixed for demonstration, and the script only
+# computes masked attention once without any training step.
+
 
 def softmax(x: np.ndarray) -> np.ndarray:
     shifted = x - np.max(x, axis=-1, keepdims=True)

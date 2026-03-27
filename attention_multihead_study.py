@@ -2,6 +2,10 @@ import math
 
 import numpy as np
 
+# Forward-only study example:
+# the projection matrices below are manually chosen for inspection,
+# so no learning or parameter updates happen in this file.
+
 
 def softmax(x: np.ndarray) -> np.ndarray:
     shifted = x - np.max(x, axis=-1, keepdims=True)
@@ -42,6 +46,9 @@ def multi_head_attention(
     head_outputs = attention_weights @ v_heads
 
     concatenated = combine_heads(head_outputs)
+    # Output projection step in standard multi-head attention.
+    # In this study example, W_o can be the identity matrix so the
+    # concatenated result passes through unchanged and is easier to inspect.
     output = concatenated @ w_o
 
     return {
@@ -107,6 +114,8 @@ def main() -> None:
         ]
     )
 
+    # Identity output projection: keeps the formal Transformer step,
+    # but does not change values so we can study the concatenated heads directly.
     w_o = np.eye(4)
 
     result = multi_head_attention(x, w_q, w_k, w_v, w_o, num_heads)

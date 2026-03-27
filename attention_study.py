@@ -3,6 +3,10 @@ from typing import Tuple
 
 import numpy as np
 
+# Forward-only study example:
+# the projection matrices below are fixed by hand for explanation,
+# so this file does not train or update any parameters.
+
 
 def softmax(x: np.ndarray) -> np.ndarray:
     shifted = x - np.max(x, axis=-1, keepdims=True)
