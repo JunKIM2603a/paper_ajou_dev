@@ -1,0 +1,2 @@
+model_name,feature_set,best_auc_roc,average_precision,balanced_accuracy,accuracy,precision,recall,f1_score,auc_roc,best_child_run_name
+ResNet-50,,0.23529411764705882,0.00510204081632653,0.5,0.99609375,0.0,0.0,0.0,0.23529411764705882,ResNet-50_trial_001

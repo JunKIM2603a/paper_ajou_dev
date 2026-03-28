@@ -1,2 +1,0 @@
-"""CBIS-DDSM benchmarking utilities."""
-

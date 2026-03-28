@@ -1,139 +1,121 @@
-﻿# 프로그램 동작 다이어그램
+# 프로그램 동작 다이어그램
 
-이 문서는 `CBIS-DDSM` 벤치마크 파이프라인이 어떻게 흘러가는지 다이어그램 중심으로 설명합니다.
+이 문서는 현재 저장소의 주요 흐름을 `ISIC2024 tabular`와 `image baseline 구조` 중심으로 설명합니다.
 
-## 1. 전체 실행 흐름
+## 1. Tabular EDA 흐름
 
 ```mermaid
 flowchart TD
-    A[사용자 실행<br/>run.ps1 또는 run_all_models.py] --> B[run_experiment.py]
-    B --> C[config.json 로드]
-    B --> D[캐시 경로 설정<br/>torch / huggingface]
-    C --> E[data.py: build_manifest]
-    D --> F[models.py: build_model]
-    E --> G[train / val / test 분할]
-    G --> H[DataLoader 생성]
-    F --> I[모델 인스턴스 생성]
-    H --> J[trainer.py: run_training]
-    I --> J
-    J --> K[epoch 반복 학습]
-    K --> L[val metric 계산]
-    L --> M[최고 가중치 저장]
-    M --> N[test 평가]
-    N --> O[MLflow child run 기록]
-    O --> P[모델별 최고 trial 선택]
-    P --> Q[MLflow parent run 요약]
+    A[ISIC_2024_Training_GroundTruth.csv] --> C[tabular_data.py]
+    B[ISIC_2024_Training_Supplement.csv] --> C
+    C --> D[isic_id 기준 병합]
+    D --> E[isic2024_tabular_eda.py]
+    E --> F[dataset_overview.json]
+    E --> G[missingness_summary.csv]
+    E --> H[target_rate_by_*.csv]
+    E --> I[report.md]
 ```
 
-## 2. 데이터셋 준비 흐름
+## 2. Feature Set 추천 흐름
 
 ```mermaid
 flowchart LR
-    A[mass/calc train CSV] --> D[행 단위 읽기]
-    B[mass/calc test CSV] --> D
-    C[dicom_info.csv] --> E[cropped image lookup 생성]
-    D --> F[pathology -> label 변환]
-    E --> G[cropped series UID -> jpeg path 매핑]
-    F --> H[manifest 생성]
+    A[EDA 산출물] --> B[define_tabular_feature_sets.py]
+    B --> C[feature_sets_recommended.json]
+    C --> D[strict]
+    C --> E[relaxed]
+    C --> F[oracle]
+```
+
+## 3. Tabular Baseline 실행 흐름
+
+```mermaid
+flowchart TD
+    A[run_tabular_baselines.py] --> B[pandas 병합 로드]
+    B --> C[feature set 선택]
+    C --> D[train / val / test stratified split]
+    D --> E[전처리 파이프라인]
+    E --> F[baseline 모델 학습]
+    F --> G[val / test metric 계산]
+    G --> H[summary.json 저장]
+    G --> I[MLflow child run 기록]
+    I --> J[모델별 best trial 선택]
+    J --> K[MLflow parent run 기록]
+```
+
+## 4. Tabular 모델 분기
+
+```mermaid
+flowchart TD
+    A[feature set + model_name] --> B{모델 종류}
+    B -->|sklearn| C[Logistic Regression / SVM / MLP]
+    B -->|xgboost| D[XGBoost]
+    B -->|catboost| E[CatBoost]
+    C --> F[ColumnTransformer]
+    D --> F
+    E --> G[범주형 직접 처리]
+    F --> H[평가]
     G --> H
-    H --> I[patient 단위 그룹화]
-    I --> J[train / val 분리]
-    I --> K[test 유지]
 ```
 
-## 3. 모델 생성 분기
+## 5. Tabular MLflow 구조
 
 ```mermaid
 flowchart TD
-    A[config.json 의 model.backend] --> B{backend 종류}
-    B -->|torchvision| C[ResNet / DenseNet / EfficientNet / ViT]
-    B -->|timm| D[DeiT / DINOv2 / RETFound]
-    B -->|open_clip| E[BioMedCLIP / CheXzero]
-    B -->|huggingface_clip| F[MedCLIP 계열]
-    C --> G[마지막 분류 헤드 2-class 교체]
-    D --> G
-    E --> H[image encoder + classifier]
-    F --> H
-    G --> I[optional checkpoint load]
-    H --> I
+    A[Experiment: ISIC2024-Tabular-Benchmark] --> B[Parent Run role=model_parent]
+    B --> C[Trial 001 strict]
+    B --> D[Trial 002 relaxed]
+    B --> E[Trial 003 oracle]
+    C --> F[test_average_precision 등]
+    D --> G[test_average_precision 등]
+    E --> H[test_average_precision 등]
+    B --> I[best_average_precision]
+    B --> J[best_feature_set]
+    B --> K[best_child_run_name]
 ```
 
-## 4. 학습 루프
+## 6. 리포트 생성 흐름
 
 ```mermaid
-sequenceDiagram
-    participant U as run_experiment.py
-    participant T as trainer.py
-    participant M as Model
-    participant V as Validation
-    participant F as MLflow
-
-    U->>T: run_training(model, dataloaders, hyperparameters)
-    loop epoch 1..N
-        T->>M: train batch forward/backward/update
-        T->>V: evaluate_model(val)
-        V-->>T: accuracy, precision, recall, f1, auc
-        T->>F: epoch metric 기록
-        T->>T: best val model 갱신
-    end
-    T->>V: evaluate_model(test)
-    T->>F: test metric / artifact 기록
-    T-->>U: summary 반환
+flowchart LR
+    A[MLflow runs] --> B[mlflow_report.py]
+    A --> C[mlflow_html_report.py]
+    B --> D[mlflow_leaderboard.csv]
+    C --> E[mlflow_report.html]
 ```
 
-## 5. MLflow 구조
-
-```mermaid
-flowchart TD
-    A[Experiment: CBIS-DDSM-Benchmark] --> B[Parent Run<br/>role=model_parent]
-    B --> C[Child Run 001<br/>role=hyperparameter_trial]
-    B --> D[Child Run 002<br/>role=hyperparameter_trial]
-    B --> E[Child Run 003<br/>role=hyperparameter_trial]
-    C --> F[history.csv / summary.json / best_model.pt]
-    D --> G[history.csv / summary.json / best_model.pt]
-    E --> H[history.csv / summary.json / best_model.pt]
-    C --> I[test_accuracy ... test_auc_roc]
-    D --> J[test_accuracy ... test_auc_roc]
-    E --> K[test_accuracy ... test_auc_roc]
-    B --> L[best_accuracy ... best_auc_roc]
-    B --> M[best_hp_learning_rate 등]
-```
-
-## 6. 파일 구조 관점
+## 7. Image Baseline 구조
 
 ```mermaid
 flowchart TB
-    A[1st_after/<모델명>/config.json] --> D[run_experiment.py]
-    B[1st_after/<모델명>/run.ps1] --> D
-    C[run_all_models.py] --> D
+    A[image_baselines/(모델명)/config.json] --> D[run_experiment.py]
+    B[run_all_models.py] --> D
     D --> E[data.py]
+    E --> E1[manifest build]
+    E1 --> E2[group-aware train/val/test split]
     D --> F[models.py]
     D --> G[trainer.py]
-    G --> H[artifacts/<모델명>/<trial명>]
+    G --> H[artifacts/(모델명)/(trial명)]
     D --> I[mlruns]
+    D --> J[smoke options]
 ```
 
-## 7. 결과 확인 포인트
+## 8. 현재 해석 포인트
 
 ```mermaid
 mindmap
-  root((결과 확인))
-    MLflow Parent Run
-      모델별 최고 결과 비교
-      best_accuracy
-      best_precision
-      best_recall
-      best_f1_score
-      best_auc_roc
-    MLflow Child Run
-      하이퍼파라미터별 상세 결과
-      epoch 로그
-      test metric
-    Artifacts
-      best_model.pt
-      history.csv
-      summary.json
-    CSV 리더보드
-      mlflow_report.py
-      leaderboard.csv
+  root((현재 해석))
+    strict
+      현실형 baseline
+      메인 비교표 권장
+    relaxed
+      보조 정보 포함
+      성능 상승 여부 확인
+    oracle
+      진단 정보 포함
+      leakage 확인용
+    목표 3
+      image loader 전환 완료
+      smoke 검증 완료
+      전체 모델 baseline 실행 남음
 ```

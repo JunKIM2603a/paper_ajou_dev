@@ -1,0 +1,24 @@
+{
+  "safe_for_initial_baseline_review": [
+    "mel_mitotic_index",
+    "mel_thick_mm",
+    "tbp_lv_dnn_lesion_confidence"
+  ],
+  "caution_review_needed": [
+    "attribution",
+    "copyright_license",
+    "image_exists",
+    "image_path",
+    "isic_id",
+    "lesion_id",
+    "malignant"
+  ],
+  "high_leakage_risk": [
+    "iddx_1",
+    "iddx_2",
+    "iddx_3",
+    "iddx_4",
+    "iddx_5",
+    "iddx_full"
+  ]
+}

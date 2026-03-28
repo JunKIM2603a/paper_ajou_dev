@@ -1,0 +1,33 @@
+{
+  "dataset_root": "/home/junkim2603a/proj/paper_ajou_dev/dataset/ISIC2024",
+  "rows": 401059,
+  "target_column": "malignant",
+  "target_distribution": {
+    "negative": 400666,
+    "positive": 393,
+    "positive_ratio": 0.0009799056996601498
+  },
+  "image_alignment": {
+    "image_exists": 401059,
+    "image_missing": 0
+  },
+  "column_count": 16,
+  "columns": [
+    "attribution",
+    "copyright_license",
+    "iddx_1",
+    "iddx_2",
+    "iddx_3",
+    "iddx_4",
+    "iddx_5",
+    "iddx_full",
+    "image_exists",
+    "image_path",
+    "isic_id",
+    "lesion_id",
+    "malignant",
+    "mel_mitotic_index",
+    "mel_thick_mm",
+    "tbp_lv_dnn_lesion_confidence"
+  ]
+}

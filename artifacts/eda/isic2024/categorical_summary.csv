@@ -1,0 +1,152 @@
+column,unique_count,value,count,ratio
+attribution,7,Memorial Sloan Kettering Cancer Center,129068,0.321818
+attribution,7,"Department of Dermatology, Hospital Clínic de Barcelona",105724,0.263612
+attribution,7,University Hospital of Basel,65218,0.162614
+attribution,7,"Frazer Institute, The University of Queensland, Dermatology Research Centre",51768,0.129078
+attribution,7,ACEMID MIA,28665,0.071473
+attribution,7,"ViDIR Group, Department of Dermatology, Medical University of Vienna",12640,0.031517
+attribution,7,"Department of Dermatology, University of Athens, Andreas Syggros Hospital of Skin and Venereal Diseases, Alexander Stratigos, Konstantinos Liopyris",7976,0.019887
+copyright_license,3,CC-BY,188812,0.470784
+copyright_license,3,CC-BY-NC,183582,0.457743
+copyright_license,3,CC-0,28665,0.071473
+iddx_1,3,Benign,400552,0.998736
+iddx_1,3,Malignant,393,0.000980
+iddx_1,3,Indeterminate,114,0.000284
+iddx_2,14,Benign melanocytic proliferations,443,0.001105
+iddx_2,14,Malignant adnexal epithelial proliferations - Follicular,163,0.000406
+iddx_2,14,Malignant melanocytic proliferations (Melanoma),157,0.000391
+iddx_2,14,Benign epidermal proliferations,83,0.000207
+iddx_2,14,Indeterminate melanocytic proliferations,75,0.000187
+iddx_2,14,Malignant epidermal proliferations,73,0.000182
+iddx_2,14,Indeterminate epidermal proliferations,39,0.000097
+iddx_2,14,Benign soft tissue proliferations - Fibro-histiocytic,15,0.000037
+iddx_2,14,Inflammatory or infectious diseases,7,0.000017
+iddx_2,14,Flat melanotic pigmentations - not melanocytic nevus,5,0.000012
+iddx_2,14,Benign soft tissue proliferations - Vascular,3,0.000007
+iddx_2,14,Cysts,2,0.000005
+iddx_2,14,Benign adnexal epithelial proliferations - Follicular,2,0.000005
+iddx_2,14,Benign adnexal epithelial proliferations - Apocrine or Eccrine,1,0.000002
+iddx_3,25,Nevus,443,0.001105
+iddx_3,25,Basal cell carcinoma,163,0.000406
+iddx_3,25,Melanoma in situ,80,0.000199
+iddx_3,25,Atypical melanocytic neoplasm,64,0.000160
+iddx_3,25,Melanoma Invasive,63,0.000157
+iddx_3,25,Seborrheic keratosis,57,0.000142
+iddx_3,25,Squamous cell carcinoma in situ,49,0.000122
+iddx_3,25,Solar or actinic keratosis,39,0.000097
+iddx_3,25,"Squamous cell carcinoma, Invasive",22,0.000055
+iddx_3,25,"Melanoma, NOS",13,0.000032
+iddx_3,25,Solar lentigo,12,0.000030
+iddx_3,25,Lichen planus like keratosis,11,0.000027
+iddx_3,25,Dermatofibroma,11,0.000027
+iddx_3,25,Atypical intraepithelial melanocytic proliferation,11,0.000027
+iddx_3,25,Verruca,7,0.000017
+iddx_3,25,Lentigo NOS,5,0.000012
+iddx_3,25,Pigmented benign keratosis,3,0.000007
+iddx_3,25,Hemangioma,3,0.000007
+iddx_3,25,Angiofibroma,2,0.000005
+iddx_3,25,"Squamous cell carcinoma, NOS",2,0.000005
+iddx_4,26,"Nevus, Atypical, Dysplastic, or Clark",228,0.000568
+iddx_4,26,"Basal cell carcinoma, Nodular",98,0.000244
+iddx_4,26,"Basal cell carcinoma, Superficial",48,0.000120
+iddx_4,26,"Melanoma Invasive, Superficial spreading",37,0.000092
+iddx_4,26,"Nevus, NOS, Compound",30,0.000075
+iddx_4,26,"Nevus, NOS, Dermal",20,0.000050
+iddx_4,26,"Melanoma in situ, Lentigo maligna type",12,0.000030
+iddx_4,26,"Melanoma in situ, associated with a nevus",12,0.000030
+iddx_4,26,"Nevus, NOS, Junctional",10,0.000025
+iddx_4,26,"Melanoma in situ, Superficial spreading",10,0.000025
+iddx_4,26,"Melanoma Invasive, Associated with a nevus",7,0.000017
+iddx_4,26,"Basal cell carcinoma, Infiltrating",6,0.000015
+iddx_4,26,"Squamous cell carcinoma, Invasive, Keratoacanthoma-type",5,0.000012
+iddx_4,26,"Melanoma Invasive, On chronically sun-exposed skin or lentigo maligna melanoma",5,0.000012
+iddx_4,26,"Nevus, Congenital",4,0.000010
+iddx_4,26,"Nevus, Spitz",3,0.000007
+iddx_4,26,"Hemangioma, Cherry",3,0.000007
+iddx_4,26,"Angiofibroma, Facial",2,0.000005
+iddx_4,26,"Nevus, Deep penetrating",2,0.000005
+iddx_4,26,"Nevus, Of special anatomic site",2,0.000005
+iddx_5,1,"Blue nevus, Cellular",1,0.000002
+iddx_full,52,Benign,399991,0.997337
+iddx_full,52,"Benign::Benign melanocytic proliferations::Nevus::Nevus, Atypical, Dysplastic, or Clark",228,0.000568
+iddx_full,52,Benign::Benign melanocytic proliferations::Nevus,141,0.000352
+iddx_full,52,"Malignant::Malignant adnexal epithelial proliferations - Follicular::Basal cell carcinoma::Basal cell carcinoma, Nodular",98,0.000244
+iddx_full,52,Indeterminate::Indeterminate melanocytic proliferations::Atypical melanocytic neoplasm,64,0.000160
+iddx_full,52,Benign::Benign epidermal proliferations::Seborrheic keratosis,56,0.000140
+iddx_full,52,Malignant::Malignant epidermal proliferations::Squamous cell carcinoma in situ,48,0.000120
+iddx_full,52,"Malignant::Malignant adnexal epithelial proliferations - Follicular::Basal cell carcinoma::Basal cell carcinoma, Superficial",48,0.000120
+iddx_full,52,Malignant::Malignant melanocytic proliferations (Melanoma)::Melanoma in situ,46,0.000115
+iddx_full,52,Indeterminate::Indeterminate epidermal proliferations::Solar or actinic keratosis,38,0.000095
+iddx_full,52,"Malignant::Malignant melanocytic proliferations (Melanoma)::Melanoma Invasive::Melanoma Invasive, Superficial spreading",37,0.000092
+iddx_full,52,"Benign::Benign melanocytic proliferations::Nevus::Nevus, NOS, Compound",30,0.000075
+iddx_full,52,"Benign::Benign melanocytic proliferations::Nevus::Nevus, NOS, Dermal",20,0.000050
+iddx_full,52,"Malignant::Malignant epidermal proliferations::Squamous cell carcinoma, Invasive",17,0.000042
+iddx_full,52,Malignant::Malignant melanocytic proliferations (Melanoma)::Melanoma Invasive,13,0.000032
+iddx_full,52,"Malignant::Malignant melanocytic proliferations (Melanoma)::Melanoma, NOS",13,0.000032
+iddx_full,52,"Malignant::Malignant melanocytic proliferations (Melanoma)::Melanoma in situ::Melanoma in situ, Lentigo maligna type",12,0.000030
+iddx_full,52,"Malignant::Malignant melanocytic proliferations (Melanoma)::Melanoma in situ::Melanoma in situ, associated with a nevus",12,0.000030
+iddx_full,52,Benign::Benign epidermal proliferations::Solar lentigo,12,0.000030
+iddx_full,52,Benign::Benign epidermal proliferations::Lichen planus like keratosis,11,0.000027
+image_exists,1,1,401059,1.000000
+image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0015670.jpg,1,0.000002
+image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0015845.jpg,1,0.000002
+image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0015864.jpg,1,0.000002
+image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0015902.jpg,1,0.000002
+image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0024200.jpg,1,0.000002
+image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0035502.jpg,1,0.000002
+image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0051648.jpg,1,0.000002
+image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0051665.jpg,1,0.000002
+image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0051710.jpg,1,0.000002
+image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0051758.jpg,1,0.000002
+image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0051812.jpg,1,0.000002
+image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0051822.jpg,1,0.000002
+image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0051896.jpg,1,0.000002
+image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0051897.jpg,1,0.000002
+image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0051958.jpg,1,0.000002
+image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0051983.jpg,1,0.000002
+image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0052003.jpg,1,0.000002
+image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0052004.jpg,1,0.000002
+image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0052026.jpg,1,0.000002
+image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0052042.jpg,1,0.000002
+isic_id,401059,ISIC_0015670,1,0.000002
+isic_id,401059,ISIC_0015845,1,0.000002
+isic_id,401059,ISIC_0015864,1,0.000002
+isic_id,401059,ISIC_0015902,1,0.000002
+isic_id,401059,ISIC_0024200,1,0.000002
+isic_id,401059,ISIC_0035502,1,0.000002
+isic_id,401059,ISIC_0051648,1,0.000002
+isic_id,401059,ISIC_0051665,1,0.000002
+isic_id,401059,ISIC_0051710,1,0.000002
+isic_id,401059,ISIC_0051758,1,0.000002
+isic_id,401059,ISIC_0051812,1,0.000002
+isic_id,401059,ISIC_0051822,1,0.000002
+isic_id,401059,ISIC_0051896,1,0.000002
+isic_id,401059,ISIC_0051897,1,0.000002
+isic_id,401059,ISIC_0051958,1,0.000002
+isic_id,401059,ISIC_0051983,1,0.000002
+isic_id,401059,ISIC_0052003,1,0.000002
+isic_id,401059,ISIC_0052004,1,0.000002
+isic_id,401059,ISIC_0052026,1,0.000002
+isic_id,401059,ISIC_0052042,1,0.000002
+lesion_id,22058,IL_6727506,1,0.000002
+lesion_id,22058,IL_3854228,1,0.000002
+lesion_id,22058,IL_9898853,1,0.000002
+lesion_id,22058,IL_2988728,1,0.000002
+lesion_id,22058,IL_6219432,1,0.000002
+lesion_id,22058,IL_6272856,1,0.000002
+lesion_id,22058,IL_9949284,1,0.000002
+lesion_id,22058,IL_3272524,1,0.000002
+lesion_id,22058,IL_5505434,1,0.000002
+lesion_id,22058,IL_4191716,1,0.000002
+lesion_id,22058,IL_1913587,1,0.000002
+lesion_id,22058,IL_7117713,1,0.000002
+lesion_id,22058,IL_2748178,1,0.000002
+lesion_id,22058,IL_6397564,1,0.000002
+lesion_id,22058,IL_4475532,1,0.000002
+lesion_id,22058,IL_8530712,1,0.000002
+lesion_id,22058,IL_1701872,1,0.000002
+lesion_id,22058,IL_0173466,1,0.000002
+lesion_id,22058,IL_3396908,1,0.000002
+lesion_id,22058,IL_0030347,1,0.000002
+malignant,2,0.0,400666,0.999020
+malignant,2,1.0,393,0.000980

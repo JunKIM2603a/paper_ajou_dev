@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MLflow Report</title>
+  <style>
+    :root {
+      --bg: #f5efe6;
+      --panel: #fffaf3;
+      --line: #d7c8b5;
+      --text: #2f261d;
+      --muted: #756553;
+      --accent: #0f766e;
+      --accent-soft: #d7f3ef;
+      --best: #fff2bf;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Noto Sans KR", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, #fff6da 0, transparent 30%),
+        radial-gradient(circle at top right, #dff6f2 0, transparent 28%),
+        var(--bg);
+    }
+    .wrap {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 32px 20px 56px;
+    }
+    .hero {
+      background: linear-gradient(135deg, rgba(15,118,110,0.94), rgba(20,83,45,0.92));
+      color: #f8fffd;
+      border-radius: 24px;
+      padding: 28px;
+      box-shadow: 0 18px 50px rgba(35, 30, 24, 0.16);
+    }
+    .hero h1 {
+      margin: 0 0 10px;
+      font-size: 34px;
+      line-height: 1.1;
+    }
+    .hero p {
+      margin: 6px 0;
+      color: rgba(248,255,253,0.88);
+    }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 14px;
+      margin-top: 20px;
+    }
+    .meta-card, .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      box-shadow: 0 12px 30px rgba(61, 46, 31, 0.08);
+    }
+    .meta-card {
+      padding: 18px;
+    }
+    .meta-card .label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 8px;
+    }
+    .meta-card .value {
+      font-size: 24px;
+      font-weight: 700;
+    }
+    .panel {
+      margin-top: 22px;
+      padding: 22px;
+    }
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-start;
+      margin-bottom: 16px;
+    }
+    h2 {
+      margin: 0 0 6px;
+      font-size: 24px;
+    }
+    .badge {
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 700;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 14px;
+      overflow: hidden;
+      border-radius: 14px;
+    }
+    th, td {
+      padding: 11px 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      font-size: 14px;
+      vertical-align: top;
+    }
+    th {
+      background: #f1e4d3;
+      color: #4a3d30;
+      font-weight: 700;
+    }
+    tr.best-row td {
+      background: var(--best);
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+    }
+    .summary-item {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+      background: #fffdf9;
+    }
+    .summary-item .k {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .summary-item .v {
+      margin-top: 8px;
+      font-size: 22px;
+      font-weight: 700;
+    }
+    .empty {
+      margin-top: 12px;
+      color: var(--muted);
+    }
+    code {
+      font-family: Consolas, "SFMono-Regular", monospace;
+      background: rgba(47, 38, 29, 0.06);
+      padding: 1px 6px;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <h1>MLflow Experiment Report</h1>
+      <p><strong>ISIC2024-Tabular-Benchmark</strong></p>
+      <p>Experiment ID: <code>330411427273995911</code></p>
+      <p>Tracking URI: <code>file:./mlruns</code></p>
+      <p>Generated at: 2026-03-28 17:08:57</p>
+      <p>Parent sort metric: <code>best_average_precision</code> / Child sort metric: <code>test_average_precision</code></p>
+    </section>
+
+    <section class="meta-grid">
+      <article class="meta-card">
+        <span class="label">Models</span>
+        <div class="value">5</div>
+      </article>
+      <article class="meta-card">
+        <span class="label">Parent Runs</span>
+        <div class="value">5</div>
+      </article>
+      <article class="meta-card">
+        <span class="label">Trial Runs</span>
+        <div class="value">15</div>
+      </article>
+    </section>
+
+    <section class="panel">
+      <div class="section-head">
+        <div>
+          <h2>Leaderboard</h2>
+          <p>Best parent runs sorted by <code>best_average_precision</code>.</p>
+        </div>
+      </div>
+      <table><thead><tr><th>Model</th><th>Feature Set</th><th>Primary</th><th>Avg Precision</th><th>Balanced Acc</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th><th>AUC</th><th>Best Child</th></tr></thead><tbody><tr><td>logistic_regression</td><td>oracle</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>logistic_regression_trial_003</td></tr><tr><td>mlp</td><td>oracle</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>mlp_trial_003</td></tr><tr><td>svm</td><td>oracle</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>svm_trial_003</td></tr><tr><td>xgboost</td><td>strict</td><td>0.0088</td><td>0.0088</td><td>0.6217</td><td>0.8125</td><td>0.0023</td><td>0.4304</td><td>0.0045</td><td>0.6551</td><td>xgboost_trial_001</td></tr><tr><td>catboost</td><td>strict</td><td>0.0077</td><td>0.0077</td><td>0.6730</td><td>0.7382</td><td>0.0023</td><td>0.6076</td><td>0.0046</td><td>0.7295</td><td>catboost_trial_001</td></tr></tbody></table>
+    </section>
+
+    
+            <section class="panel">
+              <div class="section-head">
+                <div>
+                  <h2>logistic_regression</h2>
+                  <p>Best child run: <strong>logistic_regression_trial_003</strong></p>
+                </div>
+                <div class="badge">Parent run: eb7219f594dc4aac8ba93f0cc718f813</div>
+              </div>
+              <div class="summary-grid"><div class="summary-item"><div class="k">Primary</div><div class="v">1.0000</div></div><div class="summary-item"><div class="k">Average Precision</div><div class="v">1.0000</div></div><div class="summary-item"><div class="k">Balanced Accuracy</div><div class="v">1.0000</div></div><div class="summary-item"><div class="k">Accuracy</div><div class="v">1.0000</div></div><div class="summary-item"><div class="k">Precision</div><div class="v">1.0000</div></div><div class="summary-item"><div class="k">Recall</div><div class="v">1.0000</div></div><div class="summary-item"><div class="k">F1 Score</div><div class="v">1.0000</div></div><div class="summary-item"><div class="k">Auc Roc</div><div class="v">1.0000</div></div><div class="summary-item"><div class="k">Feature Set</div><div class="v">oracle</div></div></div>
+              <table><thead><tr><th>Trial Run</th><th>Feature Set</th><th>Hyperparameters</th><th>Primary</th><th>Avg Precision</th><th>Balanced Acc</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th><th>AUC</th><th>Duration (s)</th></tr></thead><tbody><tr class="best-row"><td>logistic_regression_trial_003</td><td>oracle</td><td><code>{&quot;max_iter&quot;: &quot;1000&quot;, &quot;seed&quot;: &quot;44&quot;, &quot;feature_set&quot;: &quot;oracle&quot;, &quot;C&quot;: &quot;1.0&quot;, &quot;model_name&quot;: &quot;logistic_regression&quot;, &quot;hidden_layer_sizes&quot;: &quot;&quot;, &quot;alpha&quot;: &quot;&quot;, &quot;subsample&quot;: &quot;&quot;, &quot;learning_rate&quot;: &quot;&quot;, &quot;n_estimators&quot;: &quot;&quot;, &quot;colsample_bytree&quot;: &quot;&quot;, &quot;max_depth&quot;: &quot;&quot;, &quot;iterations&quot;: &quot;&quot;, &quot;depth&quot;: &quot;&quot;}</code></td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>41.5214</td></tr><tr><td>logistic_regression_trial_002</td><td>relaxed</td><td><code>{&quot;max_iter&quot;: &quot;1000&quot;, &quot;seed&quot;: &quot;43&quot;, &quot;feature_set&quot;: &quot;relaxed&quot;, &quot;C&quot;: &quot;1.0&quot;, &quot;model_name&quot;: &quot;logistic_regression&quot;, &quot;hidden_layer_sizes&quot;: &quot;&quot;, &quot;alpha&quot;: &quot;&quot;, &quot;subsample&quot;: &quot;&quot;, &quot;learning_rate&quot;: &quot;&quot;, &quot;n_estimators&quot;: &quot;&quot;, &quot;colsample_bytree&quot;: &quot;&quot;, &quot;max_depth&quot;: &quot;&quot;, &quot;iterations&quot;: &quot;&quot;, &quot;depth&quot;: &quot;&quot;}</code></td><td>0.0941</td><td>0.0941</td><td>0.6318</td><td>0.9971</td><td>0.1094</td><td>0.2658</td><td>0.1550</td><td>0.9849</td><td>39.1141</td></tr><tr><td>logistic_regression_trial_001</td><td>strict</td><td><code>{&quot;max_iter&quot;: &quot;1000&quot;, &quot;seed&quot;: &quot;42&quot;, &quot;feature_set&quot;: &quot;strict&quot;, &quot;C&quot;: &quot;1.0&quot;, &quot;model_name&quot;: &quot;logistic_regression&quot;, &quot;hidden_layer_sizes&quot;: &quot;&quot;, &quot;alpha&quot;: &quot;&quot;, &quot;subsample&quot;: &quot;&quot;, &quot;learning_rate&quot;: &quot;&quot;, &quot;n_estimators&quot;: &quot;&quot;, &quot;colsample_bytree&quot;: &quot;&quot;, &quot;max_depth&quot;: &quot;&quot;, &quot;iterations&quot;: &quot;&quot;, &quot;depth&quot;: &quot;&quot;}</code></td><td>0.0115</td><td>0.0115</td><td>0.6599</td><td>0.7247</td><td>0.0021</td><td>0.5949</td><td>0.0042</td><td>0.7280</td><td>0.9074</td></tr><tr><td>logistic_regression_trial_001</td><td>strict</td><td><code>{&quot;max_iter&quot;: &quot;1000&quot;, &quot;seed&quot;: &quot;42&quot;, &quot;feature_set&quot;: &quot;strict&quot;, &quot;C&quot;: &quot;1.0&quot;, &quot;model_name&quot;: &quot;logistic_regression&quot;, &quot;hidden_layer_sizes&quot;: &quot;&quot;, &quot;alpha&quot;: &quot;&quot;, &quot;subsample&quot;: &quot;&quot;, &quot;learning_rate&quot;: &quot;&quot;, &quot;n_estimators&quot;: &quot;&quot;, &quot;colsample_bytree&quot;: &quot;&quot;, &quot;max_depth&quot;: &quot;&quot;, &quot;iterations&quot;: &quot;&quot;, &quot;depth&quot;: &quot;&quot;}</code></td><td>0.0115</td><td>0.0115</td><td>0.6599</td><td>0.7247</td><td>0.0021</td><td>0.5949</td><td>0.0042</td><td>0.7280</td><td>0.9004</td></tr></tbody></table>
+            </section>
+            
+
+            <section class="panel">
+              <div class="section-head">
+                <div>
+                  <h2>mlp</h2>
+                  <p>Best child run: <strong>mlp_trial_003</strong></p>
+                </div>
+                <div class="badge">Parent run: 044fe49098d64664b0f60f9b78e2bbc3</div>
+              </div>
+              <div class="summary-grid"><div class="summary-item"><div class="k">Primary</div><div class="v">1.0000</div></div><div class="summary-item"><div class="k">Average Precision</div><div class="v">1.0000</div></div><div class="summary-item"><div class="k">Balanced Accuracy</div><div class="v">1.0000</div></div><div class="summary-item"><div class="k">Accuracy</div><div class="v">1.0000</div></div><div class="summary-item"><div class="k">Precision</div><div class="v">1.0000</div></div><div class="summary-item"><div class="k">Recall</div><div class="v">1.0000</div></div><div class="summary-item"><div class="k">F1 Score</div><div class="v">1.0000</div></div><div class="summary-item"><div class="k">Auc Roc</div><div class="v">1.0000</div></div><div class="summary-item"><div class="k">Feature Set</div><div class="v">oracle</div></div></div>
+              <table><thead><tr><th>Trial Run</th><th>Feature Set</th><th>Hyperparameters</th><th>Primary</th><th>Avg Precision</th><th>Balanced Acc</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th><th>AUC</th><th>Duration (s)</th></tr></thead><tbody><tr class="best-row"><td>mlp_trial_003</td><td>oracle</td><td><code>{&quot;max_iter&quot;: &quot;50&quot;, &quot;seed&quot;: &quot;44&quot;, &quot;feature_set&quot;: &quot;oracle&quot;, &quot;C&quot;: &quot;&quot;, &quot;model_name&quot;: &quot;mlp&quot;, &quot;hidden_layer_sizes&quot;: &quot;[64, 32]&quot;, &quot;alpha&quot;: &quot;0.0001&quot;, &quot;subsample&quot;: &quot;&quot;, &quot;learning_rate&quot;: &quot;&quot;, &quot;n_estimators&quot;: &quot;&quot;, &quot;colsample_bytree&quot;: &quot;&quot;, &quot;max_depth&quot;: &quot;&quot;, &quot;iterations&quot;: &quot;&quot;, &quot;depth&quot;: &quot;&quot;}</code></td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>558.3181</td></tr><tr><td>mlp_trial_002</td><td>relaxed</td><td><code>{&quot;max_iter&quot;: &quot;50&quot;, &quot;seed&quot;: &quot;43&quot;, &quot;feature_set&quot;: &quot;relaxed&quot;, &quot;C&quot;: &quot;&quot;, &quot;model_name&quot;: &quot;mlp&quot;, &quot;hidden_layer_sizes&quot;: &quot;[64, 32]&quot;, &quot;alpha&quot;: &quot;0.0001&quot;, &quot;subsample&quot;: &quot;&quot;, &quot;learning_rate&quot;: &quot;&quot;, &quot;n_estimators&quot;: &quot;&quot;, &quot;colsample_bytree&quot;: &quot;&quot;, &quot;max_depth&quot;: &quot;&quot;, &quot;iterations&quot;: &quot;&quot;, &quot;depth&quot;: &quot;&quot;}</code></td><td>0.0673</td><td>0.0673</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.9820</td><td>579.5829</td></tr><tr><td>mlp_trial_001</td><td>strict</td><td><code>{&quot;max_iter&quot;: &quot;50&quot;, &quot;seed&quot;: &quot;42&quot;, &quot;feature_set&quot;: &quot;strict&quot;, &quot;C&quot;: &quot;&quot;, &quot;model_name&quot;: &quot;mlp&quot;, &quot;hidden_layer_sizes&quot;: &quot;[64, 32]&quot;, &quot;alpha&quot;: &quot;0.0001&quot;, &quot;subsample&quot;: &quot;&quot;, &quot;learning_rate&quot;: &quot;&quot;, &quot;n_estimators&quot;: &quot;&quot;, &quot;colsample_bytree&quot;: &quot;&quot;, &quot;max_depth&quot;: &quot;&quot;, &quot;iterations&quot;: &quot;&quot;, &quot;depth&quot;: &quot;&quot;}</code></td><td>0.0211</td><td>0.0211</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.7328</td><td>9.2879</td></tr><tr><td>mlp_trial_001</td><td>strict</td><td><code>{&quot;max_iter&quot;: &quot;50&quot;, &quot;seed&quot;: &quot;42&quot;, &quot;feature_set&quot;: &quot;strict&quot;, &quot;C&quot;: &quot;&quot;, &quot;model_name&quot;: &quot;mlp&quot;, &quot;hidden_layer_sizes&quot;: &quot;[64, 32]&quot;, &quot;alpha&quot;: &quot;0.0001&quot;, &quot;subsample&quot;: &quot;&quot;, &quot;learning_rate&quot;: &quot;&quot;, &quot;n_estimators&quot;: &quot;&quot;, &quot;colsample_bytree&quot;: &quot;&quot;, &quot;max_depth&quot;: &quot;&quot;, &quot;iterations&quot;: &quot;&quot;, &quot;depth&quot;: &quot;&quot;}</code></td><td>0.0211</td><td>0.0211</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.7328</td><td>7.2683</td></tr></tbody></table>
+            </section>
+            
+
+            <section class="panel">
+              <div class="section-head">
+                <div>
+                  <h2>svm</h2>
+                  <p>Best child run: <strong>svm_trial_003</strong></p>
+                </div>
+                <div class="badge">Parent run: c64492d2676449e7acef225e2ac8da31</div>
+              </div>
+              <div class="summary-grid"><div class="summary-item"><div class="k">Primary</div><div class="v">1.0000</div></div><div class="summary-item"><div class="k">Average Precision</div><div class="v">1.0000</div></div><div class="summary-item"><div class="k">Balanced Accuracy</div><div class="v">1.0000</div></div><div class="summary-item"><div class="k">Accuracy</div><div class="v">1.0000</div></div><div class="summary-item"><div class="k">Precision</div><div class="v">1.0000</div></div><div class="summary-item"><div class="k">Recall</div><div class="v">1.0000</div></div><div class="summary-item"><div class="k">F1 Score</div><div class="v">1.0000</div></div><div class="summary-item"><div class="k">Auc Roc</div><div class="v">1.0000</div></div><div class="summary-item"><div class="k">Feature Set</div><div class="v">oracle</div></div></div>
+              <table><thead><tr><th>Trial Run</th><th>Feature Set</th><th>Hyperparameters</th><th>Primary</th><th>Avg Precision</th><th>Balanced Acc</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th><th>AUC</th><th>Duration (s)</th></tr></thead><tbody><tr class="best-row"><td>svm_trial_003</td><td>oracle</td><td><code>{&quot;max_iter&quot;: &quot;&quot;, &quot;seed&quot;: &quot;44&quot;, &quot;feature_set&quot;: &quot;oracle&quot;, &quot;C&quot;: &quot;1.0&quot;, &quot;model_name&quot;: &quot;svm&quot;, &quot;hidden_layer_sizes&quot;: &quot;&quot;, &quot;alpha&quot;: &quot;&quot;, &quot;subsample&quot;: &quot;&quot;, &quot;learning_rate&quot;: &quot;&quot;, &quot;n_estimators&quot;: &quot;&quot;, &quot;colsample_bytree&quot;: &quot;&quot;, &quot;max_depth&quot;: &quot;&quot;, &quot;iterations&quot;: &quot;&quot;, &quot;depth&quot;: &quot;&quot;}</code></td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>45.9290</td></tr><tr><td>svm_trial_002</td><td>relaxed</td><td><code>{&quot;max_iter&quot;: &quot;&quot;, &quot;seed&quot;: &quot;43&quot;, &quot;feature_set&quot;: &quot;relaxed&quot;, &quot;C&quot;: &quot;1.0&quot;, &quot;model_name&quot;: &quot;svm&quot;, &quot;hidden_layer_sizes&quot;: &quot;&quot;, &quot;alpha&quot;: &quot;&quot;, &quot;subsample&quot;: &quot;&quot;, &quot;learning_rate&quot;: &quot;&quot;, &quot;n_estimators&quot;: &quot;&quot;, &quot;colsample_bytree&quot;: &quot;&quot;, &quot;max_depth&quot;: &quot;&quot;, &quot;iterations&quot;: &quot;&quot;, &quot;depth&quot;: &quot;&quot;}</code></td><td>0.0735</td><td>0.0735</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.9851</td><td>41.1513</td></tr><tr><td>svm_trial_001</td><td>strict</td><td><code>{&quot;max_iter&quot;: &quot;&quot;, &quot;seed&quot;: &quot;42&quot;, &quot;feature_set&quot;: &quot;strict&quot;, &quot;C&quot;: &quot;1.0&quot;, &quot;model_name&quot;: &quot;svm&quot;, &quot;hidden_layer_sizes&quot;: &quot;&quot;, &quot;alpha&quot;: &quot;&quot;, &quot;subsample&quot;: &quot;&quot;, &quot;learning_rate&quot;: &quot;&quot;, &quot;n_estimators&quot;: &quot;&quot;, &quot;colsample_bytree&quot;: &quot;&quot;, &quot;max_depth&quot;: &quot;&quot;, &quot;iterations&quot;: &quot;&quot;, &quot;depth&quot;: &quot;&quot;}</code></td><td>0.0112</td><td>0.0112</td><td>0.6612</td><td>0.7273</td><td>0.0021</td><td>0.5949</td><td>0.0043</td><td>0.7256</td><td>0.8704</td></tr><tr><td>svm_trial_001</td><td>strict</td><td><code>{&quot;max_iter&quot;: &quot;&quot;, &quot;seed&quot;: &quot;42&quot;, &quot;feature_set&quot;: &quot;strict&quot;, &quot;C&quot;: &quot;1.0&quot;, &quot;model_name&quot;: &quot;svm&quot;, &quot;hidden_layer_sizes&quot;: &quot;&quot;, &quot;alpha&quot;: &quot;&quot;, &quot;subsample&quot;: &quot;&quot;, &quot;learning_rate&quot;: &quot;&quot;, &quot;n_estimators&quot;: &quot;&quot;, &quot;colsample_bytree&quot;: &quot;&quot;, &quot;max_depth&quot;: &quot;&quot;, &quot;iterations&quot;: &quot;&quot;, &quot;depth&quot;: &quot;&quot;}</code></td><td>0.0112</td><td>0.0112</td><td>0.6612</td><td>0.7273</td><td>0.0021</td><td>0.5949</td><td>0.0043</td><td>0.7256</td><td>0.8946</td></tr></tbody></table>
+            </section>
+            
+
+            <section class="panel">
+              <div class="section-head">
+                <div>
+                  <h2>xgboost</h2>
+                  <p>Best child run: <strong>xgboost_trial_001</strong></p>
+                </div>
+                <div class="badge">Parent run: 2baf76433b074ff0b6ff27609bf20436</div>
+              </div>
+              <div class="summary-grid"><div class="summary-item"><div class="k">Primary</div><div class="v">0.0088</div></div><div class="summary-item"><div class="k">Average Precision</div><div class="v">0.0088</div></div><div class="summary-item"><div class="k">Balanced Accuracy</div><div class="v">0.6217</div></div><div class="summary-item"><div class="k">Accuracy</div><div class="v">0.8125</div></div><div class="summary-item"><div class="k">Precision</div><div class="v">0.0023</div></div><div class="summary-item"><div class="k">Recall</div><div class="v">0.4304</div></div><div class="summary-item"><div class="k">F1 Score</div><div class="v">0.0045</div></div><div class="summary-item"><div class="k">Auc Roc</div><div class="v">0.6551</div></div><div class="summary-item"><div class="k">Feature Set</div><div class="v">strict</div></div></div>
+              <table><thead><tr><th>Trial Run</th><th>Feature Set</th><th>Hyperparameters</th><th>Primary</th><th>Avg Precision</th><th>Balanced Acc</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th><th>AUC</th><th>Duration (s)</th></tr></thead><tbody><tr class="best-row"><td>xgboost_trial_001</td><td>strict</td><td><code>{&quot;max_iter&quot;: &quot;&quot;, &quot;seed&quot;: &quot;42&quot;, &quot;feature_set&quot;: &quot;strict&quot;, &quot;C&quot;: &quot;&quot;, &quot;model_name&quot;: &quot;xgboost&quot;, &quot;hidden_layer_sizes&quot;: &quot;&quot;, &quot;alpha&quot;: &quot;&quot;, &quot;subsample&quot;: &quot;0.8&quot;, &quot;learning_rate&quot;: &quot;0.05&quot;, &quot;n_estimators&quot;: &quot;200&quot;, &quot;colsample_bytree&quot;: &quot;0.8&quot;, &quot;max_depth&quot;: &quot;6&quot;, &quot;iterations&quot;: &quot;&quot;, &quot;depth&quot;: &quot;&quot;}</code></td><td>0.0088</td><td>0.0088</td><td>0.6217</td><td>0.8125</td><td>0.0023</td><td>0.4304</td><td>0.0045</td><td>0.6551</td><td>4.6738</td></tr><tr class="best-row"><td>xgboost_trial_001</td><td>strict</td><td><code>{&quot;max_iter&quot;: &quot;&quot;, &quot;seed&quot;: &quot;42&quot;, &quot;feature_set&quot;: &quot;strict&quot;, &quot;C&quot;: &quot;&quot;, &quot;model_name&quot;: &quot;xgboost&quot;, &quot;hidden_layer_sizes&quot;: &quot;&quot;, &quot;alpha&quot;: &quot;&quot;, &quot;subsample&quot;: &quot;0.8&quot;, &quot;learning_rate&quot;: &quot;0.05&quot;, &quot;n_estimators&quot;: &quot;200&quot;, &quot;colsample_bytree&quot;: &quot;0.8&quot;, &quot;max_depth&quot;: &quot;6&quot;, &quot;iterations&quot;: &quot;&quot;, &quot;depth&quot;: &quot;&quot;}</code></td><td>0.0088</td><td>0.0088</td><td>0.6217</td><td>0.8125</td><td>0.0023</td><td>0.4304</td><td>0.0045</td><td>0.6551</td><td>4.6322</td></tr></tbody></table>
+            </section>
+            
+
+            <section class="panel">
+              <div class="section-head">
+                <div>
+                  <h2>catboost</h2>
+                  <p>Best child run: <strong>catboost_trial_001</strong></p>
+                </div>
+                <div class="badge">Parent run: ce4b01868e894df69e2b9e88df8b85fd</div>
+              </div>
+              <div class="summary-grid"><div class="summary-item"><div class="k">Primary</div><div class="v">0.0077</div></div><div class="summary-item"><div class="k">Average Precision</div><div class="v">0.0077</div></div><div class="summary-item"><div class="k">Balanced Accuracy</div><div class="v">0.6730</div></div><div class="summary-item"><div class="k">Accuracy</div><div class="v">0.7382</div></div><div class="summary-item"><div class="k">Precision</div><div class="v">0.0023</div></div><div class="summary-item"><div class="k">Recall</div><div class="v">0.6076</div></div><div class="summary-item"><div class="k">F1 Score</div><div class="v">0.0046</div></div><div class="summary-item"><div class="k">Auc Roc</div><div class="v">0.7295</div></div><div class="summary-item"><div class="k">Feature Set</div><div class="v">strict</div></div></div>
+              <table><thead><tr><th>Trial Run</th><th>Feature Set</th><th>Hyperparameters</th><th>Primary</th><th>Avg Precision</th><th>Balanced Acc</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th><th>AUC</th><th>Duration (s)</th></tr></thead><tbody><tr class="best-row"><td>catboost_trial_001</td><td>strict</td><td><code>{&quot;max_iter&quot;: &quot;&quot;, &quot;seed&quot;: &quot;42&quot;, &quot;feature_set&quot;: &quot;strict&quot;, &quot;C&quot;: &quot;&quot;, &quot;model_name&quot;: &quot;catboost&quot;, &quot;hidden_layer_sizes&quot;: &quot;&quot;, &quot;alpha&quot;: &quot;&quot;, &quot;subsample&quot;: &quot;&quot;, &quot;learning_rate&quot;: &quot;0.05&quot;, &quot;n_estimators&quot;: &quot;&quot;, &quot;colsample_bytree&quot;: &quot;&quot;, &quot;max_depth&quot;: &quot;&quot;, &quot;iterations&quot;: &quot;300&quot;, &quot;depth&quot;: &quot;6&quot;}</code></td><td>0.0077</td><td>0.0077</td><td>0.6730</td><td>0.7382</td><td>0.0023</td><td>0.6076</td><td>0.0046</td><td>0.7295</td><td>5.6956</td></tr></tbody></table>
+            </section>
+            
+  </div>
+</body>
+</html>

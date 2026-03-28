@@ -1,0 +1,21 @@
+attribution,copyright_license,iddx_1,iddx_2,iddx_3,iddx_4,iddx_5,iddx_full,image_exists,image_path,isic_id,lesion_id,malignant,mel_mitotic_index,mel_thick_mm,tbp_lv_dnn_lesion_confidence
+Memorial Sloan Kettering Cancer Center,CC-BY,Benign,,,,,Benign,1,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0015670.jpg,ISIC_0015670,,0.0,,,97.5172817707062
+Memorial Sloan Kettering Cancer Center,CC-BY,Benign,,,,,Benign,1,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0015845.jpg,ISIC_0015845,IL_6727506,0.0,,,3.141455
+Memorial Sloan Kettering Cancer Center,CC-BY,Benign,,,,,Benign,1,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0015864.jpg,ISIC_0015864,,0.0,,,99.80404
+ACEMID MIA,CC-0,Benign,,,,,Benign,1,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0015902.jpg,ISIC_0015902,,0.0,,,99.9899983406067
+Memorial Sloan Kettering Cancer Center,CC-BY,Benign,,,,,Benign,1,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0024200.jpg,ISIC_0024200,,0.0,,,70.44251
+Memorial Sloan Kettering Cancer Center,CC-BY,Benign,,,,,Benign,1,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0035502.jpg,ISIC_0035502,,0.0,,,99.6196031570435
+ACEMID MIA,CC-0,Benign,,,,,Benign,1,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0051648.jpg,ISIC_0051648,,0.0,,,99.918133020401
+"Department of Dermatology, Hospital Clínic de Barcelona",CC-BY-NC,Benign,,,,,Benign,1,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0051665.jpg,ISIC_0051665,,0.0,,,99.97239
+Memorial Sloan Kettering Cancer Center,CC-BY,Benign,,,,,Benign,1,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0051710.jpg,ISIC_0051710,,0.0,,,99.8189628124237
+"Department of Dermatology, Hospital Clínic de Barcelona",CC-BY-NC,Benign,,,,,Benign,1,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0051758.jpg,ISIC_0051758,,0.0,,,99.9996900558472
+"Department of Dermatology, Hospital Clínic de Barcelona",CC-BY-NC,Benign,,,,,Benign,1,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0051812.jpg,ISIC_0051812,,0.0,,,99.99996
+Memorial Sloan Kettering Cancer Center,CC-BY,Benign,,,,,Benign,1,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0051822.jpg,ISIC_0051822,,0.0,,,56.3124001026154
+University Hospital of Basel,CC-BY-NC,Benign,,,,,Benign,1,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0051896.jpg,ISIC_0051896,,0.0,,,99.99617
+ACEMID MIA,CC-0,Benign,,,,,Benign,1,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0051897.jpg,ISIC_0051897,,0.0,,,90.98784
+Memorial Sloan Kettering Cancer Center,CC-BY,Benign,,,,,Benign,1,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0051958.jpg,ISIC_0051958,,0.0,,,84.3925
+University Hospital of Basel,CC-BY-NC,Benign,,,,,Benign,1,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0051983.jpg,ISIC_0051983,,0.0,,,100.0
+"Frazer Institute, The University of Queensland, Dermatology Research Centre",CC-BY,Benign,,,,,Benign,1,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0052003.jpg,ISIC_0052003,,0.0,,,99.99939
+"Department of Dermatology, University of Athens, Andreas Syggros Hospital of Skin and Venereal Diseases, Alexander Stratigos, Konstantinos Liopyris",CC-BY,Benign,,,,,Benign,1,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0052004.jpg,ISIC_0052004,,0.0,,,99.9998211860657
+Memorial Sloan Kettering Cancer Center,CC-BY,Benign,,,,,Benign,1,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0052026.jpg,ISIC_0052026,,0.0,,,95.83353
+Memorial Sloan Kettering Cancer Center,CC-BY,Benign,,,,,Benign,1,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0052042.jpg,ISIC_0052042,,0.0,,,99.99708

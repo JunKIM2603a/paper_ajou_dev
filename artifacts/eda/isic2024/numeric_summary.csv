@@ -1,0 +1,10 @@
+column,group,count,mean,median,min,max
+mel_mitotic_index,all,0,,,,
+mel_mitotic_index,target_0,0,,,,
+mel_mitotic_index,target_1,0,,,,
+mel_thick_mm,all,63,0.670952,0.400000,0.200000,5.000000
+mel_thick_mm,target_0,0,,,,
+mel_thick_mm,target_1,63,0.670952,0.400000,0.200000,5.000000
+tbp_lv_dnn_lesion_confidence,all,401059,97.162204,99.994588,0.000000,100.000000
+tbp_lv_dnn_lesion_confidence,target_0,400666,97.177634,99.994610,0.000000,100.000000
+tbp_lv_dnn_lesion_confidence,target_1,393,81.431493,99.684890,0.000002,100.000000

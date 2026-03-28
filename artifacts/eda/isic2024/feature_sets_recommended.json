@@ -1,0 +1,162 @@
+{
+  "target_column": "malignant",
+  "excluded_columns": [
+    "image_exists",
+    "image_path",
+    "isic_id"
+  ],
+  "high_leakage_risk_columns": [
+    "iddx_1",
+    "iddx_2",
+    "iddx_3",
+    "iddx_4",
+    "iddx_5",
+    "iddx_full",
+    "mel_mitotic_index",
+    "mel_thick_mm"
+  ],
+  "feature_sets": {
+    "strict": [
+      "attribution",
+      "copyright_license",
+      "tbp_lv_dnn_lesion_confidence"
+    ],
+    "relaxed": [
+      "attribution",
+      "copyright_license",
+      "lesion_id",
+      "tbp_lv_dnn_lesion_confidence"
+    ],
+    "oracle": [
+      "attribution",
+      "copyright_license",
+      "iddx_1",
+      "iddx_2",
+      "iddx_3",
+      "iddx_4",
+      "iddx_5",
+      "iddx_full",
+      "lesion_id",
+      "mel_mitotic_index",
+      "mel_thick_mm",
+      "tbp_lv_dnn_lesion_confidence"
+    ]
+  },
+  "rationales": {
+    "strict": [
+      "식별자와 진단 계열 컬럼을 제외합니다.",
+      "결측이 매우 심한 컬럼을 제외합니다.",
+      "초기 현실형 baseline 비교 기준으로 사용합니다."
+    ],
+    "relaxed": [
+      "strict 세트에 더해, 결측이 많지만 검토 가치가 있는 컬럼을 포함합니다.",
+      "운영 가능성보다 탐색적 성능 비교에 가깝습니다."
+    ],
+    "oracle": [
+      "진단 계열 컬럼까지 포함한 상한선 성격의 세트입니다.",
+      "현실적인 baseline보다는 leakage 영향 확인용입니다."
+    ]
+  },
+  "evidence": {
+    "iddx_1_target_rates": {
+      "Benign": {
+        "count": 400552,
+        "positive_count": 0,
+        "negative_count": 400552,
+        "positive_ratio": 0.0
+      },
+      "Malignant": {
+        "count": 393,
+        "positive_count": 393,
+        "negative_count": 0,
+        "positive_ratio": 1.0
+      },
+      "Indeterminate": {
+        "count": 114,
+        "positive_count": 0,
+        "negative_count": 114,
+        "positive_ratio": 0.0
+      }
+    },
+    "iddx_full_target_rates_sample": {
+      "Benign": {
+        "count": 399991,
+        "positive_count": 0,
+        "negative_count": 399991,
+        "positive_ratio": 0.0
+      },
+      "Benign::Benign melanocytic proliferations::Nevus::Nevus, Atypical, Dysplastic, or Clark": {
+        "count": 228,
+        "positive_count": 0,
+        "negative_count": 228,
+        "positive_ratio": 0.0
+      },
+      "Benign::Benign melanocytic proliferations::Nevus": {
+        "count": 141,
+        "positive_count": 0,
+        "negative_count": 141,
+        "positive_ratio": 0.0
+      },
+      "Malignant::Malignant adnexal epithelial proliferations - Follicular::Basal cell carcinoma::Basal cell carcinoma, Nodular": {
+        "count": 98,
+        "positive_count": 98,
+        "negative_count": 0,
+        "positive_ratio": 1.0
+      },
+      "Indeterminate::Indeterminate melanocytic proliferations::Atypical melanocytic neoplasm": {
+        "count": 64,
+        "positive_count": 0,
+        "negative_count": 64,
+        "positive_ratio": 0.0
+      },
+      "Benign::Benign epidermal proliferations::Seborrheic keratosis": {
+        "count": 56,
+        "positive_count": 0,
+        "negative_count": 56,
+        "positive_ratio": 0.0
+      },
+      "Malignant::Malignant epidermal proliferations::Squamous cell carcinoma in situ": {
+        "count": 48,
+        "positive_count": 48,
+        "negative_count": 0,
+        "positive_ratio": 1.0
+      },
+      "Malignant::Malignant adnexal epithelial proliferations - Follicular::Basal cell carcinoma::Basal cell carcinoma, Superficial": {
+        "count": 48,
+        "positive_count": 48,
+        "negative_count": 0,
+        "positive_ratio": 1.0
+      },
+      "Malignant::Malignant melanocytic proliferations (Melanoma)::Melanoma in situ": {
+        "count": 46,
+        "positive_count": 46,
+        "negative_count": 0,
+        "positive_ratio": 1.0
+      },
+      "Indeterminate::Indeterminate epidermal proliferations::Solar or actinic keratosis": {
+        "count": 38,
+        "positive_count": 0,
+        "negative_count": 38,
+        "positive_ratio": 0.0
+      }
+    },
+    "missingness_snapshot": {
+      "lesion_id": {
+        "missing_ratio": 0.945001,
+        "non_missing_ratio": 0.054999
+      },
+      "mel_mitotic_index": {
+        "missing_ratio": 0.999868,
+        "non_missing_ratio": 0.000132
+      },
+      "mel_thick_mm": {
+        "missing_ratio": 0.999843,
+        "non_missing_ratio": 0.000157
+      },
+      "tbp_lv_dnn_lesion_confidence": {
+        "missing_ratio": 0.0,
+        "non_missing_ratio": 1.0
+      }
+    }
+  }
+}
