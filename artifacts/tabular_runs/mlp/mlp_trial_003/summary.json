@@ -1,0 +1,68 @@
+{
+  "model_name": "mlp",
+  "hyperparameters": {
+    "feature_set": "oracle",
+    "model_name": "mlp",
+    "hidden_layer_sizes": [
+      64,
+      32
+    ],
+    "alpha": 0.0001,
+    "max_iter": 50,
+    "seed": 44
+  },
+  "split_summary": {
+    "num_train_rows": 256677,
+    "num_val_rows": 64170,
+    "num_test_rows": 80212,
+    "num_train_positive": 251,
+    "num_val_positive": 63,
+    "num_test_positive": 79,
+    "numeric_columns": [
+      "mel_thick_mm",
+      "tbp_lv_dnn_lesion_confidence"
+    ],
+    "categorical_columns": [
+      "attribution",
+      "copyright_license",
+      "iddx_1",
+      "iddx_2",
+      "iddx_3",
+      "iddx_4",
+      "iddx_5",
+      "iddx_full",
+      "lesion_id",
+      "mel_mitotic_index"
+    ]
+  },
+  "metrics": {
+    "train": {
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "auc_roc": 1.0,
+      "average_precision": 1.0,
+      "balanced_accuracy": 1.0
+    },
+    "val": {
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "auc_roc": 1.0,
+      "average_precision": 0.9999999999999998,
+      "balanced_accuracy": 1.0
+    },
+    "test": {
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "auc_roc": 1.0,
+      "average_precision": 0.9999999999999998,
+      "balanced_accuracy": 1.0
+    }
+  },
+  "duration_seconds": 558.3180565834045
+}

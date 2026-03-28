@@ -1,0 +1,16 @@
+{
+  "best_epoch": 1,
+  "best_validation_metric": 0.8905180840664711,
+  "test_metrics": {
+    "accuracy": 0.9990234375,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1_score": 0.0,
+    "balanced_accuracy": 0.5,
+    "auc_roc": 0.9540566959921799,
+    "average_precision": 0.020833333333333332
+  },
+  "duration_seconds": 14.052951335906982,
+  "model_path": "artifacts/TorchXRayVision/TorchXRayVision_trial_001/best_model.pt",
+  "history_path": "artifacts/TorchXRayVision/TorchXRayVision_trial_001/history.csv"
+}

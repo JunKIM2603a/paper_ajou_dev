@@ -1,0 +1,55 @@
+{
+  "model_name": "svm",
+  "hyperparameters": {
+    "feature_set": "relaxed",
+    "model_name": "svm",
+    "C": 1.0,
+    "seed": 43
+  },
+  "split_summary": {
+    "num_train_rows": 256677,
+    "num_val_rows": 64170,
+    "num_test_rows": 80212,
+    "num_train_positive": 251,
+    "num_val_positive": 63,
+    "num_test_positive": 79,
+    "numeric_columns": [
+      "tbp_lv_dnn_lesion_confidence"
+    ],
+    "categorical_columns": [
+      "attribution",
+      "copyright_license",
+      "lesion_id"
+    ]
+  },
+  "metrics": {
+    "train": {
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "auc_roc": 1.0,
+      "average_precision": 1.0,
+      "balanced_accuracy": 1.0
+    },
+    "val": {
+      "accuracy": 0.9990182328190743,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1_score": 0.0,
+      "auc_roc": 0.9887478548389214,
+      "average_precision": 0.07866218540172347,
+      "balanced_accuracy": 0.5
+    },
+    "test": {
+      "accuracy": 0.9990151099586096,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1_score": 0.0,
+      "auc_roc": 0.9851458974770899,
+      "average_precision": 0.07351545897610054,
+      "balanced_accuracy": 0.5
+    }
+  },
+  "duration_seconds": 41.1513090133667
+}

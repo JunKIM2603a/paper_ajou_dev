@@ -1,0 +1,16 @@
+{
+  "best_epoch": 1,
+  "best_validation_metric": 0.6999022482893451,
+  "test_metrics": {
+    "accuracy": 0.9990234375,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1_score": 0.0,
+    "balanced_accuracy": 0.5,
+    "auc_roc": 0.8260019550342131,
+    "average_precision": 0.00558659217877095
+  },
+  "duration_seconds": 20.223310470581055,
+  "model_path": "artifacts/CheXzero/CheXzero_trial_001/best_model.pt",
+  "history_path": "artifacts/CheXzero/CheXzero_trial_001/history.csv"
+}

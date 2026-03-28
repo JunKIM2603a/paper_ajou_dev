@@ -1,0 +1,59 @@
+{
+  "model_name": "mlp",
+  "hyperparameters": {
+    "feature_set": "strict",
+    "model_name": "mlp",
+    "hidden_layer_sizes": [
+      64,
+      32
+    ],
+    "alpha": 0.0001,
+    "max_iter": 50,
+    "seed": 42
+  },
+  "split_summary": {
+    "num_train_rows": 256677,
+    "num_val_rows": 64170,
+    "num_test_rows": 80212,
+    "num_train_positive": 251,
+    "num_val_positive": 63,
+    "num_test_positive": 79,
+    "numeric_columns": [
+      "tbp_lv_dnn_lesion_confidence"
+    ],
+    "categorical_columns": [
+      "attribution",
+      "copyright_license"
+    ]
+  },
+  "metrics": {
+    "train": {
+      "accuracy": 0.9990221172913818,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1_score": 0.0,
+      "auc_roc": 0.7154493955107013,
+      "average_precision": 0.020769736075699565,
+      "balanced_accuracy": 0.5
+    },
+    "val": {
+      "accuracy": 0.9990182328190743,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1_score": 0.0,
+      "auc_roc": 0.7344866878069181,
+      "average_precision": 0.05546003579539343,
+      "balanced_accuracy": 0.5
+    },
+    "test": {
+      "accuracy": 0.9990151099586096,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1_score": 0.0,
+      "auc_roc": 0.7327542643898821,
+      "average_precision": 0.021109844820281855,
+      "balanced_accuracy": 0.5
+    }
+  },
+  "duration_seconds": 9.287883520126343
+}

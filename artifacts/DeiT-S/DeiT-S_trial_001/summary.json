@@ -1,0 +1,16 @@
+{
+  "best_epoch": 1,
+  "best_validation_metric": 0.7536656891495601,
+  "test_metrics": {
+    "accuracy": 0.9990234375,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1_score": 0.0,
+    "balanced_accuracy": 0.5,
+    "auc_roc": 0.6881720430107527,
+    "average_precision": 0.003125
+  },
+  "duration_seconds": 16.891620635986328,
+  "model_path": "artifacts/DeiT-S/DeiT-S_trial_001/best_model.pt",
+  "history_path": "artifacts/DeiT-S/DeiT-S_trial_001/history.csv"
+}

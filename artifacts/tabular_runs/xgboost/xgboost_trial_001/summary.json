@@ -1,0 +1,58 @@
+{
+  "model_name": "xgboost",
+  "hyperparameters": {
+    "feature_set": "strict",
+    "model_name": "xgboost",
+    "n_estimators": 200,
+    "max_depth": 6,
+    "learning_rate": 0.05,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "seed": 42
+  },
+  "split_summary": {
+    "num_train_rows": 256677,
+    "num_val_rows": 64170,
+    "num_test_rows": 80212,
+    "num_train_positive": 251,
+    "num_val_positive": 63,
+    "num_test_positive": 79,
+    "numeric_columns": [
+      "tbp_lv_dnn_lesion_confidence"
+    ],
+    "categorical_columns": [
+      "attribution",
+      "copyright_license"
+    ]
+  },
+  "metrics": {
+    "train": {
+      "accuracy": 0.8132477783361969,
+      "precision": 0.004674450492375452,
+      "recall": 0.896414342629482,
+      "f1_score": 0.00930040301746409,
+      "auc_roc": 0.9196325769900517,
+      "average_precision": 0.022438359399387594,
+      "balanced_accuracy": 0.8547903571071334
+    },
+    "val": {
+      "accuracy": 0.8153186847436497,
+      "precision": 0.0021118432167595877,
+      "recall": 0.3968253968253968,
+      "f1_score": 0.004201327619527771,
+      "auc_roc": 0.6932453702775196,
+      "average_precision": 0.0284188091454048,
+      "balanced_accuracy": 0.6062776741563769
+    },
+    "test": {
+      "accuracy": 0.8125467511095597,
+      "precision": 0.0022628951747088186,
+      "recall": 0.43037974683544306,
+      "f1_score": 0.004502118644067797,
+      "auc_roc": 0.6551228835225994,
+      "average_precision": 0.00875533957353636,
+      "balanced_accuracy": 0.621651630746163
+    }
+  },
+  "duration_seconds": 4.673759460449219
+}

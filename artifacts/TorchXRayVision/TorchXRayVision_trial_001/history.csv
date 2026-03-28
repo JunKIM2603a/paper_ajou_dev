@@ -1,0 +1,2 @@
+epoch,train_loss,val_accuracy,val_precision,val_recall,val_f1_score,val_balanced_accuracy,val_auc_roc,val_average_precision,learning_rate
+1,0.06522444836082286,0.9990234375,0.0,0.0,0.0,0.5,0.8905180840664711,0.008849557522123894,0.0

@@ -1,0 +1,56 @@
+{
+  "model_name": "logistic_regression",
+  "hyperparameters": {
+    "feature_set": "relaxed",
+    "model_name": "logistic_regression",
+    "C": 1.0,
+    "max_iter": 1000,
+    "seed": 43
+  },
+  "split_summary": {
+    "num_train_rows": 256677,
+    "num_val_rows": 64170,
+    "num_test_rows": 80212,
+    "num_train_positive": 251,
+    "num_val_positive": 63,
+    "num_test_positive": 79,
+    "numeric_columns": [
+      "tbp_lv_dnn_lesion_confidence"
+    ],
+    "categorical_columns": [
+      "attribution",
+      "copyright_license",
+      "lesion_id"
+    ]
+  },
+  "metrics": {
+    "train": {
+      "accuracy": 0.9981416332589207,
+      "precision": 0.3447802197802198,
+      "recall": 1.0,
+      "f1_score": 0.5127681307456589,
+      "auc_roc": 1.0,
+      "average_precision": 1.0,
+      "balanced_accuracy": 0.9990699071077036
+    },
+    "val": {
+      "accuracy": 0.9969767804269908,
+      "precision": 0.0880503144654088,
+      "recall": 0.2222222222222222,
+      "f1_score": 0.12612612612612611,
+      "auc_roc": 0.9888382295373732,
+      "average_precision": 0.06648836971411369,
+      "balanced_accuracy": 0.6099801893708956
+    },
+    "test": {
+      "accuracy": 0.997145065576223,
+      "precision": 0.109375,
+      "recall": 0.26582278481012656,
+      "f1_score": 0.15498154981549817,
+      "auc_roc": 0.9849040527085745,
+      "average_precision": 0.09406805371196694,
+      "balanced_accuracy": 0.6318444162529162
+    }
+  },
+  "duration_seconds": 39.11412167549133
+}

@@ -1,0 +1,56 @@
+{
+  "model_name": "catboost",
+  "hyperparameters": {
+    "feature_set": "strict",
+    "model_name": "catboost",
+    "iterations": 300,
+    "depth": 6,
+    "learning_rate": 0.05,
+    "seed": 42
+  },
+  "split_summary": {
+    "num_train_rows": 256677,
+    "num_val_rows": 64170,
+    "num_test_rows": 80212,
+    "num_train_positive": 251,
+    "num_val_positive": 63,
+    "num_test_positive": 79,
+    "numeric_columns": [
+      "tbp_lv_dnn_lesion_confidence"
+    ],
+    "categorical_columns": [
+      "attribution",
+      "copyright_license"
+    ]
+  },
+  "metrics": {
+    "train": {
+      "accuracy": 0.7373118744570024,
+      "precision": 0.0027978032063712935,
+      "recall": 0.7529880478087649,
+      "f1_score": 0.005574892336735296,
+      "auc_roc": 0.8204792305433721,
+      "average_precision": 0.0134685120731774,
+      "balanced_accuracy": 0.7451422889009116
+    },
+    "val": {
+      "accuracy": 0.7382421692379617,
+      "precision": 0.002023568622783002,
+      "recall": 0.5396825396825397,
+      "f1_score": 0.004032018974206937,
+      "auc_roc": 0.7470030883386678,
+      "average_precision": 0.023857607306890634,
+      "balanced_accuracy": 0.639059919910685
+    },
+    "test": {
+      "accuracy": 0.7382187203909639,
+      "precision": 0.0022840827980014277,
+      "recall": 0.6075949367088608,
+      "f1_score": 0.004551057172655732,
+      "auc_roc": 0.7294869115538456,
+      "average_precision": 0.007717637461805872,
+      "balanced_accuracy": 0.6729712169973117
+    }
+  },
+  "duration_seconds": 7.201059579849243
+}

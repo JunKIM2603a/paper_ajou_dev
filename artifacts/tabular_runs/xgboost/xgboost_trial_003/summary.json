@@ -1,0 +1,67 @@
+{
+  "model_name": "xgboost",
+  "hyperparameters": {
+    "feature_set": "oracle",
+    "model_name": "xgboost",
+    "n_estimators": 200,
+    "max_depth": 6,
+    "learning_rate": 0.05,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "seed": 44
+  },
+  "split_summary": {
+    "num_train_rows": 256677,
+    "num_val_rows": 64170,
+    "num_test_rows": 80212,
+    "num_train_positive": 251,
+    "num_val_positive": 63,
+    "num_test_positive": 79,
+    "numeric_columns": [
+      "mel_thick_mm",
+      "tbp_lv_dnn_lesion_confidence"
+    ],
+    "categorical_columns": [
+      "attribution",
+      "copyright_license",
+      "iddx_1",
+      "iddx_2",
+      "iddx_3",
+      "iddx_4",
+      "iddx_5",
+      "iddx_full",
+      "lesion_id",
+      "mel_mitotic_index"
+    ]
+  },
+  "metrics": {
+    "train": {
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "auc_roc": 1.0,
+      "average_precision": 1.0,
+      "balanced_accuracy": 1.0
+    },
+    "val": {
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "auc_roc": 1.0,
+      "average_precision": 1.0,
+      "balanced_accuracy": 1.0
+    },
+    "test": {
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "auc_roc": 1.0,
+      "average_precision": 1.0,
+      "balanced_accuracy": 1.0
+    }
+  },
+  "duration_seconds": 2387.8376591205597
+}

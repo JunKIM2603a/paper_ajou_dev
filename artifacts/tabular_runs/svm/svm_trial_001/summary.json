@@ -1,0 +1,54 @@
+{
+  "model_name": "svm",
+  "hyperparameters": {
+    "feature_set": "strict",
+    "model_name": "svm",
+    "C": 1.0,
+    "seed": 42
+  },
+  "split_summary": {
+    "num_train_rows": 256677,
+    "num_val_rows": 64170,
+    "num_test_rows": 80212,
+    "num_train_positive": 251,
+    "num_val_positive": 63,
+    "num_test_positive": 79,
+    "numeric_columns": [
+      "tbp_lv_dnn_lesion_confidence"
+    ],
+    "categorical_columns": [
+      "attribution",
+      "copyright_license"
+    ]
+  },
+  "metrics": {
+    "train": {
+      "accuracy": 0.722791679815488,
+      "precision": 0.001980782198246797,
+      "recall": 0.5617529880478087,
+      "f1_score": 0.003947644711975922,
+      "auc_roc": 0.7141460209562256,
+      "average_precision": 0.01153740865995894,
+      "balanced_accuracy": 0.6423511494800593
+    },
+    "val": {
+      "accuracy": 0.7240455041296556,
+      "precision": 0.0021443485130635967,
+      "recall": 0.6031746031746031,
+      "f1_score": 0.004273504273504274,
+      "auc_roc": 0.7390132221897863,
+      "average_precision": 0.018540930894575976,
+      "balanced_accuracy": 0.6636694455029426
+    },
+    "test": {
+      "accuracy": 0.7272976611978258,
+      "precision": 0.0021471972223491252,
+      "recall": 0.5949367088607594,
+      "f1_score": 0.004278951201747997,
+      "auc_roc": 0.7256022305954326,
+      "average_precision": 0.011159766174173415,
+      "balanced_accuracy": 0.6611824297801108
+    }
+  },
+  "duration_seconds": 0.8703527450561523
+}
