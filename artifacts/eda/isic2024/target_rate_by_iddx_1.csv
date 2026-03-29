@@ -1,4 +1,4 @@
 iddx_1,count,positive_count,negative_count,positive_ratio
-Benign,400552,0,400552,0.000000
-Malignant,393,393,0,1.000000
-Indeterminate,114,0,114,0.000000
+Benign,400552,0,400552,0.0
+Malignant,393,393,0,1.0
+Indeterminate,114,0,114,0.0

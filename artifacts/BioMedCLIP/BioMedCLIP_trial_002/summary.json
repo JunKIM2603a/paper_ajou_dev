@@ -1,0 +1,16 @@
+{
+  "best_epoch": 4,
+  "best_validation_metric": 0.9336762343099428,
+  "test_metrics": {
+    "accuracy": 0.9990282376072046,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1_score": 0.0,
+    "balanced_accuracy": 0.5,
+    "auc_roc": 0.9230286559458398,
+    "average_precision": 0.03310453025688282
+  },
+  "duration_seconds": 15112.082038640976,
+  "model_path": "artifacts/BioMedCLIP/BioMedCLIP_trial_002/best_model.pt",
+  "history_path": "artifacts/BioMedCLIP/BioMedCLIP_trial_002/history.csv"
+}

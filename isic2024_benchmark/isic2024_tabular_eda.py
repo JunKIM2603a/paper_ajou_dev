@@ -1,158 +1,246 @@
 from __future__ import annotations
 
 import argparse
-import csv
 import json
-import math
-from collections import Counter, defaultdict
 from pathlib import Path
-from statistics import mean, median
-from typing import Iterable
 
-from isic2024_benchmark.tabular_data import iter_merged_tabular_rows, resolve_isic2024_dataset_root
+import pandas as pd
+
+from isic2024_benchmark.runtime_env import ensure_expected_conda_env
+from isic2024_benchmark.tabular_data import DEFAULT_DATASET_ROOT, DEFAULT_TARGET_COLUMN, load_tabular_dataframe
 
 
-TARGET_COLUMN = "malignant"
-NUMERIC_CANDIDATES = {"tbp_lv_dnn_lesion_confidence", "mel_mitotic_index", "mel_thick_mm"}
 TARGET_RATE_COLUMNS = ("iddx_1", "iddx_full", "attribution", "copyright_license")
-LEAKAGE_RISK_COLUMNS = ("iddx_1", "iddx_2", "iddx_3", "iddx_4", "iddx_5", "iddx_full")
+HIGH_LEAKAGE_COLUMNS = {
+    "iddx_1",
+    "iddx_2",
+    "iddx_3",
+    "iddx_4",
+    "iddx_5",
+    "iddx_full",
+    "mel_mitotic_index",
+    "mel_thick_mm",
+}
+CAUTION_COLUMNS = {
+    "isic_id",
+    "patient_id",
+    "lesion_id",
+    "image_path",
+    "image_exists",
+    "split_group_id",
+    "attribution",
+    "copyright_license",
+}
+CATEGORICAL_SUMMARY_EXCLUSIONS = {"image_path", "split_group_id"}
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate ISIC2024 tabular EDA artifacts.")
-    parser.add_argument("--dataset-root", default="dataset/ISIC2024")
+    parser = argparse.ArgumentParser(description="Generate ISIC2024 challenge tabular EDA artifacts.")
+    parser.add_argument("--dataset-root", default=str(DEFAULT_DATASET_ROOT))
     parser.add_argument("--output-dir", default="artifacts/eda/isic2024")
     parser.add_argument("--top-k", type=int, default=20, help="Rows to keep for top-category summaries.")
     return parser.parse_args()
 
 
 def main() -> None:
+    ensure_expected_conda_env()
     args = parse_args()
-    paths = resolve_isic2024_dataset_root(args.dataset_root)
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    row_count = 0
-    target_counter: Counter[int] = Counter()
-    image_exists_counter: Counter[str] = Counter()
-    missing_counter: Counter[str] = Counter()
-    non_missing_counter: Counter[str] = Counter()
-    categorical_counters: dict[str, Counter[str]] = defaultdict(Counter)
-    target_rate_counters: dict[str, dict[str, Counter[int]]] = {
-        column: defaultdict(Counter) for column in TARGET_RATE_COLUMNS
-    }
-    numeric_values: dict[str, list[float]] = defaultdict(list)
-    numeric_values_by_target: dict[str, dict[int, list[float]]] = defaultdict(lambda: defaultdict(list))
-    preview_rows: list[dict[str, str]] = []
-    all_columns: set[str] = set()
+    frame = load_tabular_dataframe(args.dataset_root, include_image_columns=True)
+    target_column = DEFAULT_TARGET_COLUMN
+    ordered_columns = sorted(frame.columns.tolist())
+    numeric_columns = [
+        column
+        for column in ordered_columns
+        if column not in {target_column, "image_exists"}
+        and pd.api.types.is_numeric_dtype(frame[column])
+    ]
+    categorical_columns = [
+        column
+        for column in ordered_columns
+        if column not in {target_column, *CATEGORICAL_SUMMARY_EXCLUSIONS}
+        and column not in numeric_columns
+    ]
 
-    for row in iter_merged_tabular_rows(paths):
-        row_count += 1
-        all_columns.update(row.keys())
-        target = parse_binary_label(row.get(TARGET_COLUMN, ""))
-        target_counter[target] += 1
-        image_exists_counter[row.get("image_exists", "0")] += 1
+    preview_rows = frame.head(20).copy()
+    preview_rows = preview_rows[[column for column in ordered_columns if column in preview_rows.columns]]
+    preview_rows.to_csv(output_dir / "preview_rows.csv", index=False)
 
-        if len(preview_rows) < 20:
-            preview_rows.append(row)
-
-        for column, value in row.items():
-            normalized = value.strip() if isinstance(value, str) else str(value)
-            if normalized == "":
-                missing_counter[column] += 1
-                continue
-
-            non_missing_counter[column] += 1
-
-            if column in NUMERIC_CANDIDATES:
-                numeric_value = safe_float(normalized)
-                if numeric_value is not None and not math.isnan(numeric_value):
-                    numeric_values[column].append(numeric_value)
-                    numeric_values_by_target[column][target].append(numeric_value)
-                continue
-
-            categorical_counters[column][normalized] += 1
-            if column in target_rate_counters:
-                target_rate_counters[column][normalized][target] += 1
-
-    ordered_columns = sorted(all_columns)
-    leakage_groups = classify_feature_groups(ordered_columns)
-
-    write_json(
-        output_dir / "dataset_overview.json",
-        {
-            "dataset_root": str(paths.dataset_root.resolve()),
-            "rows": row_count,
-            "target_column": TARGET_COLUMN,
-            "target_distribution": {
-                "negative": target_counter.get(0, 0),
-                "positive": target_counter.get(1, 0),
-                "positive_ratio": safe_divide(target_counter.get(1, 0), row_count),
-            },
-            "image_alignment": {
-                "image_exists": image_exists_counter.get("1", 0),
-                "image_missing": image_exists_counter.get("0", 0),
-            },
-            "column_count": len(ordered_columns),
-            "columns": ordered_columns,
-        },
+    overview = build_dataset_overview(
+        frame,
+        dataset_root=args.dataset_root,
+        ordered_columns=ordered_columns,
+        numeric_columns=numeric_columns,
+        categorical_columns=categorical_columns,
     )
-    write_csv(output_dir / "preview_rows.csv", preview_rows, ordered_columns)
-    write_missingness_csv(output_dir / "missingness_summary.csv", ordered_columns, row_count, missing_counter, non_missing_counter)
-    write_numeric_summary_csv(output_dir / "numeric_summary.csv", numeric_values, numeric_values_by_target)
-    write_categorical_summary_csv(
-        output_dir / "categorical_summary.csv",
-        categorical_counters,
-        row_count=row_count,
-        top_k=args.top_k,
-    )
-    for column, counters in target_rate_counters.items():
-        write_target_rate_csv(output_dir / f"target_rate_by_{column}.csv", column, counters, args.top_k)
-    write_json(output_dir / "feature_groups.json", leakage_groups)
+    write_json(output_dir / "dataset_overview.json", overview)
+    write_missingness_csv(frame, ordered_columns, output_dir / "missingness_summary.csv")
+    write_numeric_summary_csv(frame, numeric_columns, output_dir / "numeric_summary.csv")
+    write_categorical_summary_csv(frame, categorical_columns, output_dir / "categorical_summary.csv", top_k=args.top_k)
+    for column in TARGET_RATE_COLUMNS:
+        if column in frame.columns:
+            write_target_rate_csv(frame, target_column, column, output_dir / f"target_rate_by_{column}.csv", top_k=args.top_k)
+    write_json(output_dir / "feature_groups.json", classify_feature_groups(ordered_columns))
     write_report_markdown(
         output_dir / "report.md",
-        row_count=row_count,
-        target_counter=target_counter,
-        image_exists_counter=image_exists_counter,
-        ordered_columns=ordered_columns,
-        missing_counter=missing_counter,
-        numeric_values=numeric_values,
-        leakage_groups=leakage_groups,
+        overview=overview,
+        missingness=pd.read_csv(output_dir / "missingness_summary.csv"),
+        numeric_columns=numeric_columns,
+        leakage_groups=classify_feature_groups(ordered_columns),
     )
-    print(f"Saved ISIC2024 tabular EDA artifacts to {output_dir}")
+    print(f"Saved ISIC2024 challenge tabular EDA artifacts to {output_dir}")
 
 
-def parse_binary_label(value: str) -> int:
-    normalized = value.strip()
-    if normalized in {"1", "1.0"}:
-        return 1
-    return 0
+def build_dataset_overview(
+    frame: pd.DataFrame,
+    *,
+    dataset_root: str | Path,
+    ordered_columns: list[str],
+    numeric_columns: list[str],
+    categorical_columns: list[str],
+) -> dict[str, object]:
+    target_distribution = frame[DEFAULT_TARGET_COLUMN].value_counts(dropna=False).to_dict()
+    image_exists = frame["image_exists"].value_counts(dropna=False).to_dict()
+    return {
+        "dataset_root": str(Path(dataset_root).resolve()),
+        "rows": int(len(frame)),
+        "target_column": DEFAULT_TARGET_COLUMN,
+        "target_distribution": {
+            "negative": int(target_distribution.get(0, 0)),
+            "positive": int(target_distribution.get(1, 0)),
+            "positive_ratio": float(frame[DEFAULT_TARGET_COLUMN].mean()),
+        },
+        "image_alignment": {
+            "image_exists": int(image_exists.get(1, 0)),
+            "image_missing": int(image_exists.get(0, 0)),
+        },
+        "column_count": len(ordered_columns),
+        "columns": ordered_columns,
+        "numeric_columns": numeric_columns,
+        "categorical_columns": categorical_columns,
+        "group_split_policy": "patient_id -> lesion_id -> isic_id",
+    }
 
 
-def safe_float(value: str) -> float | None:
-    try:
-        return float(value)
-    except ValueError:
-        return None
+def write_missingness_csv(frame: pd.DataFrame, ordered_columns: list[str], output_path: Path) -> None:
+    rows = []
+    row_count = max(len(frame), 1)
+    for column in ordered_columns:
+        non_missing_mask = get_non_missing_mask(frame[column])
+        non_missing_count = int(non_missing_mask.sum())
+        missing_count = int(len(frame) - non_missing_count)
+        rows.append(
+            {
+                "column": column,
+                "missing_count": missing_count,
+                "missing_ratio": f"{missing_count / row_count:.6f}",
+                "non_missing_count": non_missing_count,
+                "non_missing_ratio": f"{non_missing_count / row_count:.6f}",
+            }
+        )
+    pd.DataFrame(rows).to_csv(output_path, index=False)
 
 
-def safe_divide(numerator: int | float, denominator: int | float) -> float:
-    if denominator == 0:
-        return 0.0
-    return float(numerator) / float(denominator)
+def write_numeric_summary_csv(frame: pd.DataFrame, numeric_columns: list[str], output_path: Path) -> None:
+    rows: list[dict[str, object]] = []
+    for column in numeric_columns:
+        numeric_series = pd.to_numeric(frame[column], errors="coerce")
+        rows.append(build_numeric_summary_row(column, "all", numeric_series))
+        for target_value in (0, 1):
+            rows.append(
+                build_numeric_summary_row(
+                    column,
+                    f"target_{target_value}",
+                    numeric_series[frame[DEFAULT_TARGET_COLUMN] == target_value],
+                )
+            )
+    pd.DataFrame(rows).to_csv(output_path, index=False)
 
 
-def classify_feature_groups(columns: Iterable[str]) -> dict[str, list[str]]:
-    safe_columns: list[str] = []
-    caution_columns: list[str] = []
-    high_risk_columns: list[str] = []
+def build_numeric_summary_row(column: str, group: str, series: pd.Series) -> dict[str, object]:
+    values = series.dropna()
+    if values.empty:
+        return {"column": column, "group": group, "count": 0, "mean": "", "median": "", "min": "", "max": ""}
+    return {
+        "column": column,
+        "group": group,
+        "count": int(values.shape[0]),
+        "mean": f"{values.mean():.6f}",
+        "median": f"{values.median():.6f}",
+        "min": f"{values.min():.6f}",
+        "max": f"{values.max():.6f}",
+    }
+
+
+def write_categorical_summary_csv(
+    frame: pd.DataFrame,
+    categorical_columns: list[str],
+    output_path: Path,
+    *,
+    top_k: int,
+) -> None:
+    rows: list[dict[str, object]] = []
+    row_count = max(len(frame), 1)
+    for column in categorical_columns:
+        normalized = normalize_category_series(frame[column])
+        normalized = normalized[normalized != ""]
+        if normalized.empty:
+            continue
+        counts = normalized.value_counts().head(top_k)
+        unique_count = int(normalized.nunique())
+        for value, count in counts.items():
+            rows.append(
+                {
+                    "column": column,
+                    "unique_count": unique_count,
+                    "value": value,
+                    "count": int(count),
+                    "ratio": f"{count / row_count:.6f}",
+                }
+            )
+    pd.DataFrame(rows).to_csv(output_path, index=False)
+
+
+def write_target_rate_csv(
+    frame: pd.DataFrame,
+    target_column: str,
+    column: str,
+    output_path: Path,
+    *,
+    top_k: int,
+) -> None:
+    normalized = normalize_category_series(frame[column])
+    valid_mask = normalized != ""
+    working = pd.DataFrame({column: normalized[valid_mask], target_column: frame.loc[valid_mask, target_column].astype(int)})
+    if working.empty:
+        pd.DataFrame(columns=[column, "count", "positive_count", "negative_count", "positive_ratio"]).to_csv(output_path, index=False)
+        return
+
+    summary = (
+        working.groupby(column)[target_column]
+        .agg(count="size", positive_count="sum")
+        .sort_values("count", ascending=False)
+        .head(top_k)
+        .reset_index()
+    )
+    summary["negative_count"] = summary["count"] - summary["positive_count"]
+    summary["positive_ratio"] = summary["positive_count"] / summary["count"]
+    summary.to_csv(output_path, index=False)
+
+
+def classify_feature_groups(columns: list[str]) -> dict[str, list[str]]:
+    safe_columns = []
+    caution_columns = []
+    high_risk_columns = []
 
     for column in columns:
-        if column in {"isic_id", "image_path", "image_exists", TARGET_COLUMN}:
+        if column == DEFAULT_TARGET_COLUMN:
             caution_columns.append(column)
-        elif column in LEAKAGE_RISK_COLUMNS:
+        elif column in HIGH_LEAKAGE_COLUMNS:
             high_risk_columns.append(column)
-        elif column in {"lesion_id", "attribution", "copyright_license"}:
+        elif column in CAUTION_COLUMNS:
             caution_columns.append(column)
         else:
             safe_columns.append(column)
@@ -164,176 +252,66 @@ def classify_feature_groups(columns: Iterable[str]) -> dict[str, list[str]]:
     }
 
 
+def write_report_markdown(
+    path: Path,
+    *,
+    overview: dict[str, object],
+    missingness: pd.DataFrame,
+    numeric_columns: list[str],
+    leakage_groups: dict[str, list[str]],
+) -> None:
+    top_missing = missingness.sort_values("missing_count", ascending=False).head(10)
+    distribution = overview["target_distribution"]
+    lines = [
+        "# ISIC2024 Challenge Tabular EDA Report",
+        "",
+        "## 데이터 개요",
+        f"- 전체 행 수: `{overview['rows']}`",
+        f"- 양성 수: `{distribution['positive']}`",
+        f"- 음성 수: `{distribution['negative']}`",
+        f"- 양성 비율: `{distribution['positive_ratio']:.6f}`",
+        f"- 총 컬럼 수: `{overview['column_count']}`",
+        f"- split 정책: `{overview['group_split_policy']}`",
+        "",
+        "## 결측 상위 컬럼",
+    ]
+    for row in top_missing.itertuples():
+        lines.append(f"- `{row.column}`: `{row.missing_count}`")
+
+    lines.extend(
+        [
+            "",
+            "## 수치형 컬럼",
+            f"- 수치형 컬럼 수: `{len(numeric_columns)}`",
+            "",
+            "## feature 그룹 분류 초안",
+            "- 이 분류는 feature set 정책을 설명하기 위한 EDA 초안입니다.",
+            f"- 초기 baseline 검토 가능: `{', '.join(leakage_groups['safe_for_initial_baseline_review'])}`",
+            f"- 주의 검토 필요: `{', '.join(leakage_groups['caution_review_needed'])}`",
+            f"- leakage 위험 높음: `{', '.join(leakage_groups['high_leakage_risk'])}`",
+        ]
+    )
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def write_json(path: Path, payload: object) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def write_csv(path: Path, rows: list[dict[str, str]], fieldnames: list[str]) -> None:
-    with path.open("w", encoding="utf-8", newline="") as file:
-        writer = csv.DictWriter(file, fieldnames=fieldnames)
-        writer.writeheader()
-        for row in rows:
-            writer.writerow({name: row.get(name, "") for name in fieldnames})
+def get_non_missing_mask(series: pd.Series) -> pd.Series:
+    if pd.api.types.is_numeric_dtype(series):
+        return series.notna()
+    normalized = normalize_category_series(series)
+    return normalized != ""
 
 
-def write_missingness_csv(
-    path: Path,
-    ordered_columns: list[str],
-    row_count: int,
-    missing_counter: Counter[str],
-    non_missing_counter: Counter[str],
-) -> None:
-    with path.open("w", encoding="utf-8", newline="") as file:
-        writer = csv.writer(file)
-        writer.writerow(["column", "missing_count", "missing_ratio", "non_missing_count", "non_missing_ratio"])
-        for column in ordered_columns:
-            missing_count = missing_counter.get(column, 0)
-            non_missing_count = non_missing_counter.get(column, 0)
-            writer.writerow(
-                [
-                    column,
-                    missing_count,
-                    f"{safe_divide(missing_count, row_count):.6f}",
-                    non_missing_count,
-                    f"{safe_divide(non_missing_count, row_count):.6f}",
-                ]
-            )
-
-
-def summarize_numeric(values: list[float]) -> dict[str, str]:
-    if not values:
-        return {
-            "count": "0",
-            "mean": "",
-            "median": "",
-            "min": "",
-            "max": "",
-        }
-    return {
-        "count": str(len(values)),
-        "mean": f"{mean(values):.6f}",
-        "median": f"{median(values):.6f}",
-        "min": f"{min(values):.6f}",
-        "max": f"{max(values):.6f}",
-    }
-
-
-def write_numeric_summary_csv(
-    path: Path,
-    numeric_values: dict[str, list[float]],
-    numeric_values_by_target: dict[str, dict[int, list[float]]],
-) -> None:
-    with path.open("w", encoding="utf-8", newline="") as file:
-        writer = csv.writer(file)
-        writer.writerow(["column", "group", "count", "mean", "median", "min", "max"])
-        for column in sorted(NUMERIC_CANDIDATES):
-            overall = summarize_numeric(numeric_values.get(column, []))
-            writer.writerow([column, "all", overall["count"], overall["mean"], overall["median"], overall["min"], overall["max"]])
-            for target in [0, 1]:
-                stats = summarize_numeric(numeric_values_by_target.get(column, {}).get(target, []))
-                writer.writerow(
-                    [column, f"target_{target}", stats["count"], stats["mean"], stats["median"], stats["min"], stats["max"]]
-                )
-
-
-def write_categorical_summary_csv(
-    path: Path,
-    categorical_counters: dict[str, Counter[str]],
-    *,
-    row_count: int,
-    top_k: int,
-) -> None:
-    with path.open("w", encoding="utf-8", newline="") as file:
-        writer = csv.writer(file)
-        writer.writerow(["column", "unique_count", "value", "count", "ratio"])
-        for column in sorted(categorical_counters):
-            counter = categorical_counters[column]
-            unique_count = len(counter)
-            for value, count in counter.most_common(top_k):
-                writer.writerow([column, unique_count, value, count, f"{safe_divide(count, row_count):.6f}"])
-
-
-def write_target_rate_csv(
-    path: Path,
-    column: str,
-    counters: dict[str, Counter[int]],
-    top_k: int,
-) -> None:
-    ranked = sorted(counters.items(), key=lambda item: sum(item[1].values()), reverse=True)[:top_k]
-    with path.open("w", encoding="utf-8", newline="") as file:
-        writer = csv.writer(file)
-        writer.writerow([column, "count", "positive_count", "negative_count", "positive_ratio"])
-        for value, counter in ranked:
-            total = counter.get(0, 0) + counter.get(1, 0)
-            writer.writerow([value, total, counter.get(1, 0), counter.get(0, 0), f"{safe_divide(counter.get(1, 0), total):.6f}"])
-
-
-def write_report_markdown(
-    path: Path,
-    *,
-    row_count: int,
-    target_counter: Counter[int],
-    image_exists_counter: Counter[str],
-    ordered_columns: list[str],
-    missing_counter: Counter[str],
-    numeric_values: dict[str, list[float]],
-    leakage_groups: dict[str, list[str]],
-) -> None:
-    positive_count = target_counter.get(1, 0)
-    negative_count = target_counter.get(0, 0)
-    positive_ratio = safe_divide(positive_count, row_count)
-    top_missing = sorted(
-        ((column, missing_counter.get(column, 0)) for column in ordered_columns),
-        key=lambda item: item[1],
-        reverse=True,
-    )[:10]
-
-    lines = [
-        "# ISIC2024 Tabular EDA Report",
-        "",
-        "## 데이터 개요",
-        f"- 전체 행 수: `{row_count}`",
-        f"- 양성 수: `{positive_count}`",
-        f"- 음성 수: `{negative_count}`",
-        f"- 양성 비율: `{positive_ratio:.6f}`",
-        f"- 이미지 경로 확인 성공 수: `{image_exists_counter.get('1', 0)}`",
-        f"- 이미지 경로 확인 실패 수: `{image_exists_counter.get('0', 0)}`",
-        f"- 총 컬럼 수: `{len(ordered_columns)}`",
-        "",
-        "## 결측 상위 컬럼",
-    ]
-    for column, missing_count in top_missing:
-        lines.append(f"- `{column}`: `{missing_count}`")
-
-    lines.extend(
-        [
-            "",
-            "## 수치형 후보 컬럼",
-        ]
+def normalize_category_series(series: pd.Series) -> pd.Series:
+    return (
+        series.fillna("")
+        .astype(str)
+        .str.strip()
+        .replace({"nan": "", "None": "", "<NA>": "", "<na>": ""})
     )
-    for column in sorted(NUMERIC_CANDIDATES):
-        lines.append(f"- `{column}`: 유효값 `{len(numeric_values.get(column, []))}`개")
-
-    lines.extend(
-        [
-            "",
-            "## feature 그룹 분류 초안",
-            "- 이 분류는 최종 확정이 아니라 EDA 해석을 위한 초안입니다.",
-            f"- 초기 baseline 검토 가능: `{', '.join(leakage_groups['safe_for_initial_baseline_review'])}`",
-            f"- 주의 검토 필요: `{', '.join(leakage_groups['caution_review_needed'])}`",
-            f"- leakage 위험 높음: `{', '.join(leakage_groups['high_leakage_risk'])}`",
-            "",
-            "## 산출물",
-            "- `dataset_overview.json`",
-            "- `preview_rows.csv`",
-            "- `missingness_summary.csv`",
-            "- `numeric_summary.csv`",
-            "- `categorical_summary.csv`",
-            "- `target_rate_by_*.csv`",
-            "- `feature_groups.json`",
-        ]
-    )
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

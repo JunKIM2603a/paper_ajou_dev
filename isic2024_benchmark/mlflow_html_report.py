@@ -6,6 +6,8 @@ import json
 from datetime import datetime
 from pathlib import Path
 
+from isic2024_benchmark.runtime_env import ensure_expected_conda_env
+
 
 PARENT_METRICS = [
     "best_average_precision",
@@ -38,6 +40,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    ensure_expected_conda_env()
     try:
         import mlflow
     except ImportError as exc:

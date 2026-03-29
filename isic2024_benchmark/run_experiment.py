@@ -23,16 +23,17 @@ from isic2024_benchmark.reproducibility import (
     make_worker_init_fn,
     set_global_seed,
 )
+from isic2024_benchmark.runtime_env import ensure_expected_conda_env
 from isic2024_benchmark.trainer import run_training
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run ISIC2024 image model benchmark.")
+    parser = argparse.ArgumentParser(description="Run ISIC2024 challenge image model benchmark.")
     parser.add_argument("--config", required=True, help="Path to the model config JSON file.")
     parser.add_argument(
         "--dataset-root",
-        default="dataset/ISIC2024",
-        help="Path to the ISIC2024 dataset root.",
+        default="dataset/isic-2024-challenge",
+        help="Path to the ISIC2024 challenge dataset root.",
     )
     parser.add_argument(
         "--output-root",
@@ -99,6 +100,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    ensure_expected_conda_env()
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     if hasattr(sys.stderr, "reconfigure"):
@@ -110,6 +112,7 @@ def main() -> None:
     _log(f"requested dataset_root={args.dataset_root}")
     _log(f"resolved dataset_root={resolved_dataset_root}")
     _log(f"device={args.device}, output_root={args.output_root}")
+    _validate_runtime_device(args.device)
     # 사전학습 가중치와 허깅페이스 캐시가 사용자 홈이 아닌 프로젝트 내부에 쌓이도록 고정한다.
     cache_root = Path(args.output_root) / "cache"
     cache_root.mkdir(parents=True, exist_ok=True)
@@ -141,7 +144,7 @@ def main() -> None:
     _log("building manifest")
     manifest = build_manifest(
         resolved_dataset_root,
-        cache_path=Path(args.output_root) / "cache" / "isic2024_image_manifest.json",
+        cache_path=Path(args.output_root) / "cache" / "isic2024_challenge_image_manifest.json",
     )
     _log(f"manifest ready: {len(manifest)} samples")
     splits = create_splits(manifest, validation_ratio=validation_ratio, seed=seed, test_ratio=test_ratio)
@@ -408,6 +411,32 @@ def _cleanup_torch_state(device: str) -> None:
         torch.cuda.ipc_collect()
 
 
+def _validate_runtime_device(device: str) -> None:
+    _log(
+        "runtime device preflight: "
+        f"cuda_available={torch.cuda.is_available()}, visible_device_count={torch.cuda.device_count()}, requested_device={device}"
+    )
+    if torch.cuda.is_available():
+        visible = [
+            {"index": index, "name": torch.cuda.get_device_name(index)}
+            for index in range(torch.cuda.device_count())
+        ]
+        _log(f"visible_cuda_devices={json.dumps(visible, ensure_ascii=False)}")
+
+    if not device.startswith("cuda"):
+        return
+
+    if not torch.cuda.is_available():
+        raise RuntimeError(
+            "CUDA device requested but torch.cuda.is_available() is False. "
+            "Check the NVIDIA driver, CUDA visibility, and conda environment."
+        )
+    try:
+        torch.empty(1, device=device)
+    except Exception as exc:  # pragma: no cover - defensive runtime guard
+        raise RuntimeError(f"Failed to allocate a tensor on device '{device}': {exc}") from exc
+
+
 def _log(message: str) -> None:
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
     print(f"[run_experiment {timestamp}] {message}", flush=True)
@@ -415,7 +444,6 @@ def _log(message: str) -> None:
 
 if __name__ == "__main__":
     main()
-
 
 
 

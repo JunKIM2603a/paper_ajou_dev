@@ -4,10 +4,24 @@ import csv
 import json
 from pathlib import Path
 
+from isic2024_benchmark.tabular_data import DEFAULT_TARGET_COLUMN
 
-TARGET_COLUMN = "malignant"
-IDENTIFIER_COLUMNS = {"isic_id", "image_path", "image_exists"}
-DIAGNOSIS_COLUMNS = {"iddx_1", "iddx_2", "iddx_3", "iddx_4", "iddx_5", "iddx_full"}
+
+TARGET_COLUMN = DEFAULT_TARGET_COLUMN
+IDENTIFIER_COLUMNS = {"isic_id", "patient_id", "image_path", "image_exists", "split_group_id"}
+RELAXED_ONLY_COLUMNS = {"lesion_id", "attribution", "copyright_license"}
+HIGH_LEAKAGE_COLUMNS = {
+    "iddx_1",
+    "iddx_2",
+    "iddx_3",
+    "iddx_4",
+    "iddx_5",
+    "iddx_full",
+    "mel_mitotic_index",
+    "mel_thick_mm",
+}
+STRICT_MIN_NON_MISSING_RATIO = 0.95
+RELAXED_MIN_NON_MISSING_RATIO = 0.05
 
 
 def load_dataset_overview(eda_dir: str | Path) -> dict:
@@ -28,6 +42,8 @@ def load_missingness_summary(eda_dir: str | Path) -> dict[str, dict[str, float]]
 
 def load_target_rate_summary(eda_dir: str | Path, column: str) -> dict[str, dict[str, float]]:
     path = Path(eda_dir) / f"target_rate_by_{column}.csv"
+    if not path.exists():
+        return {}
     summary: dict[str, dict[str, float]] = {}
     with path.open("r", encoding="utf-8", newline="") as file:
         for row in csv.DictReader(file):
@@ -48,53 +64,33 @@ def recommend_feature_sets(eda_dir: str | Path) -> dict[str, object]:
     iddx_full_rates = load_target_rate_summary(eda_dir, "iddx_full")
 
     all_columns = [column for column in overview["columns"] if column != TARGET_COLUMN]
-    high_leakage = set(DIAGNOSIS_COLUMNS)
-
-    # EDA 기준 추가 leakage 후보:
-    # - mel_thick_mm는 현재 유효값이 모두 양성에만 존재함
-    # - mel_mitotic_index는 유효값이 거의 없고 실제 학습 feature로 쓰기 어려움
-    if "mel_thick_mm" in missingness:
-        high_leakage.add("mel_thick_mm")
-    if "mel_mitotic_index" in missingness:
-        high_leakage.add("mel_mitotic_index")
-
-    strict = []
-    relaxed = []
-    oracle = []
-    excluded = []
+    strict: list[str] = []
+    relaxed: list[str] = []
+    oracle: list[str] = []
 
     for column in all_columns:
-        if column in IDENTIFIER_COLUMNS:
-            excluded.append(column)
-            continue
-
-        oracle.append(column)
-        if column in high_leakage:
-            continue
-
-        # 결측이 과도하면 strict에서는 제외하고 relaxed에서만 검토한다.
         non_missing_ratio = missingness.get(column, {}).get("non_missing_ratio", 0.0)
-        if non_missing_ratio >= 0.95:
+
+        if column in IDENTIFIER_COLUMNS:
+            continue
+        if column in RELAXED_ONLY_COLUMNS:
+            relaxed.append(column)
+            oracle.append(column)
+            continue
+        if column in HIGH_LEAKAGE_COLUMNS:
+            oracle.append(column)
+            continue
+
+        if non_missing_ratio >= STRICT_MIN_NON_MISSING_RATIO:
             strict.append(column)
             relaxed.append(column)
-        elif non_missing_ratio >= 0.05:
+            oracle.append(column)
+        elif non_missing_ratio >= RELAXED_MIN_NON_MISSING_RATIO:
             relaxed.append(column)
+            oracle.append(column)
 
-    rationales = {
-        "strict": [
-            "식별자와 진단 계열 컬럼을 제외합니다.",
-            "결측이 매우 심한 컬럼을 제외합니다.",
-            "초기 현실형 baseline 비교 기준으로 사용합니다.",
-        ],
-        "relaxed": [
-            "strict 세트에 더해, 결측이 많지만 검토 가치가 있는 컬럼을 포함합니다.",
-            "운영 가능성보다 탐색적 성능 비교에 가깝습니다.",
-        ],
-        "oracle": [
-            "진단 계열 컬럼까지 포함한 상한선 성격의 세트입니다.",
-            "현실적인 baseline보다는 leakage 영향 확인용입니다.",
-        ],
-    }
+    included_columns = set(strict) | set(relaxed) | set(oracle)
+    excluded_columns = sorted(column for column in all_columns if column not in included_columns)
 
     evidence = {
         "iddx_1_target_rates": iddx_1_rates,
@@ -102,19 +98,35 @@ def recommend_feature_sets(eda_dir: str | Path) -> dict[str, object]:
         "missingness_snapshot": {
             key: missingness[key]
             for key in sorted(missingness)
-            if key in {"lesion_id", "mel_mitotic_index", "mel_thick_mm", "tbp_lv_dnn_lesion_confidence"}
+            if key in {"lesion_id", "mel_mitotic_index", "mel_thick_mm", "tbp_lv_dnn_lesion_confidence", "patient_id"}
         },
     }
 
     return {
         "target_column": TARGET_COLUMN,
-        "excluded_columns": sorted(excluded),
-        "high_leakage_risk_columns": sorted(high_leakage),
+        "strict_min_non_missing_ratio": STRICT_MIN_NON_MISSING_RATIO,
+        "relaxed_min_non_missing_ratio": RELAXED_MIN_NON_MISSING_RATIO,
+        "excluded_columns": excluded_columns,
+        "high_leakage_risk_columns": sorted(HIGH_LEAKAGE_COLUMNS),
         "feature_sets": {
             "strict": strict,
             "relaxed": relaxed,
             "oracle": oracle,
         },
-        "rationales": rationales,
+        "rationales": {
+            "strict": [
+                "TBP/기본 임상 메타데이터 중심의 현실형 baseline 세트입니다.",
+                "식별자, 환자/병변 식별 정보, 진단 계열 컬럼, mel 계열 컬럼, 기관/라이선스 컬럼을 제외합니다.",
+                f"결측이 심한 컬럼은 non-missing ratio `{STRICT_MIN_NON_MISSING_RATIO:.2f}` 이상일 때만 포함합니다.",
+            ],
+            "relaxed": [
+                "strict 세트에 더해 lesion/기관 메타데이터와 중간 결측 컬럼을 포함합니다.",
+                "메인 결과표보다는 보조 비교와 편향 점검에 적합합니다.",
+            ],
+            "oracle": [
+                "relaxed 세트에 진단 계열과 mel 계열 컬럼을 추가한 leakage 상한선 세트입니다.",
+                "현실형 baseline이 아니라 leakage 영향을 확인하기 위한 참고용 세트입니다.",
+            ],
+        },
         "evidence": evidence,
     }

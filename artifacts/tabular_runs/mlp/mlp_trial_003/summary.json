@@ -12,17 +12,56 @@
     "seed": 44
   },
   "split_summary": {
-    "num_train_rows": 256677,
-    "num_val_rows": 64170,
-    "num_test_rows": 80212,
-    "num_train_positive": 251,
-    "num_val_positive": 63,
-    "num_test_positive": 79,
+    "num_train_rows": 252362,
+    "num_val_rows": 61412,
+    "num_test_rows": 87285,
+    "num_train_positive": 254,
+    "num_val_positive": 61,
+    "num_test_positive": 78,
+    "num_train_groups": 666,
+    "num_val_groups": 167,
+    "num_test_groups": 209,
+    "split_group_policy": "patient_id -> lesion_id -> isic_id",
     "numeric_columns": [
+      "age_approx",
+      "clin_size_long_diam_mm",
       "mel_thick_mm",
-      "tbp_lv_dnn_lesion_confidence"
+      "tbp_lv_A",
+      "tbp_lv_Aext",
+      "tbp_lv_B",
+      "tbp_lv_Bext",
+      "tbp_lv_C",
+      "tbp_lv_Cext",
+      "tbp_lv_H",
+      "tbp_lv_Hext",
+      "tbp_lv_L",
+      "tbp_lv_Lext",
+      "tbp_lv_areaMM2",
+      "tbp_lv_area_perim_ratio",
+      "tbp_lv_color_std_mean",
+      "tbp_lv_deltaA",
+      "tbp_lv_deltaB",
+      "tbp_lv_deltaL",
+      "tbp_lv_deltaLB",
+      "tbp_lv_deltaLBnorm",
+      "tbp_lv_dnn_lesion_confidence",
+      "tbp_lv_eccentricity",
+      "tbp_lv_minorAxisMM",
+      "tbp_lv_nevi_confidence",
+      "tbp_lv_norm_border",
+      "tbp_lv_norm_color",
+      "tbp_lv_perimeterMM",
+      "tbp_lv_radial_color_std_max",
+      "tbp_lv_stdL",
+      "tbp_lv_stdLExt",
+      "tbp_lv_symm_2axis",
+      "tbp_lv_symm_2axis_angle",
+      "tbp_lv_x",
+      "tbp_lv_y",
+      "tbp_lv_z"
     ],
     "categorical_columns": [
+      "anatom_site_general",
       "attribution",
       "copyright_license",
       "iddx_1",
@@ -31,8 +70,13 @@
       "iddx_4",
       "iddx_5",
       "iddx_full",
+      "image_type",
       "lesion_id",
-      "mel_mitotic_index"
+      "mel_mitotic_index",
+      "sex",
+      "tbp_lv_location",
+      "tbp_lv_location_simple",
+      "tbp_tile_type"
     ]
   },
   "metrics": {
@@ -51,7 +95,7 @@
       "recall": 1.0,
       "f1_score": 1.0,
       "auc_roc": 1.0,
-      "average_precision": 0.9999999999999998,
+      "average_precision": 1.0,
       "balanced_accuracy": 1.0
     },
     "test": {
@@ -64,5 +108,5 @@
       "balanced_accuracy": 1.0
     }
   },
-  "duration_seconds": 558.3180565834045
+  "duration_seconds": 629.4137392044067
 }

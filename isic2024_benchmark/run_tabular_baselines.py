@@ -8,6 +8,8 @@ from typing import Any
 
 from isic2024_benchmark.config_utils import expand_search_space, sanitize_run_name
 from isic2024_benchmark.reproducibility import DEFAULT_SEED, set_global_seed
+from isic2024_benchmark.runtime_env import ensure_expected_conda_env
+from isic2024_benchmark.split_utils import split_group_ids
 from isic2024_benchmark.tabular_baselines import (
     build_catboost_estimator,
     build_preprocessor,
@@ -16,12 +18,13 @@ from isic2024_benchmark.tabular_baselines import (
     get_model_specs,
     split_feature_types,
 )
+from isic2024_benchmark.tabular_data import DEFAULT_DATASET_ROOT, DEFAULT_TARGET_COLUMN, load_tabular_dataframe
 from isic2024_benchmark.tabular_feature_sets import recommend_feature_sets
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run ISIC2024 tabular baseline models.")
-    parser.add_argument("--dataset-root", default="dataset/ISIC2024")
+    parser = argparse.ArgumentParser(description="Run ISIC2024 challenge tabular baseline models.")
+    parser.add_argument("--dataset-root", default=str(DEFAULT_DATASET_ROOT))
     parser.add_argument("--eda-dir", default="artifacts/eda/isic2024")
     parser.add_argument("--feature-set-json", default="artifacts/eda/isic2024/feature_sets_recommended.json")
     parser.add_argument("--tracking-uri", default="file:./mlruns")
@@ -39,9 +42,9 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    ensure_expected_conda_env()
     try:
         import mlflow
-        import pandas as pd
     except ImportError as exc:
         raise ImportError(
             "pandas and mlflow are required to run tabular baselines. Activate the conda env and install dependencies."
@@ -54,6 +57,9 @@ def main() -> None:
     set_global_seed(args.seed)
     frame = load_merged_dataframe(args.dataset_root)
     target_column = feature_payload["target_column"]
+    if target_column != DEFAULT_TARGET_COLUMN:
+        raise RuntimeError(f"Unexpected target column in feature set JSON: {target_column}")
+    group_ids = frame["split_group_id"].copy()
 
     mlflow.set_tracking_uri(args.tracking_uri)
     mlflow.set_experiment(args.experiment_name)
@@ -70,7 +76,7 @@ def main() -> None:
                     "benchmark": "ISIC2024-tabular",
                     "model_name": spec.name,
                     "role": "model_parent",
-                    "dataset_name": "ISIC2024",
+                    "dataset_name": "ISIC2024-challenge",
                 }
             )
             mlflow.log_params(
@@ -79,6 +85,7 @@ def main() -> None:
                     "test_size": args.test_size,
                     "validation_size": args.validation_size,
                     "dataset_root": str(Path(args.dataset_root).resolve()),
+                    "split_group_policy": "patient_id -> lesion_id -> isic_id",
                 }
             )
 
@@ -95,6 +102,7 @@ def main() -> None:
                 output_dir.mkdir(parents=True, exist_ok=True)
                 summary = train_and_evaluate(
                     frame=split_frame,
+                    group_ids=group_ids,
                     target_column=target_column,
                     model_name=spec.name,
                     hyperparameters=hyperparameters,
@@ -159,20 +167,16 @@ def ensure_feature_set_json(eda_dir: str, feature_set_json: str) -> None:
 
 
 def load_merged_dataframe(dataset_root: str):
-    import pandas as pd
-
-    from isic2024_benchmark.tabular_data import resolve_isic2024_dataset_root
-
-    paths = resolve_isic2024_dataset_root(dataset_root)
-    ground_truth = pd.read_csv(paths.ground_truth_csv)
-    supplement = pd.read_csv(paths.supplement_csv)
-    frame = ground_truth.merge(supplement, on="isic_id", how="left", validate="1:1")
+    frame = load_tabular_dataframe(dataset_root, include_image_columns=False)
+    if DEFAULT_TARGET_COLUMN not in frame.columns:
+        raise RuntimeError(f"Target column '{DEFAULT_TARGET_COLUMN}' not found in {dataset_root}")
     return frame
 
 
 def train_and_evaluate(
     *,
     frame,
+    group_ids,
     target_column: str,
     model_name: str,
     hyperparameters: dict[str, Any],
@@ -180,7 +184,7 @@ def train_and_evaluate(
     validation_size: float,
     output_dir: Path,
 ) -> dict[str, Any]:
-    from sklearn.model_selection import train_test_split
+    import pandas as pd
 
     start = time.time()
     seed = int(hyperparameters["seed"])
@@ -188,26 +192,26 @@ def train_and_evaluate(
 
     X = frame.drop(columns=[target_column]).copy()
     y = frame[target_column].astype(float).astype(int)
+    split_sets = build_split_sets(
+        group_ids=group_ids,
+        y=y,
+        validation_size=validation_size,
+        test_size=test_size,
+        seed=seed,
+    )
 
     for column in X.columns:
         X[column] = X[column].where(X[column].notna(), None)
 
-    X_train_full, X_test, y_train_full, y_test = train_test_split(
-        X,
-        y,
-        test_size=test_size,
-        stratify=y,
-        random_state=seed,
-    )
-
-    val_ratio_within_train = validation_size
-    X_train, X_val, y_train, y_val = train_test_split(
-        X_train_full,
-        y_train_full,
-        test_size=val_ratio_within_train,
-        stratify=y_train_full,
-        random_state=seed + 100,
-    )
+    train_mask = group_ids.isin(split_sets["train"])
+    val_mask = group_ids.isin(split_sets["val"])
+    test_mask = group_ids.isin(split_sets["test"])
+    X_train = X.loc[train_mask].copy()
+    X_val = X.loc[val_mask].copy()
+    X_test = X.loc[test_mask].copy()
+    y_train = y.loc[train_mask].copy()
+    y_val = y.loc[val_mask].copy()
+    y_test = y.loc[test_mask].copy()
 
     numeric_columns, categorical_columns = split_feature_types(X_train)
     estimator = build_estimator(
@@ -237,6 +241,10 @@ def train_and_evaluate(
             "num_train_positive": int(y_train.sum()),
             "num_val_positive": int(y_val.sum()),
             "num_test_positive": int(y_test.sum()),
+            "num_train_groups": int(len(split_sets["train"])),
+            "num_val_groups": int(len(split_sets["val"])),
+            "num_test_groups": int(len(split_sets["test"])),
+            "split_group_policy": "patient_id -> lesion_id -> isic_id",
             "numeric_columns": numeric_columns,
             "categorical_columns": categorical_columns,
         },
@@ -245,6 +253,19 @@ def train_and_evaluate(
     }
     (output_dir / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     return summary
+
+
+def build_split_sets(*, group_ids, y, validation_size: float, test_size: float, seed: int) -> dict[str, set[str]]:
+    import pandas as pd
+
+    group_frame = pd.DataFrame({"group_id": group_ids, "target": y})
+    group_labels = group_frame.groupby("group_id")["target"].max().astype(int).to_dict()
+    return split_group_ids(
+        group_labels,
+        validation_ratio=validation_size,
+        test_ratio=test_size,
+        seed=seed,
+    )
 
 
 def build_estimator(*, model_name: str, hyperparameters: dict[str, Any], X_train, y_train, numeric_columns, categorical_columns):
@@ -269,7 +290,6 @@ def build_estimator(*, model_name: str, hyperparameters: dict[str, Any], X_train
     if model_name == "catboost":
         import pandas as pd
 
-        # CatBoost는 범주형 컬럼을 직접 받아들이는 쪽이 baseline 작성이 간단하다.
         train_frame = X_train.copy()
         for column in categorical_columns:
             train_frame[column] = train_frame[column].fillna("__missing__").astype(str)

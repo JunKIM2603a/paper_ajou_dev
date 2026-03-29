@@ -5,6 +5,8 @@ import csv
 import math
 from pathlib import Path
 
+from isic2024_benchmark.runtime_env import ensure_expected_conda_env
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Export MLflow best-run leaderboard.")
@@ -16,6 +18,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    ensure_expected_conda_env()
     try:
         import mlflow
     except ImportError as exc:

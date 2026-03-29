@@ -11,48 +11,90 @@
     "seed": 42
   },
   "split_summary": {
-    "num_train_rows": 256677,
-    "num_val_rows": 64170,
-    "num_test_rows": 80212,
-    "num_train_positive": 251,
-    "num_val_positive": 63,
-    "num_test_positive": 79,
+    "num_train_rows": 274176,
+    "num_val_rows": 60952,
+    "num_test_rows": 65931,
+    "num_train_positive": 256,
+    "num_val_positive": 60,
+    "num_test_positive": 77,
+    "num_train_groups": 666,
+    "num_val_groups": 167,
+    "num_test_groups": 209,
+    "split_group_policy": "patient_id -> lesion_id -> isic_id",
     "numeric_columns": [
-      "tbp_lv_dnn_lesion_confidence"
+      "age_approx",
+      "clin_size_long_diam_mm",
+      "tbp_lv_A",
+      "tbp_lv_Aext",
+      "tbp_lv_B",
+      "tbp_lv_Bext",
+      "tbp_lv_C",
+      "tbp_lv_Cext",
+      "tbp_lv_H",
+      "tbp_lv_Hext",
+      "tbp_lv_L",
+      "tbp_lv_Lext",
+      "tbp_lv_areaMM2",
+      "tbp_lv_area_perim_ratio",
+      "tbp_lv_color_std_mean",
+      "tbp_lv_deltaA",
+      "tbp_lv_deltaB",
+      "tbp_lv_deltaL",
+      "tbp_lv_deltaLB",
+      "tbp_lv_deltaLBnorm",
+      "tbp_lv_dnn_lesion_confidence",
+      "tbp_lv_eccentricity",
+      "tbp_lv_minorAxisMM",
+      "tbp_lv_nevi_confidence",
+      "tbp_lv_norm_border",
+      "tbp_lv_norm_color",
+      "tbp_lv_perimeterMM",
+      "tbp_lv_radial_color_std_max",
+      "tbp_lv_stdL",
+      "tbp_lv_stdLExt",
+      "tbp_lv_symm_2axis",
+      "tbp_lv_symm_2axis_angle",
+      "tbp_lv_x",
+      "tbp_lv_y",
+      "tbp_lv_z"
     ],
     "categorical_columns": [
-      "attribution",
-      "copyright_license"
+      "anatom_site_general",
+      "image_type",
+      "sex",
+      "tbp_lv_location",
+      "tbp_lv_location_simple",
+      "tbp_tile_type"
     ]
   },
   "metrics": {
     "train": {
-      "accuracy": 0.8132477783361969,
-      "precision": 0.004674450492375452,
-      "recall": 0.896414342629482,
-      "f1_score": 0.00930040301746409,
-      "auc_roc": 0.9196325769900517,
-      "average_precision": 0.022438359399387594,
-      "balanced_accuracy": 0.8547903571071334
+      "accuracy": 0.9917461776377218,
+      "precision": 0.10162763001190948,
+      "recall": 1.0,
+      "f1_score": 0.1845045045045045,
+      "auc_roc": 0.9999248896803812,
+      "average_precision": 0.9118133159286881,
+      "balanced_accuracy": 0.9958692318925233
     },
     "val": {
-      "accuracy": 0.8153186847436497,
-      "precision": 0.0021118432167595877,
-      "recall": 0.3968253968253968,
-      "f1_score": 0.004201327619527771,
-      "auc_roc": 0.6932453702775196,
-      "average_precision": 0.0284188091454048,
-      "balanced_accuracy": 0.6062776741563769
+      "accuracy": 0.9907140044625279,
+      "precision": 0.044964028776978415,
+      "recall": 0.4166666666666667,
+      "f1_score": 0.08116883116883117,
+      "auc_roc": 0.9368866189318794,
+      "average_precision": 0.055079764323880856,
+      "balanced_accuracy": 0.7039731546563315
     },
     "test": {
-      "accuracy": 0.8125467511095597,
-      "precision": 0.0022628951747088186,
-      "recall": 0.43037974683544306,
-      "f1_score": 0.004502118644067797,
-      "auc_roc": 0.6551228835225994,
-      "average_precision": 0.00875533957353636,
-      "balanced_accuracy": 0.621651630746163
+      "accuracy": 0.9917489496594925,
+      "precision": 0.05523809523809524,
+      "recall": 0.37662337662337664,
+      "f1_score": 0.09634551495016612,
+      "auc_roc": 0.9425115534994964,
+      "average_precision": 0.08843353583802205,
+      "balanced_accuracy": 0.6845457819126844
     }
   },
-  "duration_seconds": 4.673759460449219
+  "duration_seconds": 21.341015100479126
 }

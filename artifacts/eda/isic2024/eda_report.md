@@ -11,13 +11,13 @@
 
 | 항목 | 값 |
 | --- | --- |
-| dataset_root | /home/junkim2603a/proj/paper_ajou_dev/dataset/ISIC2024 |
+| dataset_root | /home/junkim2603a/proj/paper_ajou_dev/dataset/isic-2024-challenge |
 | rows | 401059 |
-| target_column | malignant |
+| target_column | target |
 | positive_count | 393 |
 | negative_count | 400666 |
 | positive_ratio | 0.000980 |
-| column_count | 16 |
+| column_count | 58 |
 
 ### 해석
 
@@ -54,15 +54,15 @@
 | iddx_3 | 399994 | 0.997345 |
 | iddx_2 | 399991 | 0.997337 |
 | lesion_id | 379001 | 0.945001 |
-| attribution | 0 | 0.0 |
-| copyright_license | 0 | 0.0 |
-| iddx_1 | 0 | 0.0 |
+| sex | 11517 | 0.028716 |
+| anatom_site_general | 5756 | 0.014352 |
+| age_approx | 2798 | 0.006977 |
 
 ### 해석
 
 `iddx_5`의 결측률은 `0.999998`이다. `mel_mitotic_index`의 결측률은 `0.999868`이다. `mel_thick_mm`의 결측률은 `0.999843`이다. `iddx_4`의 결측률은 `0.998626`이다. `iddx_3`의 결측률은 `0.997345`이다. 상위 결측 컬럼 대부분은 `iddx_*` 후반부와 `mel_*` 계열로 나타났다. 이 패턴은 두 가지 해석을 가능하게 한다. 첫째, 이러한 변수는 데이터셋 전반에서 관측 가능한 일반 변수라기보다 특정 상황에서만 기록되는 후속 진단 정보일 가능성이 높다. 둘째, 실제 baseline feature로 사용할 경우 결측 처리 자체가 결과를 왜곡할 수 있다.
 
-`lesion_id` 역시 결측이 매우 많지만, 완전히 무시하기에는 아까운 변수다. 실제 baseline 실험에서 `relaxed` 세트가 `strict`보다 크게 좋아지는 양상이 확인되므로, 이 변수는 단순 메타데이터 이상의 정보를 담고 있을 가능성이 있다. 다만 바로 메인 baseline에 포함하기보다는, `strict`와 분리된 보조 실험 세트로 관리하는 것이 해석상 안전하다.
+또한 `patient_id`, `lesion_id`, `attribution`, `copyright_license`처럼 본질적 병변 특징보다 수집 단위나 출처에 가까운 컬럼은 단순 분포만 보면 유용해 보일 수 있어도, 공정한 일반화 비교 기준으로 쓰기에는 해석 리스크가 있다. 이번 전환에서는 이런 컬럼을 `strict`에서 제외하고 `relaxed`에서만 별도 비교하도록 분리한다.
 
 ## 5. 범주형 변수 분석
 
@@ -82,7 +82,7 @@
 
 ### 해석
 
-`iddx_1=Malignant`의 양성 비율은 `1.000000`이고, `iddx_1=Benign`은 `0.000000`이다. 이 값은 단순 상관 수준을 넘어, `iddx_1`이 사실상 타깃에 대한 직접적인 정보를 포함하고 있음을 보여준다.
+`iddx_1=Malignant`의 양성 비율은 `1.000000`이고, `iddx_1=Indeterminate`은 `0.000000`이다. 이 차이는 단순 상관 수준을 넘어, `iddx_1`이 사실상 타깃과 매우 가까운 진단 정보를 포함하고 있음을 보여준다.
 
 즉, 이 변수는 메타데이터라기보다 이미 정리된 진단 판단 결과에 가깝다. 따라서 `iddx_1`을 일반 baseline feature에 포함하면 모델이 입력 데이터를 학습하는 것이 아니라, 이미 주어진 정답 힌트를 활용하는 구조가 된다. 이 때문에 본 프로젝트에서는 `iddx_1`을 `oracle` 세트에만 포함시키고, 메인 비교에서는 제외하는 것이 타당하다.
 
@@ -96,13 +96,13 @@
 
 | attribution | count | positive_count | positive_ratio |
 | --- | --- | --- | --- |
-| Frazer Institute, The University of Queensland, Dermatology Research Centre | 51768 | 81 | 0.001565 |
-| Memorial Sloan Kettering Cancer Center | 129068 | 174 | 0.001348 |
-| ACEMID MIA | 28665 | 33 | 0.001151 |
-| ViDIR Group, Department of Dermatology, Medical University of Vienna | 12640 | 14 | 0.001108 |
-| Department of Dermatology, University of Athens, Andreas Syggros Hospital of Skin and Venereal Diseases, Alexander Stratigos, Konstantinos Liopyris | 7976 | 6 | 0.000752 |
-| Department of Dermatology, Hospital Clínic de Barcelona | 105724 | 72 | 0.000681 |
-| University Hospital of Basel | 65218 | 13 | 0.000199 |
+| Frazer Institute, The University of Queensland, Dermatology Research Centre | 51768 | 81 | 0.0015646731571627 |
+| Memorial Sloan Kettering Cancer Center | 129068 | 174 | 0.0013481265689404 |
+| ACEMID MIA | 28665 | 33 | 0.0011512297226582 |
+| ViDIR Group, Department of Dermatology, Medical University of Vienna | 12640 | 14 | 0.0011075949367088 |
+| Department of Dermatology, University of Athens, Andreas Syggros Hospital of Skin and Venereal Diseases, Alexander Stratigos, Konstantinos Liopyris | 7976 | 6 | 0.0007522567703109 |
+| Department of Dermatology, Hospital Clínic de Barcelona | 105724 | 72 | 0.0006810185010026 |
+| University Hospital of Basel | 65218 | 13 | 0.0001993314729062 |
 
 ### 해석
 
@@ -122,15 +122,114 @@
 
 | column | group | count | mean | median | min | max |
 | --- | --- | --- | --- | --- | --- | --- |
-| mel_mitotic_index | all | 0 |  |  |  |  |
-| mel_mitotic_index | target_0 | 0 |  |  |  |  |
-| mel_mitotic_index | target_1 | 0 |  |  |  |  |
+| age_approx | all | 398261 | 58.012986 | 60.0 | 5.0 | 85.0 |
+| age_approx | target_0 | 397871 | 58.009694 | 60.0 | 5.0 | 85.0 |
+| age_approx | target_1 | 390 | 61.371795 | 60.0 | 20.0 | 85.0 |
+| clin_size_long_diam_mm | all | 401059 | 3.930827 | 3.37 | 1.0 | 28.4 |
+| clin_size_long_diam_mm | target_0 | 400666 | 3.929043 | 3.37 | 1.0 | 28.4 |
+| clin_size_long_diam_mm | target_1 | 393 | 5.749771 | 5.14 | 1.01 | 18.94 |
 | mel_thick_mm | all | 63 | 0.670952 | 0.4 | 0.2 | 5.0 |
 | mel_thick_mm | target_0 | 0 |  |  |  |  |
 | mel_thick_mm | target_1 | 63 | 0.670952 | 0.4 | 0.2 | 5.0 |
+| tbp_lv_A | all | 401059 | 19.974007 | 19.80191 | -2.487115 | 48.18961 |
+| tbp_lv_A | target_0 | 400666 | 19.971528 | 19.800474 | -2.487115 | 48.18961 |
+| tbp_lv_A | target_1 | 393 | 22.500924 | 21.99098 | 4.971736 | 43.71767 |
+| tbp_lv_Aext | all | 401059 | 14.919247 | 14.71393 | -9.080269 | 37.02168 |
+| tbp_lv_Aext | target_0 | 400666 | 14.916682 | 14.712272 | -9.080269 | 37.02168 |
+| tbp_lv_Aext | target_1 | 393 | 17.534401 | 16.877089 | 4.826737 | 35.86719 |
+| tbp_lv_B | all | 401059 | 28.281706 | 28.17157 | -0.730989 | 54.3069 |
+| tbp_lv_B | target_0 | 400666 | 28.286065 | 28.174977 | -0.730989 | 54.3069 |
+| tbp_lv_B | target_1 | 393 | 23.837896 | 24.04374 | 2.870907 | 44.625461 |
+| tbp_lv_Bext | all | 401059 | 26.913015 | 26.701704 | 9.237066 | 48.3727 |
+| tbp_lv_Bext | target_0 | 400666 | 26.91494 | 26.703165 | 9.237066 | 48.3727 |
+| tbp_lv_Bext | target_1 | 393 | 24.950406 | 25.077617 | 12.63714 | 42.718264 |
+| tbp_lv_C | all | 401059 | 34.786341 | 34.82258 | 3.054228 | 58.76517 |
+| tbp_lv_C | target_0 | 400666 | 34.788027 | 34.823648 | 3.054228 | 58.76517 |
+| tbp_lv_C | target_1 | 393 | 33.067349 | 33.446362 | 7.715667 | 53.569388 |
+| tbp_lv_Cext | all | 401059 | 30.921279 | 30.804893 | 11.84652 | 54.30529 |
+| tbp_lv_Cext | target_0 | 400666 | 30.921401 | 30.804718 | 11.84652 | 54.30529 |
+| tbp_lv_Cext | target_1 | 393 | 30.796881 | 31.005119 | 17.381603 | 47.263349 |
+| tbp_lv_H | all | 401059 | 54.653689 | 55.035632 | -1.574164 | 105.875784 |
+| tbp_lv_H | target_0 | 400666 | 54.66145 | 55.040083 | -1.574164 | 105.875784 |
+| tbp_lv_H | target_1 | 393 | 46.741528 | 47.277889 | 7.174666 | 65.25869 |
+| tbp_lv_Hext | all | 401059 | 60.996869 | 61.109173 | 28.43649 | 130.9833 |
+| tbp_lv_Hext | target_0 | 400666 | 61.002632 | 61.1127 | 28.43649 | 130.9833 |
+| tbp_lv_Hext | target_1 | 393 | 55.121791 | 55.385449 | 32.649963 | 75.477687 |
+| tbp_lv_L | all | 401059 | 42.289976 | 42.34377 | 4.223007 | 87.548888 |
+| tbp_lv_L | target_0 | 400666 | 42.291356 | 42.343629 | 4.223007 | 87.548888 |
+| tbp_lv_L | target_1 | 393 | 40.883934 | 42.548845 | 6.157081 | 63.70602 |
+| tbp_lv_Lext | all | 401059 | 51.199529 | 51.425557 | 17.70226 | 98.58825 |
+| tbp_lv_Lext | target_0 | 400666 | 51.199687 | 51.424885 | 17.70226 | 98.58825 |
+| tbp_lv_Lext | target_1 | 393 | 51.03826 | 52.349597 | 20.553112 | 74.01323 |
+| tbp_lv_areaMM2 | all | 401059 | 8.539975 | 5.68587 | 0.431601 | 334.1527 |
+| tbp_lv_areaMM2 | target_0 | 400666 | 8.526291 | 5.68587 | 0.431601 | 334.1527 |
+| tbp_lv_areaMM2 | target_1 | 393 | 22.490554 | 12.85419 | 0.656784 | 141.114656 |
+| tbp_lv_area_perim_ratio | all | 401059 | 19.084517 | 17.42395 | 10.761634 | 87.20534 |
+| tbp_lv_area_perim_ratio | target_0 | 400666 | 19.082902 | 17.42338 | 10.761634 | 87.20534 |
+| tbp_lv_area_perim_ratio | target_1 | 393 | 20.730862 | 18.32528 | 11.134446 | 49.86905 |
+| tbp_lv_color_std_mean | all | 401059 | 1.070408 | 0.931402 | 0.0 | 9.952932 |
+| tbp_lv_color_std_mean | target_0 | 400666 | 1.069828 | 0.931117 | 0.0 | 9.952932 |
+| tbp_lv_color_std_mean | target_1 | 393 | 1.661645 | 1.489238 | 0.0 | 8.009495 |
+| tbp_lv_deltaA | all | 401059 | 5.05476 | 4.643926 | -13.81985 | 32.13759 |
+| tbp_lv_deltaA | target_0 | 400666 | 5.054846 | 4.643749 | -13.81985 | 32.13759 |
+| tbp_lv_deltaA | target_1 | 393 | 4.966523 | 5.038595 | -8.280943 | 16.31623 |
+| tbp_lv_deltaB | all | 401059 | 1.368691 | 1.593945 | -18.088106 | 12.64393 |
+| tbp_lv_deltaB | target_0 | 400666 | 1.371125 | 1.59573 | -18.088106 | 12.64393 |
+| tbp_lv_deltaB | target_1 | 393 | -1.11251 | -0.649948 | -15.339217 | 6.903996 |
+| tbp_lv_deltaL | all | 401059 | -8.909552 | -8.132223 | -38.75614 | -1.590631 |
+| tbp_lv_deltaL | target_0 | 400666 | -8.908332 | -8.131439 | -38.75614 | -1.590631 |
+| tbp_lv_deltaL | target_1 | 393 | -10.154326 | -9.229332 | -34.69047 | -2.587007 |
+| tbp_lv_deltaLB | all | 401059 | 9.455766 | 8.699932 | 2.952675 | 39.19772 |
+| tbp_lv_deltaLB | target_0 | 400666 | 9.454437 | 8.699245 | 2.952675 | 39.19772 |
+| tbp_lv_deltaLB | target_1 | 393 | 10.810271 | 9.763281 | 2.962654 | 37.7161 |
+| tbp_lv_deltaLBnorm | all | 401059 | 7.538922 | 6.94632 | 3.001138 | 30.487456 |
+| tbp_lv_deltaLBnorm | target_0 | 400666 | 7.53778 | 6.945794 | 3.001138 | 30.487456 |
+| tbp_lv_deltaLBnorm | target_1 | 393 | 8.703975 | 7.629472 | 3.05825 | 30.34092 |
 | tbp_lv_dnn_lesion_confidence | all | 401059 | 97.162204 | 99.994588 | 0.0 | 100.0 |
 | tbp_lv_dnn_lesion_confidence | target_0 | 400666 | 97.177634 | 99.99461 | 0.0 | 100.0 |
 | tbp_lv_dnn_lesion_confidence | target_1 | 393 | 81.431493 | 99.68489 | 2e-06 | 100.0 |
+| tbp_lv_eccentricity | all | 401059 | 0.741238 | 0.768215 | 0.027667 | 0.97496 |
+| tbp_lv_eccentricity | target_0 | 400666 | 0.741262 | 0.768237 | 0.027667 | 0.97496 |
+| tbp_lv_eccentricity | target_1 | 393 | 0.716914 | 0.738177 | 0.193099 | 0.960627 |
+| tbp_lv_minorAxisMM | all | 401059 | 2.539773 | 2.265201 | 0.273973 | 18.3879 |
+| tbp_lv_minorAxisMM | target_0 | 400666 | 2.538459 | 2.264226 | 0.273973 | 18.3879 |
+| tbp_lv_minorAxisMM | target_1 | 393 | 3.879183 | 3.543483 | 0.547945 | 13.031066 |
+| tbp_lv_nevi_confidence | all | 401059 | 38.520265 | 14.408514 | 0.0 | 100.0 |
+| tbp_lv_nevi_confidence | target_0 | 400666 | 38.537596 | 14.451695 | 0.0 | 100.0 |
+| tbp_lv_nevi_confidence | target_1 | 393 | 20.850907 | 0.489743 | 0.0 | 99.99878 |
+| tbp_lv_norm_border | all | 401059 | 3.451523 | 2.996933 | 0.589426 | 10.0 |
+| tbp_lv_norm_border | target_0 | 400666 | 3.451159 | 2.996717 | 0.589426 | 10.0 |
+| tbp_lv_norm_border | target_1 | 393 | 3.823057 | 3.345044 | 1.023068 | 10.0 |
+| tbp_lv_norm_color | all | 401059 | 3.09159 | 2.764664 | 0.0 | 10.0 |
+| tbp_lv_norm_color | target_0 | 400666 | 3.090164 | 2.763985 | 0.0 | 10.0 |
+| tbp_lv_norm_color | target_1 | 393 | 4.545228 | 4.531665 | 0.0 | 10.0 |
+| tbp_lv_perimeterMM | all | 401059 | 11.878891 | 10.01544 | 2.579237 | 102.4939 |
+| tbp_lv_perimeterMM | target_0 | 400666 | 11.872182 | 10.015438 | 2.579237 | 102.4939 |
+| tbp_lv_perimeterMM | target_1 | 393 | 18.718538 | 16.24227 | 2.806203 | 76.01962 |
+| tbp_lv_radial_color_std_max | all | 401059 | 1.016459 | 0.902281 | 0.0 | 11.49114 |
+| tbp_lv_radial_color_std_max | target_0 | 400666 | 1.015873 | 0.902049 | 0.0 | 11.49114 |
+| tbp_lv_radial_color_std_max | target_1 | 393 | 1.613218 | 1.475259 | 0.0 | 7.020391 |
+| tbp_lv_stdL | all | 401059 | 2.71519 | 2.186693 | 0.26816 | 17.56365 |
+| tbp_lv_stdL | target_0 | 400666 | 2.7145 | 2.186371 | 0.26816 | 17.56365 |
+| tbp_lv_stdL | target_1 | 393 | 3.418305 | 2.724339 | 0.490105 | 14.004394 |
+| tbp_lv_stdLExt | all | 401059 | 2.238605 | 2.149758 | 0.636247 | 25.534791 |
+| tbp_lv_stdLExt | target_0 | 400666 | 2.238095 | 2.149499 | 0.636247 | 25.534791 |
+| tbp_lv_stdLExt | target_1 | 393 | 2.758215 | 2.534622 | 1.112039 | 15.73316 |
+| tbp_lv_symm_2axis | all | 401059 | 0.306823 | 0.282297 | 0.052034 | 0.977055 |
+| tbp_lv_symm_2axis | target_0 | 400666 | 0.306813 | 0.282258 | 0.052034 | 0.977055 |
+| tbp_lv_symm_2axis | target_1 | 393 | 0.317134 | 0.303571 | 0.076033 | 0.767033 |
+| tbp_lv_symm_2axis_angle | all | 401059 | 86.332073 | 90.0 | 0.0 | 175.0 |
+| tbp_lv_symm_2axis_angle | target_0 | 400666 | 86.330647 | 90.0 | 0.0 | 175.0 |
+| tbp_lv_symm_2axis_angle | target_1 | 393 | 87.78626 | 90.0 | 0.0 | 175.0 |
+| tbp_lv_x | all | 401059 | -3.091862 | -5.747253 | -624.870728 | 614.4717 |
+| tbp_lv_x | target_0 | 400666 | -3.07548 | -5.724847 | -624.870728 | 614.4717 |
+| tbp_lv_x | target_1 | 393 | -19.793436 | -22.899292 | -499.481934 | 467.8475 |
+| tbp_lv_y | all | 401059 | 1039.598221 | 1172.803 | -1052.134 | 1887.766846 |
+| tbp_lv_y | target_0 | 400666 | 1039.470821 | 1172.709919 | -1052.134 | 1887.766846 |
+| tbp_lv_y | target_1 | 393 | 1169.483517 | 1286.181 | 25.816711 | 1864.878662 |
+| tbp_lv_z | all | 401059 | 55.823389 | 67.957947 | -291.890442 | 319.407 |
+| tbp_lv_z | target_0 | 400666 | 55.845144 | 67.992142 | -291.890442 | 319.407 |
+| tbp_lv_z | target_1 | 393 | 33.644145 | 35.604858 | -218.2009 | 220.5186 |
 
 ### 해석
 
@@ -144,7 +243,7 @@
 
 | 구분 | 컬럼 |
 | --- | --- |
-| excluded_columns | image_exists, image_path, isic_id |
+| excluded_columns | image_exists, image_path, isic_id, patient_id, split_group_id |
 | high_leakage_risk_columns | iddx_1, iddx_2, iddx_3, iddx_4, iddx_5, iddx_full, mel_mitotic_index, mel_thick_mm |
 
 ### 해석
@@ -159,9 +258,9 @@
 
 | feature_set | num_columns | columns |
 | --- | --- | --- |
-| strict | 3 | attribution, copyright_license, tbp_lv_dnn_lesion_confidence |
-| relaxed | 4 | attribution, copyright_license, lesion_id, tbp_lv_dnn_lesion_confidence |
-| oracle | 12 | attribution, copyright_license, iddx_1, iddx_2, iddx_3, iddx_4, iddx_5, iddx_full, lesion_id, mel_mitotic_index, mel_thick_mm, tbp_lv_dnn_lesion_confidence |
+| strict | 41 | age_approx, anatom_site_general, clin_size_long_diam_mm, image_type, sex, tbp_lv_A, tbp_lv_Aext, tbp_lv_B, tbp_lv_Bext, tbp_lv_C, tbp_lv_Cext, tbp_lv_H, tbp_lv_Hext, tbp_lv_L, tbp_lv_Lext, tbp_lv_areaMM2, tbp_lv_area_perim_ratio, tbp_lv_color_std_mean, tbp_lv_deltaA, tbp_lv_deltaB, tbp_lv_deltaL, tbp_lv_deltaLB, tbp_lv_deltaLBnorm, tbp_lv_dnn_lesion_confidence, tbp_lv_eccentricity, tbp_lv_location, tbp_lv_location_simple, tbp_lv_minorAxisMM, tbp_lv_nevi_confidence, tbp_lv_norm_border, tbp_lv_norm_color, tbp_lv_perimeterMM, tbp_lv_radial_color_std_max, tbp_lv_stdL, tbp_lv_stdLExt, tbp_lv_symm_2axis, tbp_lv_symm_2axis_angle, tbp_lv_x, tbp_lv_y, tbp_lv_z, tbp_tile_type |
+| relaxed | 44 | age_approx, anatom_site_general, attribution, clin_size_long_diam_mm, copyright_license, image_type, lesion_id, sex, tbp_lv_A, tbp_lv_Aext, tbp_lv_B, tbp_lv_Bext, tbp_lv_C, tbp_lv_Cext, tbp_lv_H, tbp_lv_Hext, tbp_lv_L, tbp_lv_Lext, tbp_lv_areaMM2, tbp_lv_area_perim_ratio, tbp_lv_color_std_mean, tbp_lv_deltaA, tbp_lv_deltaB, tbp_lv_deltaL, tbp_lv_deltaLB, tbp_lv_deltaLBnorm, tbp_lv_dnn_lesion_confidence, tbp_lv_eccentricity, tbp_lv_location, tbp_lv_location_simple, tbp_lv_minorAxisMM, tbp_lv_nevi_confidence, tbp_lv_norm_border, tbp_lv_norm_color, tbp_lv_perimeterMM, tbp_lv_radial_color_std_max, tbp_lv_stdL, tbp_lv_stdLExt, tbp_lv_symm_2axis, tbp_lv_symm_2axis_angle, tbp_lv_x, tbp_lv_y, tbp_lv_z, tbp_tile_type |
+| oracle | 52 | age_approx, anatom_site_general, attribution, clin_size_long_diam_mm, copyright_license, iddx_1, iddx_2, iddx_3, iddx_4, iddx_5, iddx_full, image_type, lesion_id, mel_mitotic_index, mel_thick_mm, sex, tbp_lv_A, tbp_lv_Aext, tbp_lv_B, tbp_lv_Bext, tbp_lv_C, tbp_lv_Cext, tbp_lv_H, tbp_lv_Hext, tbp_lv_L, tbp_lv_Lext, tbp_lv_areaMM2, tbp_lv_area_perim_ratio, tbp_lv_color_std_mean, tbp_lv_deltaA, tbp_lv_deltaB, tbp_lv_deltaL, tbp_lv_deltaLB, tbp_lv_deltaLBnorm, tbp_lv_dnn_lesion_confidence, tbp_lv_eccentricity, tbp_lv_location, tbp_lv_location_simple, tbp_lv_minorAxisMM, tbp_lv_nevi_confidence, tbp_lv_norm_border, tbp_lv_norm_color, tbp_lv_perimeterMM, tbp_lv_radial_color_std_max, tbp_lv_stdL, tbp_lv_stdLExt, tbp_lv_symm_2axis, tbp_lv_symm_2axis_angle, tbp_lv_x, tbp_lv_y, tbp_lv_z, tbp_tile_type |
 
 ### 해석
 
@@ -171,26 +270,14 @@
 
 표 8. Tabular baseline 요약
 
-| model_name | feature_set | best_average_precision | balanced_accuracy | recall | auc_roc |
-| --- | --- | --- | --- | --- | --- |
-| logistic_regression | oracle | 1.0 | 1.0 | 1.0 | 1.0 |
-| svm | oracle | 0.9999999999999998 | 1.0 | 1.0 | 1.0 |
-| mlp | strict | 0.0211098448202818 | 0.5 | 0.0 | 0.7327542643898821 |
-| logistic_regression | strict | 0.0114549881539307 | 0.6599033063228585 | 0.5949367088607594 | 0.7280103315579621 |
-| svm | strict | 0.0111597661741734 | 0.6611824297801108 | 0.5949367088607594 | 0.7256022305954326 |
-| xgboost | strict | 0.0087553395735363 | 0.621651630746163 | 0.430379746835443 | 0.6551228835225994 |
-| catboost | strict | 0.0077176374618058 | 0.6729712169973117 | 0.6075949367088608 | 0.7294869115538456 |
+_baseline 결과 파일을 찾지 못했습니다._
 
 ### Discussion
 
-`strict` 세트에서는 `mlp`가 가장 높은 `best_average_precision=0.021110`를 기록했다. 이는 극단적 불균형 환경에서도 제한된 메타데이터와 신뢰도 점수만으로 일정 수준의 순위화가 가능함을 보여준다.
-
-`oracle` 세트에서는 `logistic_regression`가 `best_average_precision=1.000000`를 기록했다. 현재 결과에서 `oracle` 성능이 거의 완벽해지는 현상은, EDA에서 지적한 `iddx_*` 계열 leakage 위험이 실제 실험 결과로도 재확인되었음을 의미한다.
-
-종합하면, EDA는 단순히 분포를 설명하는 단계에 그치지 않고, 어떤 feature set이 메인 baseline 비교 기준이 되어야 하는지 직접적인 실험 설계 근거를 제공했다. 본 프로젝트에서는 `strict`를 메인 비교 기준으로 유지하고, `relaxed`와 `oracle`은 보조 해석 및 leakage 확인용으로 제한하는 것이 가장 일관된 선택이다.
+현재 baseline 리더보드가 없어 EDA와의 연결 논의를 자동 생성하지 못했다. baseline 실행 후 다시 렌더링하면 이 섹션이 채워진다.
 
 ## 10. 결론
 
 본 EDA는 `ISIC2024` tabular 데이터가 단순한 메타데이터 분류 문제가 아니라, 극단적 클래스 불균형과 강한 leakage 후보가 동시에 존재하는 민감한 실험 환경임을 보여주었다. 특히 `iddx_1`, `iddx_full`, `mel_thick_mm` 계열은 분포와 baseline 결과 모두에서 비정상적으로 강한 신호를 보였기 때문에, 메인 비교 실험에 그대로 사용하는 것은 적절하지 않다.
 
-따라서 현재 시점에서 가장 타당한 메인 baseline 기준은 `strict` feature set이다. `relaxed`와 `oracle`은 성능 향상 자체를 보고하기보다는, 어떤 컬럼이 결과를 과도하게 좋게 만드는지를 보여주는 보조 분석으로 활용하는 것이 적절하다. 이 결론은 이후 image baseline 결과와 tabular baseline 결과를 공정하게 비교할 때도 중요한 기준점이 된다.
+또한 동일 환자의 표본이 매우 많이 반복되므로, 이번 전환에서는 `patient_id` 기반 split을 통해 train/val/test 간 환자 중복을 차단하는 것이 핵심 전제다. 따라서 현재 시점에서 가장 타당한 메인 baseline 기준은 `strict` feature set이다. `relaxed`와 `oracle`은 성능 향상 자체를 보고하기보다는, 어떤 컬럼이 결과를 과도하게 좋게 만드는지를 보여주는 보조 분석으로 활용하는 것이 적절하다. 이 결론은 이후 image baseline 결과와 tabular baseline 결과를 공정하게 비교할 때도 중요한 기준점이 된다.

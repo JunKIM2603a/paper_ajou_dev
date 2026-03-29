@@ -1,4 +1,9 @@
 column,unique_count,value,count,ratio
+anatom_site_general,5,posterior torso,121902,0.303950
+anatom_site_general,5,lower extremity,103028,0.256890
+anatom_site_general,5,anterior torso,87770,0.218846
+anatom_site_general,5,upper extremity,70557,0.175927
+anatom_site_general,5,head/neck,12046,0.030035
 attribution,7,Memorial Sloan Kettering Cancer Center,129068,0.321818
 attribution,7,"Department of Dermatology, Hospital Clínic de Barcelona",105724,0.263612
 attribution,7,University Hospital of Basel,65218,0.162614
@@ -37,9 +42,9 @@ iddx_3,25,Solar or actinic keratosis,39,0.000097
 iddx_3,25,"Squamous cell carcinoma, Invasive",22,0.000055
 iddx_3,25,"Melanoma, NOS",13,0.000032
 iddx_3,25,Solar lentigo,12,0.000030
-iddx_3,25,Lichen planus like keratosis,11,0.000027
 iddx_3,25,Dermatofibroma,11,0.000027
 iddx_3,25,Atypical intraepithelial melanocytic proliferation,11,0.000027
+iddx_3,25,Lichen planus like keratosis,11,0.000027
 iddx_3,25,Verruca,7,0.000017
 iddx_3,25,Lentigo NOS,5,0.000012
 iddx_3,25,Pigmented benign keratosis,3,0.000007
@@ -58,14 +63,14 @@ iddx_4,26,"Nevus, NOS, Junctional",10,0.000025
 iddx_4,26,"Melanoma in situ, Superficial spreading",10,0.000025
 iddx_4,26,"Melanoma Invasive, Associated with a nevus",7,0.000017
 iddx_4,26,"Basal cell carcinoma, Infiltrating",6,0.000015
-iddx_4,26,"Squamous cell carcinoma, Invasive, Keratoacanthoma-type",5,0.000012
 iddx_4,26,"Melanoma Invasive, On chronically sun-exposed skin or lentigo maligna melanoma",5,0.000012
+iddx_4,26,"Squamous cell carcinoma, Invasive, Keratoacanthoma-type",5,0.000012
 iddx_4,26,"Nevus, Congenital",4,0.000010
 iddx_4,26,"Nevus, Spitz",3,0.000007
 iddx_4,26,"Hemangioma, Cherry",3,0.000007
-iddx_4,26,"Angiofibroma, Facial",2,0.000005
 iddx_4,26,"Nevus, Deep penetrating",2,0.000005
 iddx_4,26,"Nevus, Of special anatomic site",2,0.000005
+iddx_4,26,"Nevus, Combined",2,0.000005
 iddx_5,1,"Blue nevus, Cellular",1,0.000002
 iddx_full,52,Benign,399991,0.997337
 iddx_full,52,"Benign::Benign melanocytic proliferations::Nevus::Nevus, Atypical, Dysplastic, or Clark",228,0.000568
@@ -73,8 +78,8 @@ iddx_full,52,Benign::Benign melanocytic proliferations::Nevus,141,0.000352
 iddx_full,52,"Malignant::Malignant adnexal epithelial proliferations - Follicular::Basal cell carcinoma::Basal cell carcinoma, Nodular",98,0.000244
 iddx_full,52,Indeterminate::Indeterminate melanocytic proliferations::Atypical melanocytic neoplasm,64,0.000160
 iddx_full,52,Benign::Benign epidermal proliferations::Seborrheic keratosis,56,0.000140
-iddx_full,52,Malignant::Malignant epidermal proliferations::Squamous cell carcinoma in situ,48,0.000120
 iddx_full,52,"Malignant::Malignant adnexal epithelial proliferations - Follicular::Basal cell carcinoma::Basal cell carcinoma, Superficial",48,0.000120
+iddx_full,52,Malignant::Malignant epidermal proliferations::Squamous cell carcinoma in situ,48,0.000120
 iddx_full,52,Malignant::Malignant melanocytic proliferations (Melanoma)::Melanoma in situ,46,0.000115
 iddx_full,52,Indeterminate::Indeterminate epidermal proliferations::Solar or actinic keratosis,38,0.000095
 iddx_full,52,"Malignant::Malignant melanocytic proliferations (Melanoma)::Melanoma Invasive::Melanoma Invasive, Superficial spreading",37,0.000092
@@ -83,70 +88,108 @@ iddx_full,52,"Benign::Benign melanocytic proliferations::Nevus::Nevus, NOS, Derm
 iddx_full,52,"Malignant::Malignant epidermal proliferations::Squamous cell carcinoma, Invasive",17,0.000042
 iddx_full,52,Malignant::Malignant melanocytic proliferations (Melanoma)::Melanoma Invasive,13,0.000032
 iddx_full,52,"Malignant::Malignant melanocytic proliferations (Melanoma)::Melanoma, NOS",13,0.000032
+iddx_full,52,Benign::Benign epidermal proliferations::Solar lentigo,12,0.000030
 iddx_full,52,"Malignant::Malignant melanocytic proliferations (Melanoma)::Melanoma in situ::Melanoma in situ, Lentigo maligna type",12,0.000030
 iddx_full,52,"Malignant::Malignant melanocytic proliferations (Melanoma)::Melanoma in situ::Melanoma in situ, associated with a nevus",12,0.000030
-iddx_full,52,Benign::Benign epidermal proliferations::Solar lentigo,12,0.000030
 iddx_full,52,Benign::Benign epidermal proliferations::Lichen planus like keratosis,11,0.000027
 image_exists,1,1,401059,1.000000
-image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0015670.jpg,1,0.000002
-image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0015845.jpg,1,0.000002
-image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0015864.jpg,1,0.000002
-image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0015902.jpg,1,0.000002
-image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0024200.jpg,1,0.000002
-image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0035502.jpg,1,0.000002
-image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0051648.jpg,1,0.000002
-image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0051665.jpg,1,0.000002
-image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0051710.jpg,1,0.000002
-image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0051758.jpg,1,0.000002
-image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0051812.jpg,1,0.000002
-image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0051822.jpg,1,0.000002
-image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0051896.jpg,1,0.000002
-image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0051897.jpg,1,0.000002
-image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0051958.jpg,1,0.000002
-image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0051983.jpg,1,0.000002
-image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0052003.jpg,1,0.000002
-image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0052004.jpg,1,0.000002
-image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0052026.jpg,1,0.000002
-image_path,401059,dataset/ISIC2024/ISIC_2024_Training_Input/ISIC_0052042.jpg,1,0.000002
+image_type,1,TBP tile: close-up,401059,1.000000
 isic_id,401059,ISIC_0015670,1,0.000002
-isic_id,401059,ISIC_0015845,1,0.000002
-isic_id,401059,ISIC_0015864,1,0.000002
-isic_id,401059,ISIC_0015902,1,0.000002
-isic_id,401059,ISIC_0024200,1,0.000002
-isic_id,401059,ISIC_0035502,1,0.000002
-isic_id,401059,ISIC_0051648,1,0.000002
-isic_id,401059,ISIC_0051665,1,0.000002
-isic_id,401059,ISIC_0051710,1,0.000002
-isic_id,401059,ISIC_0051758,1,0.000002
-isic_id,401059,ISIC_0051812,1,0.000002
-isic_id,401059,ISIC_0051822,1,0.000002
-isic_id,401059,ISIC_0051896,1,0.000002
-isic_id,401059,ISIC_0051897,1,0.000002
-isic_id,401059,ISIC_0051958,1,0.000002
-isic_id,401059,ISIC_0051983,1,0.000002
-isic_id,401059,ISIC_0052003,1,0.000002
-isic_id,401059,ISIC_0052004,1,0.000002
-isic_id,401059,ISIC_0052026,1,0.000002
-isic_id,401059,ISIC_0052042,1,0.000002
+isic_id,401059,ISIC_6699080,1,0.000002
+isic_id,401059,ISIC_6699647,1,0.000002
+isic_id,401059,ISIC_6699636,1,0.000002
+isic_id,401059,ISIC_6699544,1,0.000002
+isic_id,401059,ISIC_6699513,1,0.000002
+isic_id,401059,ISIC_6699499,1,0.000002
+isic_id,401059,ISIC_6699477,1,0.000002
+isic_id,401059,ISIC_6699464,1,0.000002
+isic_id,401059,ISIC_6699462,1,0.000002
+isic_id,401059,ISIC_6699365,1,0.000002
+isic_id,401059,ISIC_6699316,1,0.000002
+isic_id,401059,ISIC_6699302,1,0.000002
+isic_id,401059,ISIC_6699250,1,0.000002
+isic_id,401059,ISIC_6699239,1,0.000002
+isic_id,401059,ISIC_6699236,1,0.000002
+isic_id,401059,ISIC_6699199,1,0.000002
+isic_id,401059,ISIC_6699196,1,0.000002
+isic_id,401059,ISIC_6699148,1,0.000002
+isic_id,401059,ISIC_6699147,1,0.000002
 lesion_id,22058,IL_6727506,1,0.000002
-lesion_id,22058,IL_3854228,1,0.000002
-lesion_id,22058,IL_9898853,1,0.000002
-lesion_id,22058,IL_2988728,1,0.000002
-lesion_id,22058,IL_6219432,1,0.000002
-lesion_id,22058,IL_6272856,1,0.000002
-lesion_id,22058,IL_9949284,1,0.000002
-lesion_id,22058,IL_3272524,1,0.000002
-lesion_id,22058,IL_5505434,1,0.000002
-lesion_id,22058,IL_4191716,1,0.000002
-lesion_id,22058,IL_1913587,1,0.000002
-lesion_id,22058,IL_7117713,1,0.000002
-lesion_id,22058,IL_2748178,1,0.000002
-lesion_id,22058,IL_6397564,1,0.000002
-lesion_id,22058,IL_4475532,1,0.000002
-lesion_id,22058,IL_8530712,1,0.000002
-lesion_id,22058,IL_1701872,1,0.000002
-lesion_id,22058,IL_0173466,1,0.000002
-lesion_id,22058,IL_3396908,1,0.000002
-lesion_id,22058,IL_0030347,1,0.000002
-malignant,2,0.0,400666,0.999020
-malignant,2,1.0,393,0.000980
+lesion_id,22058,IL_3147105,1,0.000002
+lesion_id,22058,IL_0180339,1,0.000002
+lesion_id,22058,IL_7214852,1,0.000002
+lesion_id,22058,IL_0805062,1,0.000002
+lesion_id,22058,IL_3819544,1,0.000002
+lesion_id,22058,IL_4384293,1,0.000002
+lesion_id,22058,IL_0889385,1,0.000002
+lesion_id,22058,IL_9271352,1,0.000002
+lesion_id,22058,IL_5181541,1,0.000002
+lesion_id,22058,IL_1889618,1,0.000002
+lesion_id,22058,IL_2192003,1,0.000002
+lesion_id,22058,IL_6197662,1,0.000002
+lesion_id,22058,IL_8310453,1,0.000002
+lesion_id,22058,IL_2490056,1,0.000002
+lesion_id,22058,IL_0673720,1,0.000002
+lesion_id,22058,IL_4817776,1,0.000002
+lesion_id,22058,IL_5115265,1,0.000002
+lesion_id,22058,IL_3123114,1,0.000002
+lesion_id,22058,IL_0397860,1,0.000002
+mel_mitotic_index,7,0/mm^2,22,0.000055
+mel_mitotic_index,7,<1/mm^2,19,0.000047
+mel_mitotic_index,7,>4/mm^2,4,0.000010
+mel_mitotic_index,7,1/mm^2,3,0.000007
+mel_mitotic_index,7,3/mm^2,2,0.000005
+mel_mitotic_index,7,2/mm^2,2,0.000005
+mel_mitotic_index,7,4/mm^2,1,0.000002
+patient_id,1042,IP_1117889,9184,0.022899
+patient_id,1042,IP_5714646,6267,0.015626
+patient_id,1042,IP_3921915,5568,0.013883
+patient_id,1042,IP_7797815,4454,0.011106
+patient_id,1042,IP_9577633,3583,0.008934
+patient_id,1042,IP_5539318,2859,0.007129
+patient_id,1042,IP_9853536,2327,0.005802
+patient_id,1042,IP_5143034,2283,0.005692
+patient_id,1042,IP_0321326,2245,0.005598
+patient_id,1042,IP_5426188,2193,0.005468
+patient_id,1042,IP_1127121,2183,0.005443
+patient_id,1042,IP_1116526,2121,0.005288
+patient_id,1042,IP_2331257,1909,0.004760
+patient_id,1042,IP_6724798,1859,0.004635
+patient_id,1042,IP_3785831,1852,0.004618
+patient_id,1042,IP_0658218,1820,0.004538
+patient_id,1042,IP_5811816,1772,0.004418
+patient_id,1042,IP_5961877,1610,0.004014
+patient_id,1042,IP_0869661,1609,0.004012
+patient_id,1042,IP_3710285,1607,0.004007
+sex,2,male,265546,0.662112
+sex,2,female,123996,0.309171
+tbp_lv_location,21,Torso Back Top Third,71112,0.177311
+tbp_lv_location,21,Torso Front Top Half,63350,0.157957
+tbp_lv_location,21,Torso Back Middle Third,46185,0.115158
+tbp_lv_location,21,Left Leg - Lower,27428,0.068389
+tbp_lv_location,21,Right Leg - Lower,25208,0.062854
+tbp_lv_location,21,Torso Front Bottom Half,24360,0.060739
+tbp_lv_location,21,Left Leg - Upper,23673,0.059026
+tbp_lv_location,21,Right Leg - Upper,23034,0.057433
+tbp_lv_location,21,Right Arm - Upper,22972,0.057278
+tbp_lv_location,21,Left Arm - Upper,22816,0.056889
+tbp_lv_location,21,Head & Neck,12046,0.030035
+tbp_lv_location,21,Left Arm - Lower,11939,0.029769
+tbp_lv_location,21,Right Arm - Lower,10636,0.026520
+tbp_lv_location,21,Unknown,5756,0.014352
+tbp_lv_location,21,Torso Back Bottom Third,4596,0.011460
+tbp_lv_location,21,Left Leg,1974,0.004922
+tbp_lv_location,21,Right Leg,1711,0.004266
+tbp_lv_location,21,Left Arm,1593,0.003972
+tbp_lv_location,21,Right Arm,601,0.001499
+tbp_lv_location,21,Torso Front,60,0.000150
+tbp_lv_location_simple,8,Torso Back,121902,0.303950
+tbp_lv_location_simple,8,Torso Front,87770,0.218846
+tbp_lv_location_simple,8,Left Leg,53075,0.132337
+tbp_lv_location_simple,8,Right Leg,49953,0.124553
+tbp_lv_location_simple,8,Left Arm,36348,0.090630
+tbp_lv_location_simple,8,Right Arm,34209,0.085297
+tbp_lv_location_simple,8,Head & Neck,12046,0.030035
+tbp_lv_location_simple,8,Unknown,5756,0.014352
+tbp_tile_type,2,3D: XP,285903,0.712870
+tbp_tile_type,2,3D: white,115156,0.287130

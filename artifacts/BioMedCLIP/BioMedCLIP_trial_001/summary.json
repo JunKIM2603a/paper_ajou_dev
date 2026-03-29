@@ -1,16 +1,16 @@
 {
-  "best_epoch": 1,
-  "best_validation_metric": 0.8289345063538612,
+  "best_epoch": 5,
+  "best_validation_metric": 0.9340238818985684,
   "test_metrics": {
-    "accuracy": 0.9990234375,
+    "accuracy": 0.9990169380444976,
     "precision": 0.0,
     "recall": 0.0,
     "f1_score": 0.0,
-    "balanced_accuracy": 0.5,
-    "auc_roc": 0.8670576735092864,
-    "average_precision": 0.0072992700729927005
+    "balanced_accuracy": 0.4999943447230611,
+    "auc_roc": 0.907280353646825,
+    "average_precision": 0.04497098315945555
   },
-  "duration_seconds": 29.10145378112793,
+  "duration_seconds": 14715.263271331787,
   "model_path": "artifacts/BioMedCLIP/BioMedCLIP_trial_001/best_model.pt",
   "history_path": "artifacts/BioMedCLIP/BioMedCLIP_trial_001/history.csv"
 }

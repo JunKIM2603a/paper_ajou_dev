@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-import csv
 import json
-import random
-from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -13,7 +10,13 @@ import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
 
-from isic2024_benchmark.tabular_data import build_supplement_lookup, resolve_isic2024_dataset_root
+from isic2024_benchmark.split_utils import split_group_ids
+from isic2024_benchmark.tabular_data import (
+    build_group_id_from_row,
+    iter_merged_tabular_rows,
+    normalize_cell,
+    resolve_isic2024_dataset_root,
+)
 
 
 @dataclass
@@ -58,7 +61,6 @@ class ImageClassificationDataset(Dataset):
         return self.transform(image), torch.tensor(sample.label, dtype=torch.long)
 
 
-# Backward-compatible alias for older imports.
 CbisDdsmDataset = ImageClassificationDataset
 
 
@@ -70,38 +72,33 @@ def build_manifest(dataset_root: str | Path, cache_path: str | Path | None = Non
             with cache_path.open("r", encoding="utf-8") as file:
                 return json.load(file)
 
-    supplement_lookup = build_supplement_lookup(paths)
     manifest: list[dict[str, Any]] = []
-    with paths.ground_truth_csv.open("r", encoding="utf-8-sig", newline="") as file:
-        reader = csv.DictReader(file)
-        for row in reader:
-            isic_id = row["isic_id"].strip()
-            image_path = paths.image_dir / f"{isic_id}.jpg"
-            if not image_path.exists():
-                continue
+    for row in iter_merged_tabular_rows(paths):
+        isic_id = normalize_cell(row.get("isic_id", ""))
+        image_path = Path(row["image_path"])
+        if not image_path.exists():
+            continue
 
-            label = parse_binary_label(row["malignant"])
-            supplement_row = supplement_lookup.get(isic_id, {})
-            lesion_id = supplement_row.get("lesion_id", "").strip()
-            group_id = lesion_id or isic_id
-
-            manifest.append(
-                {
-                    "image_path": str(image_path),
-                    "label": label,
-                    "group_id": group_id,
-                    "isic_id": isic_id,
-                    "source_split": "train_pool",
-                    "metadata": {
-                        "lesion_id": lesion_id,
-                        "attribution": supplement_row.get("attribution", "").strip(),
-                        "copyright_license": supplement_row.get("copyright_license", "").strip(),
-                        "iddx_1": supplement_row.get("iddx_1", "").strip(),
-                        "iddx_full": supplement_row.get("iddx_full", "").strip(),
-                        "tbp_lv_dnn_lesion_confidence": supplement_row.get("tbp_lv_dnn_lesion_confidence", "").strip(),
-                    },
-                }
-            )
+        label = parse_binary_label(row.get(paths.target_column, row.get("target", "0")))
+        group_id = build_group_id_from_row(row)
+        manifest.append(
+            {
+                "image_path": str(image_path),
+                "label": label,
+                "group_id": group_id,
+                "isic_id": isic_id,
+                "source_split": "train_pool",
+                "metadata": {
+                    "patient_id": normalize_cell(row.get("patient_id", "")),
+                    "lesion_id": normalize_cell(row.get("lesion_id", "")),
+                    "attribution": normalize_cell(row.get("attribution", "")),
+                    "copyright_license": normalize_cell(row.get("copyright_license", "")),
+                    "iddx_1": normalize_cell(row.get("iddx_1", "")),
+                    "iddx_full": normalize_cell(row.get("iddx_full", "")),
+                    "tbp_lv_dnn_lesion_confidence": normalize_cell(row.get("tbp_lv_dnn_lesion_confidence", "")),
+                },
+            }
+        )
 
     if cache_path is not None:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
@@ -117,48 +114,34 @@ def create_splits(
     seed: int,
     test_ratio: float = 0.2,
 ) -> dict[str, list[ImageSample]]:
-    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    group_labels: dict[str, int] = {}
     for sample in manifest:
-        grouped[sample["group_id"]].append(sample)
+        group_id = str(sample["group_id"])
+        group_labels[group_id] = max(group_labels.get(group_id, 0), int(sample["label"]))
 
-    positive_groups: list[list[dict[str, Any]]] = []
-    negative_groups: list[list[dict[str, Any]]] = []
-    for group in grouped.values():
-        group_label = max(item["label"] for item in group)
-        if group_label == 1:
-            positive_groups.append(group)
+    split_ids = split_group_ids(
+        group_labels,
+        validation_ratio=validation_ratio,
+        test_ratio=test_ratio,
+        seed=seed,
+    )
+    split_items = {"train": [], "val": [], "test": []}
+    for sample in manifest:
+        group_id = str(sample["group_id"])
+        if group_id in split_ids["train"]:
+            split_name = "train"
+        elif group_id in split_ids["val"]:
+            split_name = "val"
         else:
-            negative_groups.append(group)
+            split_name = "test"
+        split_items[split_name].append(sample)
 
-    random.Random(seed).shuffle(positive_groups)
-    random.Random(seed + 1).shuffle(negative_groups)
-
-    train_samples: list[ImageSample] = []
-    val_samples: list[ImageSample] = []
-    test_samples: list[ImageSample] = []
-
-    for groups in [negative_groups, positive_groups]:
-        test_count = max(1, int(len(groups) * test_ratio))
-        remaining_groups = groups[test_count:]
-        val_count = max(1, int(len(remaining_groups) * validation_ratio))
-
-        test_part = groups[:test_count]
-        val_part = remaining_groups[:val_count]
-        train_part = remaining_groups[val_count:]
-
-        for group in train_part:
-            train_samples.extend(_to_image_samples(group, split_name="train"))
-        for group in val_part:
-            val_samples.extend(_to_image_samples(group, split_name="val"))
-        for group in test_part:
-            test_samples.extend(_to_image_samples(group, split_name="test"))
-
-    return {"train": train_samples, "val": val_samples, "test": test_samples}
+    return {split_name: _to_image_samples(items, split_name=split_name) for split_name, items in split_items.items()}
 
 
 def parse_binary_label(value: str) -> int:
-    normalized = value.strip()
-    if normalized in {"1", "1.0"}:
+    normalized = normalize_cell(value)
+    if normalized in {"1", "1.0", "true", "True"}:
         return 1
     return 0
 

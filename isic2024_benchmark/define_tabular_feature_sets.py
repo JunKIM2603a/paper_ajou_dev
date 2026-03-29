@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
+from isic2024_benchmark.runtime_env import ensure_expected_conda_env
 from isic2024_benchmark.tabular_feature_sets import recommend_feature_sets
 
 
@@ -15,6 +16,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    ensure_expected_conda_env()
     args = parse_args()
     recommendations = recommend_feature_sets(args.eda_dir)
     output_path = Path(args.output)

@@ -13,6 +13,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 
+from isic2024_benchmark.runtime_env import ensure_expected_conda_env
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Render a richer markdown EDA report with figures for ISIC2024.")
@@ -23,6 +25,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    ensure_expected_conda_env()
     args = parse_args()
     eda_dir = Path(args.eda_dir)
     template_path = Path(args.template)
@@ -185,18 +188,20 @@ def build_missingness_interpretation(missingness: pd.DataFrame) -> str:
         f"{joined} 상위 결측 컬럼 대부분은 `iddx_*` 후반부와 `mel_*` 계열로 나타났다. "
         "이 패턴은 두 가지 해석을 가능하게 한다. 첫째, 이러한 변수는 데이터셋 전반에서 관측 가능한 일반 변수라기보다 "
         "특정 상황에서만 기록되는 후속 진단 정보일 가능성이 높다. 둘째, 실제 baseline feature로 사용할 경우 결측 처리 자체가 결과를 왜곡할 수 있다.\n\n"
-        "`lesion_id` 역시 결측이 매우 많지만, 완전히 무시하기에는 아까운 변수다. 실제 baseline 실험에서 `relaxed` 세트가 `strict`보다 크게 좋아지는 양상이 확인되므로, "
-        "이 변수는 단순 메타데이터 이상의 정보를 담고 있을 가능성이 있다. 다만 바로 메인 baseline에 포함하기보다는, `strict`와 분리된 보조 실험 세트로 관리하는 것이 해석상 안전하다."
+        "또한 `patient_id`, `lesion_id`, `attribution`, `copyright_license`처럼 본질적 병변 특징보다 수집 단위나 출처에 가까운 컬럼은 "
+        "단순 분포만 보면 유용해 보일 수 있어도, 공정한 일반화 비교 기준으로 쓰기에는 해석 리스크가 있다. "
+        "이번 전환에서는 이런 컬럼을 `strict`에서 제외하고 `relaxed`에서만 별도 비교하도록 분리한다."
     )
 
 
 def build_iddx1_interpretation(iddx1: pd.DataFrame) -> str:
-    malignant_row = iddx1[iddx1["iddx_1"] == "Malignant"].iloc[0]
-    benign_row = iddx1[iddx1["iddx_1"] == "Benign"].iloc[0]
+    ordered = iddx1.sort_values("positive_ratio", ascending=False).reset_index(drop=True)
+    highest = ordered.iloc[0]
+    lowest = ordered.iloc[-1]
     return (
-        f"`iddx_1=Malignant`의 양성 비율은 `{malignant_row['positive_ratio']:.6f}`이고, "
-        f"`iddx_1=Benign`은 `{benign_row['positive_ratio']:.6f}`이다. "
-        "이 값은 단순 상관 수준을 넘어, `iddx_1`이 사실상 타깃에 대한 직접적인 정보를 포함하고 있음을 보여준다.\n\n"
+        f"`iddx_1={highest['iddx_1']}`의 양성 비율은 `{highest['positive_ratio']:.6f}`이고, "
+        f"`iddx_1={lowest['iddx_1']}`은 `{lowest['positive_ratio']:.6f}`이다. "
+        "이 차이는 단순 상관 수준을 넘어, `iddx_1`이 사실상 타깃과 매우 가까운 진단 정보를 포함하고 있음을 보여준다.\n\n"
         "즉, 이 변수는 메타데이터라기보다 이미 정리된 진단 판단 결과에 가깝다. "
         "따라서 `iddx_1`을 일반 baseline feature에 포함하면 모델이 입력 데이터를 학습하는 것이 아니라, "
         "이미 주어진 정답 힌트를 활용하는 구조가 된다. 이 때문에 본 프로젝트에서는 `iddx_1`을 `oracle` 세트에만 포함시키고, "
@@ -298,7 +303,7 @@ def build_discussion(overview: dict, feature_sets: dict, baseline: pd.DataFrame)
         row = relaxed_best.iloc[0]
         parts.append(
             f"`relaxed` 세트에서는 `{row['model_name']}`가 `best_average_precision={float(row['best_average_precision']):.6f}`를 기록했다. "
-            "만약 이 값이 `strict` 대비 크게 높다면, `lesion_id`와 같은 보조 정보가 모델 성능에 강하게 개입하고 있음을 시사한다."
+            "만약 이 값이 `strict` 대비 크게 높다면, `lesion_id`, `attribution`, `copyright_license` 같은 보조 메타데이터가 모델 성능에 강하게 개입하고 있음을 시사한다."
         )
     if not oracle_best.empty:
         row = oracle_best.iloc[0]
@@ -320,6 +325,7 @@ def build_conclusion(overview: dict, feature_sets: dict) -> str:
         "극단적 클래스 불균형과 강한 leakage 후보가 동시에 존재하는 민감한 실험 환경임을 보여주었다. "
         "특히 `iddx_1`, `iddx_full`, `mel_thick_mm` 계열은 분포와 baseline 결과 모두에서 비정상적으로 강한 신호를 보였기 때문에, "
         "메인 비교 실험에 그대로 사용하는 것은 적절하지 않다.\n\n"
+        "또한 동일 환자의 표본이 매우 많이 반복되므로, 이번 전환에서는 `patient_id` 기반 split을 통해 train/val/test 간 환자 중복을 차단하는 것이 핵심 전제다. "
         "따라서 현재 시점에서 가장 타당한 메인 baseline 기준은 `strict` feature set이다. "
         "`relaxed`와 `oracle`은 성능 향상 자체를 보고하기보다는, 어떤 컬럼이 결과를 과도하게 좋게 만드는지를 보여주는 보조 분석으로 활용하는 것이 적절하다. "
         "이 결론은 이후 image baseline 결과와 tabular baseline 결과를 공정하게 비교할 때도 중요한 기준점이 된다."

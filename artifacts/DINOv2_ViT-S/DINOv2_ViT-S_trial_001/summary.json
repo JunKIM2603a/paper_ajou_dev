@@ -1,16 +1,16 @@
 {
-  "best_epoch": 1,
-  "best_validation_metric": 0.09090909090909091,
+  "best_epoch": 5,
+  "best_validation_metric": 0.7599488033767254,
   "test_metrics": {
-    "accuracy": 0.9990234375,
+    "accuracy": 0.9990282376072046,
     "precision": 0.0,
     "recall": 0.0,
     "f1_score": 0.0,
     "balanced_accuracy": 0.5,
-    "auc_roc": 0.42424242424242425,
-    "average_precision": 0.001694915254237288
+    "auc_roc": 0.7936445340170168,
+    "average_precision": 0.00516837584641625
   },
-  "duration_seconds": 18.005812168121338,
+  "duration_seconds": 14271.483320713043,
   "model_path": "artifacts/DINOv2_ViT-S/DINOv2_ViT-S_trial_001/best_model.pt",
   "history_path": "artifacts/DINOv2_ViT-S/DINOv2_ViT-S_trial_001/history.csv"
 }
