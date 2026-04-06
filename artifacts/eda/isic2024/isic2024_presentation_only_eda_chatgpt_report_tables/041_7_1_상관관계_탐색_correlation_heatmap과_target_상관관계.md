@@ -1,0 +1,17 @@
+| col_1 | column | target_corr | abs_target_corr |
+| --- | --- | --- | --- |
+| 12 | tbp_lv_areaMM2 | 0.0451 | 0.0451 |
+| 8 | tbp_lv_H | -0.0449 | 0.0449 |
+| 25 | tbp_lv_perimeterMM | 0.0362 | 0.0362 |
+| 21 | tbp_lv_minorAxisMM | 0.0358 | 0.0358 |
+| 16 | tbp_lv_deltaB | -0.0351 | 0.0351 |
+| 1 | clin_size_long_diam_mm | 0.0327 | 0.0327 |
+| 9 | tbp_lv_Hext | -0.0327 | 0.0327 |
+| 4 | tbp_lv_B | -0.0264 | 0.0264 |
+| 28 | tbp_lv_stdLExt | 0.0261 | 0.0261 |
+| 26 | tbp_lv_radial_color_std_max | 0.0254 | 0.0254 |
+| 14 | tbp_lv_color_std_mean | 0.0243 | 0.0243 |
+| 3 | tbp_lv_Aext | 0.0232 | 0.0232 |
+| 24 | tbp_lv_norm_color | 0.0223 | 0.0223 |
+| 2 | tbp_lv_A | 0.0198 | 0.0198 |
+| 19 | tbp_lv_deltaLBnorm | 0.0152 | 0.0152 |

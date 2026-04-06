@@ -1,0 +1,9 @@
+| col_1 | value |
+| --- | --- |
+| patients_total | 1042.0 |
+| patients_with_malignant | 259.0 |
+| patients_without_malignant | 783.0 |
+| patients_with_both_classes | 258.0 |
+| patients_all_positive | 1.0 |
+| median_rows_per_patient | 241.5 |
+| max_rows_per_patient | 9184.0 |
