@@ -77,6 +77,9 @@ def _build_timm_model(model_config: dict[str, Any], num_classes: int) -> nn.Modu
     model_kwargs: dict[str, Any] = {}
     if image_size is not None:
         model_kwargs["img_size"] = int(image_size)
+    global_pool = model_config.get("global_pool")
+    if global_pool:
+        model_kwargs["global_pool"] = global_pool
 
     model = timm.create_model(
         model_config["architecture"],
@@ -124,7 +127,7 @@ def _build_open_clip_model(model_config: dict[str, Any], num_classes: int) -> nn
     feature_dim = _infer_open_clip_feature_dim(model)
     classifier = EncoderClassifier(encoder, feature_dim, num_classes)
     if checkpoint_path:
-        _load_checkpoint(classifier, checkpoint_path)
+        _load_open_clip_checkpoint(classifier, checkpoint_path)
     return classifier
 
 
@@ -154,17 +157,74 @@ def _build_huggingface_clip_model(model_config: dict[str, Any], num_classes: int
     return classifier
 
 
-# 외부 체크포인트는 module. 접두사가 붙어 있어도 최대한 유연하게 읽는다.
+# 외부 체크포인트는 module./model. 접두사나 head shape mismatch가 있어도 최대한 유연하게 읽는다.
 def _load_checkpoint(model: nn.Module, checkpoint_path: str) -> None:
-    state = torch.load(Path(checkpoint_path), map_location="cpu")
-    if isinstance(state, dict) and "state_dict" in state:
-        state = state["state_dict"]
-    cleaned = {key.removeprefix("module."): value for key, value in state.items()}
-    missing, unexpected = model.load_state_dict(cleaned, strict=False)
+    state = _extract_checkpoint_state(checkpoint_path)
+    filtered, skipped_unexpected, skipped_incompatible = _filter_compatible_state(model, state)
+    missing, unexpected = model.load_state_dict(filtered, strict=False)
+    unexpected = skipped_unexpected + list(unexpected)
     if missing:
         print(f"[checkpoint] Missing keys: {missing[:5]}{'...' if len(missing) > 5 else ''}")
     if unexpected:
         print(f"[checkpoint] Unexpected keys: {unexpected[:5]}{'...' if len(unexpected) > 5 else ''}")
+    if skipped_incompatible:
+        preview = [item[0] for item in skipped_incompatible[:5]]
+        print(f"[checkpoint] Skipped incompatible keys: {preview}{'...' if len(skipped_incompatible) > 5 else ''}")
+
+
+def _load_open_clip_checkpoint(model: nn.Module, checkpoint_path: str) -> None:
+    cleaned = _extract_checkpoint_state(checkpoint_path)
+
+    # Some CheXzero/open_clip checkpoints store the raw CLIP model state_dict without the
+    # EncoderClassifier wrapper prefix. When that happens, map them into encoder.clip_model.*
+    # and leave the task-specific classifier head randomly initialized.
+    if cleaned and not any(key.startswith(("encoder.clip_model.", "classifier.")) for key in cleaned):
+        cleaned = {f"encoder.clip_model.{key}": value for key, value in cleaned.items()}
+
+    filtered, skipped_unexpected, skipped_incompatible = _filter_compatible_state(model, cleaned)
+    missing, unexpected = model.load_state_dict(filtered, strict=False)
+    unexpected = skipped_unexpected + list(unexpected)
+    if missing:
+        print(f"[checkpoint] Missing keys: {missing[:5]}{'...' if len(missing) > 5 else ''}")
+    if unexpected:
+        print(f"[checkpoint] Unexpected keys: {unexpected[:5]}{'...' if len(unexpected) > 5 else ''}")
+    if skipped_incompatible:
+        preview = [item[0] for item in skipped_incompatible[:5]]
+        print(f"[checkpoint] Skipped incompatible keys: {preview}{'...' if len(skipped_incompatible) > 5 else ''}")
+
+
+def _extract_checkpoint_state(checkpoint_path: str) -> dict[str, torch.Tensor]:
+    state = torch.load(Path(checkpoint_path), map_location="cpu")
+    if isinstance(state, dict) and "state_dict" in state:
+        state = state["state_dict"]
+    elif isinstance(state, dict) and "model" in state:
+        state = state["model"]
+    if not isinstance(state, dict):
+        raise RuntimeError(f"Unsupported checkpoint format at {checkpoint_path}")
+    return {
+        key.removeprefix("module.").removeprefix("model."): value
+        for key, value in state.items()
+    }
+
+
+def _filter_compatible_state(
+    model: nn.Module, state: dict[str, torch.Tensor]
+) -> tuple[dict[str, torch.Tensor], list[str], list[tuple[str, tuple[int, ...], tuple[int, ...]]]]:
+    target_state = model.state_dict()
+    filtered: dict[str, torch.Tensor] = {}
+    skipped_unexpected: list[str] = []
+    skipped_incompatible: list[tuple[str, tuple[int, ...], tuple[int, ...]]] = []
+
+    for key, value in state.items():
+        if key not in target_state:
+            skipped_unexpected.append(key)
+            continue
+        if tuple(value.shape) != tuple(target_state[key].shape):
+            skipped_incompatible.append((key, tuple(value.shape), tuple(target_state[key].shape)))
+            continue
+        filtered[key] = value
+
+    return filtered, skipped_unexpected, skipped_incompatible
 
 
 def _infer_open_clip_feature_dim(model: nn.Module) -> int:
@@ -186,9 +246,6 @@ def _infer_open_clip_feature_dim(model: nn.Module) -> int:
     if features.ndim != 2:
         raise RuntimeError(f"Unexpected open_clip image feature shape: {tuple(features.shape)}")
     return int(features.shape[-1])
-
-
-
 
 
 

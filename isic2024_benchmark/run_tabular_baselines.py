@@ -8,7 +8,7 @@ from typing import Any
 
 from isic2024_benchmark.config_utils import expand_search_space, sanitize_run_name
 from isic2024_benchmark.reproducibility import DEFAULT_SEED, set_global_seed
-from isic2024_benchmark.runtime_env import ensure_expected_conda_env
+from isic2024_benchmark.runtime_env import ensure_expected_conda_env, get_default_mlflow_tracking_uri
 from isic2024_benchmark.split_utils import split_group_ids
 from isic2024_benchmark.tabular_baselines import (
     build_catboost_estimator,
@@ -27,7 +27,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dataset-root", default=str(DEFAULT_DATASET_ROOT))
     parser.add_argument("--eda-dir", default="artifacts/eda/isic2024")
     parser.add_argument("--feature-set-json", default="artifacts/eda/isic2024/feature_sets_recommended.json")
-    parser.add_argument("--tracking-uri", default="file:./mlruns")
+    parser.add_argument("--tracking-uri", default=get_default_mlflow_tracking_uri())
     parser.add_argument("--experiment-name", default="ISIC2024-Tabular-Benchmark")
     parser.add_argument("--output-root", default="artifacts/tabular_runs")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)

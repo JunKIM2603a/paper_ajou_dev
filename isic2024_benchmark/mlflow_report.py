@@ -5,12 +5,12 @@ import csv
 import math
 from pathlib import Path
 
-from isic2024_benchmark.runtime_env import ensure_expected_conda_env
+from isic2024_benchmark.runtime_env import ensure_expected_conda_env, get_default_mlflow_tracking_uri
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Export MLflow best-run leaderboard.")
-    parser.add_argument("--tracking-uri", default="file:./mlruns")
+    parser.add_argument("--tracking-uri", default=get_default_mlflow_tracking_uri())
     parser.add_argument("--experiment-name", default="ISIC2024-Tabular-Benchmark")
     parser.add_argument("--output", default="artifacts/mlflow_leaderboard.csv")
     parser.add_argument("--sort-metric", default="best_average_precision")

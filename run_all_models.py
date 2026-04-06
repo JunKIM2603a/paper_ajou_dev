@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from isic2024_benchmark.reproducibility import DEFAULT_SEED
-from isic2024_benchmark.runtime_env import ensure_expected_conda_env
+from isic2024_benchmark.runtime_env import ensure_expected_conda_env, get_default_mlflow_tracking_uri
 
 
 @dataclass
@@ -27,7 +27,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-root", default="artifacts")
     parser.add_argument(
         "--tracking-uri",
-        default=os.environ.get("MLFLOW_TRACKING_URI", "file:./mlruns"),
+        default=get_default_mlflow_tracking_uri(),
     )
     parser.add_argument("--experiment-name", default="ISIC2024-Image-Benchmark")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)

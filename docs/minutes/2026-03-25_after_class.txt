@@ -1,0 +1,12 @@
+주제변경: xAI -> multi-modal
+
+EDA 
+   tabular data 로 하기
+   정답 레이블 분포 확인
+
+싱글 모달
+   최고성능 찾기
+      tabular - sklearn 사용 - xgboost, catboost, svm, logistic reg, mlp 포함 => 테이블 결과 얻기
+      이미지 -전체 모델을 fine turning or freeze 중 하나로 확정해서 진행하기--> 리더보드 얻기
+      
+   목표: tabular + 이미지 fusing (concate or 새로운 방법 찾아보기)

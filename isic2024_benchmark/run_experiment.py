@@ -23,7 +23,7 @@ from isic2024_benchmark.reproducibility import (
     make_worker_init_fn,
     set_global_seed,
 )
-from isic2024_benchmark.runtime_env import ensure_expected_conda_env
+from isic2024_benchmark.runtime_env import ensure_expected_conda_env, get_default_mlflow_tracking_uri
 from isic2024_benchmark.trainer import run_training
 
 
@@ -42,7 +42,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--mlflow-tracking-uri",
-        default=os.environ.get("MLFLOW_TRACKING_URI", "file:./mlruns"),
+        default=get_default_mlflow_tracking_uri(),
         help="MLflow tracking URI.",
     )
     parser.add_argument(
@@ -66,6 +66,13 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=None,
         help="Limit the number of hyperparameter trials for smoke testing.",
+    )
+    parser.add_argument(
+        "--trial-indices",
+        nargs="+",
+        type=int,
+        default=None,
+        help="Optional zero-based hyperparameter trial indices to run, e.g. --trial-indices 0 1.",
     )
     parser.add_argument(
         "--epochs-override",
@@ -204,9 +211,12 @@ def main() -> None:
     parent_run_name = sanitize_run_name(model_name)
     search_space = config.get("search_space", {})
     combinations = expand_search_space(search_space)
-    if args.max_trials is not None:
-        combinations = combinations[: max(args.max_trials, 0)]
-    _log(f"trial combinations={len(combinations)}")
+    planned_trials = _select_trial_plan(
+        combinations=combinations,
+        trial_indices=args.trial_indices,
+        max_trials=args.max_trials,
+    )
+    _log(f"trial combinations={len(combinations)}, planned_trials={len(planned_trials)}")
     best_result = None
     best_run_name = None
 
@@ -230,6 +240,7 @@ def main() -> None:
                 "seed": seed,
                 "disable_pretrained": args.disable_pretrained,
                 "max_trials": args.max_trials,
+                "trial_indices": json.dumps(args.trial_indices) if args.trial_indices is not None else None,
                 "epochs_override": args.epochs_override,
                 "max_train_samples": args.max_train_samples,
                 "max_val_samples": args.max_val_samples,
@@ -242,11 +253,14 @@ def main() -> None:
         mlflow.log_dict(config, "resolved_config.json")
 
         # search_space의 모든 조합을 순회하면서 자식 런을 생성한다.
-        for index, hyperparameters in enumerate(combinations, start=1):
-            run_name = f"{parent_run_name}_trial_{index:03d}"
+        for execution_order, (trial_index, hyperparameters) in enumerate(planned_trials, start=1):
+            run_name = f"{parent_run_name}_trial_{trial_index + 1:03d}"
             output_dir = Path(args.output_root) / parent_run_name / run_name
-            trial_seed = seed + index - 1
-            _log(f"trial {index}/{len(combinations)} start: {run_name}")
+            trial_seed = seed + trial_index
+            _log(
+                f"trial {execution_order}/{len(planned_trials)} start: {run_name} "
+                f"(search_space_index={trial_index})"
+            )
             _log(f"trial seed={trial_seed}")
             _log(f"trial hyperparameters={json.dumps(hyperparameters, ensure_ascii=False)}")
             with mlflow.start_run(run_name=run_name, nested=True):
@@ -260,6 +274,7 @@ def main() -> None:
                 mlflow.log_params(flatten_params(config["model"], prefix="model"))
                 mlflow.log_params({f"hp_{key}": value for key, value in hyperparameters.items()})
                 mlflow.log_param("trial_seed", trial_seed)
+                mlflow.log_param("trial_index", trial_index)
 
                 model = None
                 try:
@@ -355,6 +370,35 @@ def flatten_params(values: dict[str, Any], prefix: str) -> dict[str, Any]:
     return flattened
 
 
+def _select_trial_plan(
+    *,
+    combinations: list[dict[str, Any]],
+    trial_indices: list[int] | None,
+    max_trials: int | None,
+) -> list[tuple[int, dict[str, Any]]]:
+    indexed_combinations = list(enumerate(combinations))
+    if trial_indices is not None and max_trials is not None:
+        raise ValueError("`--trial-indices` and `--max-trials` cannot be used together.")
+    if trial_indices is None:
+        if max_trials is not None:
+            return indexed_combinations[: max(max_trials, 0)]
+        return indexed_combinations
+
+    if len(set(trial_indices)) != len(trial_indices):
+        raise ValueError(f"Duplicate trial indices are not allowed: {trial_indices}")
+
+    selected: list[tuple[int, dict[str, Any]]] = []
+    for trial_index in trial_indices:
+        if trial_index < 0:
+            raise ValueError(f"Trial indices must be non-negative, got {trial_index}")
+        if trial_index >= len(indexed_combinations):
+            raise ValueError(
+                f"Trial index {trial_index} is out of range for {len(indexed_combinations)} available trials."
+            )
+        selected.append(indexed_combinations[trial_index])
+    return selected
+
+
 def _disable_pretrained_weights(config: dict[str, Any]) -> None:
     model_config = config.setdefault("model", {})
     if "weights" in model_config:
@@ -444,7 +488,4 @@ def _log(message: str) -> None:
 
 if __name__ == "__main__":
     main()
-
-
-
 

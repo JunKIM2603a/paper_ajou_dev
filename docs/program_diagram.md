@@ -88,14 +88,14 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-    A[image_baselines/(모델명)/config.json] --> D[run_experiment.py]
+    A[image_baselines/모델명/config.json] --> D[run_experiment.py]
     B[run_all_models.py] --> D
     D --> E[data.py]
     E --> E1[manifest build]
     E1 --> E2[group-aware train/val/test split]
     D --> F[models.py]
     D --> G[trainer.py]
-    G --> H[artifacts/(모델명)/(trial명)]
+    G --> H[artifacts/모델명/trial명]
     D --> I[mlruns]
     D --> J[smoke options]
 ```

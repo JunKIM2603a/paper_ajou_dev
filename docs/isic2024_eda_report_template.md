@@ -5,6 +5,14 @@
 이 문서는 `ISIC2024` tabular 데이터를 대상으로 데이터 구조, 클래스 불균형, 결측 패턴, 주요 범주형/수치형 변수의 분포, leakage 가능성, 그리고 baseline feature set 설계 근거를 정리한다.  
 또한 목표 2에서 실행한 tabular baseline 결과와 EDA 해석을 연결하여, 어떤 feature set을 메인 비교 기준으로 삼아야 하는지 논의한다.
 
+### 읽기 가이드
+
+{{reading_guide}}
+
+### 분석 원칙
+
+{{analysis_principles}}
+
 ## 2. 데이터 개요
 
 표 1. 데이터셋 개요
@@ -97,7 +105,21 @@
 
 ## 8. Feature Set 설계
 
-표 7. Feature set 구성
+### 8.1 실험 설계 관점 요약
+
+{{experiment_design_summary}}
+
+표 7. 컬럼 배치 규칙
+
+{{column_policy_table}}
+
+### 해석
+
+{{column_policy_interpretation}}
+
+### 8.2 Feature set 구성
+
+표 8. Feature set 구성
 
 {{feature_set_table}}
 
@@ -107,7 +129,7 @@
 
 ## 9. Discussion: EDA와 Baseline 결과의 연결
 
-표 8. Tabular baseline 요약
+표 9. Tabular baseline 요약
 
 {{baseline_table}}
 

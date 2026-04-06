@@ -1,3 +1,6 @@
 model_name,feature_set,best_average_precision,average_precision,balanced_accuracy,accuracy,precision,recall,f1_score,auc_roc,best_child_run_name
+xgboost,oracle,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,xgboost_trial_003
+catboost,oracle,0.9999999999999998,0.9999999999999998,1.0,1.0,1.0,1.0,1.0,1.0,catboost_trial_003
+mlp,oracle,0.9999999999999998,0.9999999999999998,1.0,1.0,1.0,1.0,1.0,1.0,mlp_trial_003
 svm,oracle,0.9999999999999998,0.9999999999999998,1.0,1.0,1.0,1.0,1.0,1.0,svm_trial_003
 logistic_regression,oracle,0.9999999999999998,0.9999999999999998,1.0,1.0,1.0,1.0,1.0,1.0,logistic_regression_trial_003

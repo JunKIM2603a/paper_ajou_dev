@@ -6,7 +6,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from isic2024_benchmark.runtime_env import ensure_expected_conda_env
+from isic2024_benchmark.runtime_env import ensure_expected_conda_env, get_default_mlflow_tracking_uri
 
 
 PARENT_METRICS = [
@@ -27,11 +27,12 @@ CHILD_METRICS = [
     "test_f1_score",
     "test_auc_roc",
 ]
+FEATURE_SET_DISPLAY_ORDER = {"strict": 0, "relaxed": 1, "oracle": 2}
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Export an HTML report from MLflow runs.")
-    parser.add_argument("--tracking-uri", default="file:./mlruns")
+    parser.add_argument("--tracking-uri", default=get_default_mlflow_tracking_uri())
     parser.add_argument("--experiment-name", default="ISIC2024-Tabular-Benchmark")
     parser.add_argument("--output", default="artifacts/mlflow_report.html")
     parser.add_argument("--parent-sort-metric", default="best_average_precision")
@@ -92,6 +93,7 @@ def build_html(
 ) -> str:
     parent_records = select_best_parent_rows(parent_runs, parent_sort_metric)
     child_records = [row for _, row in child_runs.iterrows()]
+    feature_set_records = select_best_child_rows_by_feature_set(child_records, child_sort_metric)
     generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     sections = []
@@ -307,12 +309,14 @@ def build_html(
     <section class="panel">
       <div class="section-head">
         <div>
-          <h2>Leaderboard</h2>
+          <h2>Overall Leaderboard</h2>
           <p>Best parent runs sorted by <code>{parent_sort_metric}</code>.</p>
         </div>
       </div>
-      {leaderboard}
+      {overall_leaderboard}
     </section>
+
+    {feature_set_panels}
 
     {sections}
   </div>
@@ -328,7 +332,8 @@ def build_html(
         model_count=len({safe_value(row.get("tags.model_name")) for row in parent_records}),
         parent_count=len(parent_records),
         child_count=len(child_records),
-        leaderboard=build_leaderboard(parent_records, parent_sort_metric),
+        overall_leaderboard=build_leaderboard(parent_records, parent_sort_metric),
+        feature_set_panels=build_feature_set_panels(feature_set_records, child_sort_metric),
         sections="\n".join(sections) if sections else '<p class="empty">No runs found.</p>',
     )
 
@@ -358,6 +363,74 @@ def build_leaderboard(parent_records: list, parent_sort_metric: str) -> str:
         "<table><thead><tr>"
         "<th>Model</th><th>Feature Set</th><th>Primary</th><th>Avg Precision</th><th>Balanced Acc</th>"
         "<th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th><th>AUC</th><th>Best Child</th>"
+        "</tr></thead><tbody>"
+        + "".join(rows)
+        + "</tbody></table>"
+    )
+
+
+def build_feature_set_panels(feature_set_records: dict[str, list], child_sort_metric: str) -> str:
+    if not feature_set_records:
+        return ""
+
+    panels = []
+    for feature_set, rows in feature_set_records.items():
+        panels.append(
+            """
+    <section class="panel">
+      <div class="section-head">
+        <div>
+          <h2>{feature_set_label} Leaderboard</h2>
+          <p>Best runs within <code>{feature_set}</code>, sorted by <code>{child_sort_metric}</code>.</p>
+        </div>
+        <div class="badge">{row_count} models</div>
+      </div>
+      {table}
+    </section>
+            """.format(
+                feature_set_label=escape(feature_set.title()),
+                feature_set=escape(feature_set),
+                child_sort_metric=escape(child_sort_metric),
+                row_count=len(rows),
+                table=build_feature_set_leaderboard(rows, child_sort_metric),
+            )
+        )
+    return "\n".join(panels)
+
+
+def build_feature_set_leaderboard(child_rows: list, child_sort_metric: str) -> str:
+    if not child_rows:
+        return '<p class="empty">No child runs found for this feature set.</p>'
+
+    rows = []
+    for index, row in enumerate(child_rows, start=1):
+        row_class = ' class="best-row"' if index == 1 else ""
+        params = {
+            key.removeprefix("params.hp_"): safe_value(value)
+            for key, value in row.items()
+            if isinstance(key, str) and key.startswith("params.hp_")
+        }
+        rows.append(
+            f"<tr{row_class}>"
+            f"<td>{index}</td>"
+            f"<td>{escape(safe_value(row.get('tags.model_name')))}</td>"
+            f"<td>{escape(safe_value(row.get('tags.mlflow.runName')))}</td>"
+            f"<td><code>{escape(json.dumps(params, ensure_ascii=False))}</code></td>"
+            f"<td>{format_metric(row.get(f'metrics.{child_sort_metric}'))}</td>"
+            f"<td>{format_metric(row.get('metrics.test_average_precision'))}</td>"
+            f"<td>{format_metric(row.get('metrics.test_balanced_accuracy'))}</td>"
+            f"<td>{format_metric(row.get('metrics.test_accuracy'))}</td>"
+            f"<td>{format_metric(row.get('metrics.test_precision'))}</td>"
+            f"<td>{format_metric(row.get('metrics.test_recall'))}</td>"
+            f"<td>{format_metric(row.get('metrics.test_f1_score'))}</td>"
+            f"<td>{format_metric(row.get('metrics.test_auc_roc'))}</td>"
+            f"<td>{format_metric(row.get('metrics.duration_seconds'))}</td>"
+            "</tr>"
+        )
+    return (
+        "<table><thead><tr>"
+        "<th>Rank</th><th>Model</th><th>Trial Run</th><th>Hyperparameters</th><th>Primary</th><th>Avg Precision</th>"
+        "<th>Balanced Acc</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th><th>AUC</th><th>Duration (s)</th>"
         "</tr></thead><tbody>"
         + "".join(rows)
         + "</tbody></table>"
@@ -439,6 +512,37 @@ def select_best_parent_rows(parent_runs, parent_sort_metric: str) -> list:
         seen_models.add(model_name)
         records.append(row)
     return records
+
+
+def select_best_child_rows_by_feature_set(child_records: list, child_sort_metric: str) -> dict[str, list]:
+    metric_key = f"metrics.{child_sort_metric}"
+    feature_sets = sorted(
+        {
+            safe_value(row.get("params.feature_set"))
+            for row in child_records
+            if safe_value(row.get("params.feature_set"))
+        },
+        key=lambda name: (FEATURE_SET_DISPLAY_ORDER.get(name, len(FEATURE_SET_DISPLAY_ORDER)), name),
+    )
+    if not feature_sets:
+        return {}
+
+    grouped: dict[str, list] = {}
+    for feature_set in feature_sets:
+        selected = []
+        seen_models: set[str] = set()
+        for row in child_records:
+            if safe_value(row.get("params.feature_set")) != feature_set:
+                continue
+            model_name = safe_value(row.get("tags.model_name"))
+            if not model_name or not safe_value(row.get(metric_key)):
+                continue
+            if model_name in seen_models:
+                continue
+            seen_models.add(model_name)
+            selected.append(row)
+        grouped[feature_set] = selected
+    return grouped
 
 
 def safe_value(value) -> str:

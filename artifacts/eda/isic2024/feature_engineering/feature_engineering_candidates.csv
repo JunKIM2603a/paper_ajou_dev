@@ -1,0 +1,6 @@
+feature,source_columns,goal,decision,decision_reason,mean_benign_train,mean_malignant_train,std_diff_train,abs_std_diff_train,skew_train,max_abs_corr_with_base_train,adopt_v1
+feat_border_color_interaction,"tbp_lv_norm_border, tbp_lv_norm_color",경계 불규칙성과 색 불균일을 상호작용으로 결합,adopt_v1,두 위험 신호가 동시에 큰 경우를 한 변수로 보기 위해 채택,9.8348,17.6489,0.5684,0.5684,2.7798,0.6912,True
+feat_color_contrast_euclidean,"tbp_lv_deltaL, tbp_lv_deltaA, tbp_lv_deltaB",병변 내부-외부 색차를 하나의 강도 변수로 요약,adopt_v1,색차 방향성보다 전체 강도 차이를 직접 반영하기 위해 채택,10.6912,12.3446,0.3682,0.3682,1.2818,0.9676,True
+feat_long_to_minor_ratio,"clin_size_long_diam_mm, tbp_lv_minorAxisMM",길이 대비 폭 비율로 병변의 길쭉함을 반영,adopt_v1,크기와 형태를 동시에 반영하면서 해석이 쉬워 채택,1.6124,1.5338,-0.2082,0.2082,1.1291,0.8423,True
+feat_symmetry_border_interaction,"tbp_lv_symm_2axis, tbp_lv_norm_border",비대칭성과 경계 불규칙성을 동시에 반영,adopt_v1,형태학적 이상 징후를 곱 형태로 묶어 채택,1.2545,1.3927,0.1142,0.1142,1.9483,0.9654,True
+feat_age_size_interaction,"age_approx, clin_size_long_diam_mm",나이와 병변 크기의 결합 효과 탐색,defer,해석은 가능하지만 나이 효과를 과도하게 키울 수 있어 1차 버전에서는 보류,224.1288,358.4906,0.6628,0.6628,2.7378,0.8682,False

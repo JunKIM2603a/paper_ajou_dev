@@ -31,6 +31,7 @@ MODEL_SPECS: dict[str, TabularModelSpec] = {
             "feature_set": ["strict", "relaxed", "oracle"],
             "model_name": ["svm"],
             "C": [1.0],
+            "max_iter": [20000],
         },
     ),
     "mlp": TabularModelSpec(
@@ -140,6 +141,7 @@ def build_sklearn_estimator(model_name: str, hyperparameters: dict[str, Any]):
     elif model_name == "svm":
         estimator = LinearSVC(
             class_weight="balanced",
+            dual=False,
             random_state=int(hyperparameters["seed"]),
             **model_hyperparameters,
         )

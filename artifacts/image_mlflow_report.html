@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MLflow Report</title>
+  <style>
+    :root {
+      --bg: #f5efe6;
+      --panel: #fffaf3;
+      --line: #d7c8b5;
+      --text: #2f261d;
+      --muted: #756553;
+      --accent: #0f766e;
+      --accent-soft: #d7f3ef;
+      --best: #fff2bf;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Noto Sans KR", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, #fff6da 0, transparent 30%),
+        radial-gradient(circle at top right, #dff6f2 0, transparent 28%),
+        var(--bg);
+    }
+    .wrap {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 32px 20px 56px;
+    }
+    .hero {
+      background: linear-gradient(135deg, rgba(15,118,110,0.94), rgba(20,83,45,0.92));
+      color: #f8fffd;
+      border-radius: 24px;
+      padding: 28px;
+      box-shadow: 0 18px 50px rgba(35, 30, 24, 0.16);
+    }
+    .hero h1 {
+      margin: 0 0 10px;
+      font-size: 34px;
+      line-height: 1.1;
+    }
+    .hero p {
+      margin: 6px 0;
+      color: rgba(248,255,253,0.88);
+    }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 14px;
+      margin-top: 20px;
+    }
+    .meta-card, .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      box-shadow: 0 12px 30px rgba(61, 46, 31, 0.08);
+    }
+    .meta-card {
+      padding: 18px;
+    }
+    .meta-card .label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 8px;
+    }
+    .meta-card .value {
+      font-size: 24px;
+      font-weight: 700;
+    }
+    .panel {
+      margin-top: 22px;
+      padding: 22px;
+    }
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-start;
+      margin-bottom: 16px;
+    }
+    h2 {
+      margin: 0 0 6px;
+      font-size: 24px;
+    }
+    .badge {
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 700;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 14px;
+      overflow: hidden;
+      border-radius: 14px;
+    }
+    th, td {
+      padding: 11px 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      font-size: 14px;
+      vertical-align: top;
+    }
+    th {
+      background: #f1e4d3;
+      color: #4a3d30;
+      font-weight: 700;
+    }
+    tr.best-row td {
+      background: var(--best);
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+    }
+    .summary-item {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+      background: #fffdf9;
+    }
+    .summary-item .k {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .summary-item .v {
+      margin-top: 8px;
+      font-size: 22px;
+      font-weight: 700;
+    }
+    .empty {
+      margin-top: 12px;
+      color: var(--muted);
+    }
+    code {
+      font-family: Consolas, "SFMono-Regular", monospace;
+      background: rgba(47, 38, 29, 0.06);
+      padding: 1px 6px;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <h1>MLflow Experiment Report</h1>
+      <p><strong>ISIC2024-Image-Benchmark</strong></p>
+      <p>Experiment ID: <code>152610854065081844</code></p>
+      <p>Tracking URI: <code>sqlite:///mlflow.db</code></p>
+      <p>Generated at: 2026-04-02 18:47:04</p>
+      <p>Parent sort metric: <code>best_auc_roc</code> / Child sort metric: <code>test_auc_roc</code></p>
+    </section>
+
+    <section class="meta-grid">
+      <article class="meta-card">
+        <span class="label">Models</span>
+        <div class="value">7</div>
+      </article>
+      <article class="meta-card">
+        <span class="label">Parent Runs</span>
+        <div class="value">7</div>
+      </article>
+      <article class="meta-card">
+        <span class="label">Trial Runs</span>
+        <div class="value">47</div>
+      </article>
+    </section>
+
+    <section class="panel">
+      <div class="section-head">
+        <div>
+          <h2>Overall Leaderboard</h2>
+          <p>Best parent runs sorted by <code>best_auc_roc</code>.</p>
+        </div>
+      </div>
+      <table><thead><tr><th>Model</th><th>Feature Set</th><th>Primary</th><th>Avg Precision</th><th>Balanced Acc</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th><th>AUC</th><th>Best Child</th></tr></thead><tbody><tr><td>BioMedCLIP</td><td></td><td>0.9230</td><td>0.0331</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.9230</td><td>BioMedCLIP_trial_002</td></tr><tr><td>EfficientNet-B0</td><td></td><td>0.9003</td><td>0.0268</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.9003</td><td>EfficientNet-B0_trial_004</td></tr><tr><td>ResNet-50</td><td></td><td>0.8873</td><td>0.0224</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.8873</td><td>ResNet-50_trial_002</td></tr><tr><td>DenseNet-121</td><td></td><td>0.8839</td><td>0.0200</td><td>0.5114</td><td>0.9985</td><td>0.0400</td><td>0.0233</td><td>0.0294</td><td>0.8839</td><td>DenseNet-121_trial_001</td></tr><tr><td>DeiT-S</td><td></td><td>0.8757</td><td>0.0187</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.8757</td><td>DeiT-S_trial_002</td></tr><tr><td>CheXzero</td><td></td><td>0.8640</td><td>0.0119</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.8640</td><td>CheXzero_trial_002</td></tr><tr><td>DINOv2 ViT-S</td><td></td><td>0.8218</td><td>0.0073</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.8218</td><td>DINOv2_ViT-S_trial_002</td></tr></tbody></table>
+    </section>
+
+    
+
+    
+            <section class="panel">
+              <div class="section-head">
+                <div>
+                  <h2>BioMedCLIP</h2>
+                  <p>Best child run: <strong>BioMedCLIP_trial_002</strong></p>
+                </div>
+                <div class="badge">Parent run: fb16bfe06a5740d78ee62af3779234e8</div>
+              </div>
+              <div class="summary-grid"><div class="summary-item"><div class="k">Primary</div><div class="v">0.9230</div></div><div class="summary-item"><div class="k">Average Precision</div><div class="v">0.0331</div></div><div class="summary-item"><div class="k">Balanced Accuracy</div><div class="v">0.5000</div></div><div class="summary-item"><div class="k">Accuracy</div><div class="v">0.9990</div></div><div class="summary-item"><div class="k">Precision</div><div class="v">0.0000</div></div><div class="summary-item"><div class="k">Recall</div><div class="v">0.0000</div></div><div class="summary-item"><div class="k">F1 Score</div><div class="v">0.0000</div></div><div class="summary-item"><div class="k">Auc Roc</div><div class="v">0.9230</div></div><div class="summary-item"><div class="k">Feature Set</div><div class="v"></div></div></div>
+              <table><thead><tr><th>Trial Run</th><th>Feature Set</th><th>Hyperparameters</th><th>Primary</th><th>Avg Precision</th><th>Balanced Acc</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th><th>AUC</th><th>Duration (s)</th></tr></thead><tbody><tr class="best-row"><td>BioMedCLIP_trial_002</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;1e-05&quot;, &quot;weight_decay&quot;: &quot;0.001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.9230</td><td>0.0331</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.9230</td><td>15112.0820</td></tr><tr><td>BioMedCLIP_trial_001</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;1e-05&quot;, &quot;weight_decay&quot;: &quot;0.0001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.9073</td><td>0.0450</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.9073</td><td>14715.2633</td></tr><tr><td>BioMedCLIP_trial_003</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;5e-05&quot;, &quot;weight_decay&quot;: &quot;0.0001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.8493</td><td>0.0112</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.8493</td><td>15104.9969</td></tr><tr><td>BioMedCLIP_trial_004</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;5e-05&quot;, &quot;weight_decay&quot;: &quot;0.001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.8420</td><td>0.0117</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.8420</td><td>16994.7395</td></tr></tbody></table>
+            </section>
+            
+
+            <section class="panel">
+              <div class="section-head">
+                <div>
+                  <h2>EfficientNet-B0</h2>
+                  <p>Best child run: <strong>EfficientNet-B0_trial_004</strong></p>
+                </div>
+                <div class="badge">Parent run: 77195860e1b04470be8f6ae55cb7ec08</div>
+              </div>
+              <div class="summary-grid"><div class="summary-item"><div class="k">Primary</div><div class="v">0.9003</div></div><div class="summary-item"><div class="k">Average Precision</div><div class="v">0.0268</div></div><div class="summary-item"><div class="k">Balanced Accuracy</div><div class="v">0.5000</div></div><div class="summary-item"><div class="k">Accuracy</div><div class="v">0.9990</div></div><div class="summary-item"><div class="k">Precision</div><div class="v">0.0000</div></div><div class="summary-item"><div class="k">Recall</div><div class="v">0.0000</div></div><div class="summary-item"><div class="k">F1 Score</div><div class="v">0.0000</div></div><div class="summary-item"><div class="k">Auc Roc</div><div class="v">0.9003</div></div><div class="summary-item"><div class="k">Feature Set</div><div class="v"></div></div></div>
+              <table><thead><tr><th>Trial Run</th><th>Feature Set</th><th>Hyperparameters</th><th>Primary</th><th>Avg Precision</th><th>Balanced Acc</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th><th>AUC</th><th>Duration (s)</th></tr></thead><tbody><tr class="best-row"><td>EfficientNet-B0_trial_004</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;0.0003&quot;, &quot;weight_decay&quot;: &quot;0.001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.9003</td><td>0.0268</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.9003</td><td>20571.7414</td></tr><tr><td>EfficientNet-B0_trial_001</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;0.0001&quot;, &quot;weight_decay&quot;: &quot;0.0001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.8951</td><td>0.0298</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.8951</td><td>19519.1133</td></tr><tr><td>EfficientNet-B0_trial_001</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;0.0001&quot;, &quot;weight_decay&quot;: &quot;0.0001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.8951</td><td>0.0298</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.8951</td><td>12723.3850</td></tr><tr><td>EfficientNet-B0_trial_002</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;0.0001&quot;, &quot;weight_decay&quot;: &quot;0.001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.8942</td><td>0.0213</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.8942</td><td>20110.9802</td></tr><tr><td>EfficientNet-B0_trial_003</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;0.0003&quot;, &quot;weight_decay&quot;: &quot;0.0001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.8648</td><td>0.0241</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.8648</td><td>19898.0797</td></tr><tr><td>EfficientNet-B0_trial_002</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;0.0001&quot;, &quot;weight_decay&quot;: &quot;0.001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr></tbody></table>
+            </section>
+            
+
+            <section class="panel">
+              <div class="section-head">
+                <div>
+                  <h2>ResNet-50</h2>
+                  <p>Best child run: <strong>ResNet-50_trial_002</strong></p>
+                </div>
+                <div class="badge">Parent run: 21eb25bf1df74cc88f6f8f42737ee903</div>
+              </div>
+              <div class="summary-grid"><div class="summary-item"><div class="k">Primary</div><div class="v">0.8873</div></div><div class="summary-item"><div class="k">Average Precision</div><div class="v">0.0224</div></div><div class="summary-item"><div class="k">Balanced Accuracy</div><div class="v">0.5000</div></div><div class="summary-item"><div class="k">Accuracy</div><div class="v">0.9990</div></div><div class="summary-item"><div class="k">Precision</div><div class="v">0.0000</div></div><div class="summary-item"><div class="k">Recall</div><div class="v">0.0000</div></div><div class="summary-item"><div class="k">F1 Score</div><div class="v">0.0000</div></div><div class="summary-item"><div class="k">Auc Roc</div><div class="v">0.8873</div></div><div class="summary-item"><div class="k">Feature Set</div><div class="v"></div></div></div>
+              <table><thead><tr><th>Trial Run</th><th>Feature Set</th><th>Hyperparameters</th><th>Primary</th><th>Avg Precision</th><th>Balanced Acc</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th><th>AUC</th><th>Duration (s)</th></tr></thead><tbody><tr class="best-row"><td>ResNet-50_trial_002</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;0.0001&quot;, &quot;weight_decay&quot;: &quot;0.001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.8873</td><td>0.0224</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.8873</td><td>3696.5140</td></tr><tr><td>ResNet-50_trial_001</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;0.0001&quot;, &quot;weight_decay&quot;: &quot;0.0001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.8704</td><td>0.0232</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.8704</td><td>3724.5691</td></tr><tr><td>ResNet-50_trial_004</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;0.0003&quot;, &quot;weight_decay&quot;: &quot;0.001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.8535</td><td>0.0136</td><td>0.4998</td><td>0.9985</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.8535</td><td>3748.8334</td></tr><tr><td>ResNet-50_trial_003</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;0.0003&quot;, &quot;weight_decay&quot;: &quot;0.0001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.8358</td><td>0.0153</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.8358</td><td>3736.6383</td></tr><tr><td>ResNet-50_trial_004</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;0.0003&quot;, &quot;weight_decay&quot;: &quot;0.001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr><tr><td>ResNet-50_trial_003</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;0.0003&quot;, &quot;weight_decay&quot;: &quot;0.0001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr><tr class="best-row"><td>ResNet-50_trial_002</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;0.0001&quot;, &quot;weight_decay&quot;: &quot;0.001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr><tr><td>ResNet-50_trial_001</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;0.0001&quot;, &quot;weight_decay&quot;: &quot;0.0001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr></tbody></table>
+            </section>
+            
+
+            <section class="panel">
+              <div class="section-head">
+                <div>
+                  <h2>DenseNet-121</h2>
+                  <p>Best child run: <strong>DenseNet-121_trial_001</strong></p>
+                </div>
+                <div class="badge">Parent run: 4d253506a8904f9d995b18660c2fc8ba</div>
+              </div>
+              <div class="summary-grid"><div class="summary-item"><div class="k">Primary</div><div class="v">0.8839</div></div><div class="summary-item"><div class="k">Average Precision</div><div class="v">0.0200</div></div><div class="summary-item"><div class="k">Balanced Accuracy</div><div class="v">0.5114</div></div><div class="summary-item"><div class="k">Accuracy</div><div class="v">0.9985</div></div><div class="summary-item"><div class="k">Precision</div><div class="v">0.0400</div></div><div class="summary-item"><div class="k">Recall</div><div class="v">0.0233</div></div><div class="summary-item"><div class="k">F1 Score</div><div class="v">0.0294</div></div><div class="summary-item"><div class="k">Auc Roc</div><div class="v">0.8839</div></div><div class="summary-item"><div class="k">Feature Set</div><div class="v"></div></div></div>
+              <table><thead><tr><th>Trial Run</th><th>Feature Set</th><th>Hyperparameters</th><th>Primary</th><th>Avg Precision</th><th>Balanced Acc</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th><th>AUC</th><th>Duration (s)</th></tr></thead><tbody><tr class="best-row"><td>DenseNet-121_trial_001</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;0.0001&quot;, &quot;weight_decay&quot;: &quot;0.0001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.8839</td><td>0.0200</td><td>0.5114</td><td>0.9985</td><td>0.0400</td><td>0.0233</td><td>0.0294</td><td>0.8839</td><td>24405.7181</td></tr><tr class="best-row"><td>DenseNet-121_trial_001</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;0.0001&quot;, &quot;weight_decay&quot;: &quot;0.0001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.8839</td><td>0.0200</td><td>0.5114</td><td>0.9985</td><td>0.0400</td><td>0.0233</td><td>0.0294</td><td>0.8839</td><td>15811.3189</td></tr><tr><td>DenseNet-121_trial_004</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;0.0003&quot;, &quot;weight_decay&quot;: &quot;0.001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.8645</td><td>0.0139</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.8645</td><td>9412.2352</td></tr><tr><td>DenseNet-121_trial_002</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;0.0001&quot;, &quot;weight_decay&quot;: &quot;0.001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.8429</td><td>0.0125</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.8429</td><td>24414.9235</td></tr><tr><td>DenseNet-121_trial_003</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;0.0003&quot;, &quot;weight_decay&quot;: &quot;0.0001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.8169</td><td>0.0081</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.8169</td><td>24936.4108</td></tr><tr class="best-row"><td>DenseNet-121_trial_001</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;0.0001&quot;, &quot;weight_decay&quot;: &quot;0.0001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr><tr><td>DenseNet-121_trial_002</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;0.0001&quot;, &quot;weight_decay&quot;: &quot;0.001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr></tbody></table>
+            </section>
+            
+
+            <section class="panel">
+              <div class="section-head">
+                <div>
+                  <h2>DeiT-S</h2>
+                  <p>Best child run: <strong>DeiT-S_trial_002</strong></p>
+                </div>
+                <div class="badge">Parent run: 8c73622b28be432faabc6e7c0f099c18</div>
+              </div>
+              <div class="summary-grid"><div class="summary-item"><div class="k">Primary</div><div class="v">0.8757</div></div><div class="summary-item"><div class="k">Average Precision</div><div class="v">0.0187</div></div><div class="summary-item"><div class="k">Balanced Accuracy</div><div class="v">0.5000</div></div><div class="summary-item"><div class="k">Accuracy</div><div class="v">0.9990</div></div><div class="summary-item"><div class="k">Precision</div><div class="v">0.0000</div></div><div class="summary-item"><div class="k">Recall</div><div class="v">0.0000</div></div><div class="summary-item"><div class="k">F1 Score</div><div class="v">0.0000</div></div><div class="summary-item"><div class="k">Auc Roc</div><div class="v">0.8757</div></div><div class="summary-item"><div class="k">Feature Set</div><div class="v"></div></div></div>
+              <table><thead><tr><th>Trial Run</th><th>Feature Set</th><th>Hyperparameters</th><th>Primary</th><th>Avg Precision</th><th>Balanced Acc</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th><th>AUC</th><th>Duration (s)</th></tr></thead><tbody><tr class="best-row"><td>DeiT-S_trial_002</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;5e-05&quot;, &quot;weight_decay&quot;: &quot;0.001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.8757</td><td>0.0187</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.8757</td><td>13257.2947</td></tr><tr><td>DeiT-S_trial_004</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;0.0001&quot;, &quot;weight_decay&quot;: &quot;0.001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.8458</td><td>0.0192</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.8458</td><td>16260.9361</td></tr><tr><td>DeiT-S_trial_001</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;5e-05&quot;, &quot;weight_decay&quot;: &quot;0.0001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.8446</td><td>0.0122</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.8446</td><td>13356.4310</td></tr><tr><td>DeiT-S_trial_003</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;0.0001&quot;, &quot;weight_decay&quot;: &quot;0.0001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.8290</td><td>0.0092</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.8290</td><td>13254.7459</td></tr></tbody></table>
+            </section>
+            
+
+            <section class="panel">
+              <div class="section-head">
+                <div>
+                  <h2>CheXzero</h2>
+                  <p>Best child run: <strong>CheXzero_trial_002</strong></p>
+                </div>
+                <div class="badge">Parent run: 23390cd7704c4a3d9698a900388a217a</div>
+              </div>
+              <div class="summary-grid"><div class="summary-item"><div class="k">Primary</div><div class="v">0.8640</div></div><div class="summary-item"><div class="k">Average Precision</div><div class="v">0.0119</div></div><div class="summary-item"><div class="k">Balanced Accuracy</div><div class="v">0.5000</div></div><div class="summary-item"><div class="k">Accuracy</div><div class="v">0.9990</div></div><div class="summary-item"><div class="k">Precision</div><div class="v">0.0000</div></div><div class="summary-item"><div class="k">Recall</div><div class="v">0.0000</div></div><div class="summary-item"><div class="k">F1 Score</div><div class="v">0.0000</div></div><div class="summary-item"><div class="k">Auc Roc</div><div class="v">0.8640</div></div><div class="summary-item"><div class="k">Feature Set</div><div class="v"></div></div></div>
+              <table><thead><tr><th>Trial Run</th><th>Feature Set</th><th>Hyperparameters</th><th>Primary</th><th>Avg Precision</th><th>Balanced Acc</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th><th>AUC</th><th>Duration (s)</th></tr></thead><tbody><tr class="best-row"><td>CheXzero_trial_002</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;1e-05&quot;, &quot;weight_decay&quot;: &quot;0.001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.8640</td><td>0.0119</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.8640</td><td>12932.1427</td></tr><tr><td>CheXzero_trial_001</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;1e-05&quot;, &quot;weight_decay&quot;: &quot;0.0001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.8565</td><td>0.0110</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.8565</td><td>15197.6474</td></tr><tr class="best-row"><td>CheXzero_trial_002</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;1e-05&quot;, &quot;weight_decay&quot;: &quot;0.001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.8321</td><td>0.0103</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.8321</td><td>5572.4615</td></tr><tr><td>CheXzero_trial_001</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;1e-05&quot;, &quot;weight_decay&quot;: &quot;0.0001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.8286</td><td>0.0081</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.8286</td><td>12562.0909</td></tr><tr><td>CheXzero_trial_004</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;5e-05&quot;, &quot;weight_decay&quot;: &quot;0.001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.8143</td><td>0.0081</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.8143</td><td>5644.3402</td></tr><tr><td>CheXzero_trial_003</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;5e-05&quot;, &quot;weight_decay&quot;: &quot;0.0001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.8090</td><td>0.0117</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.8090</td><td>12949.5925</td></tr><tr><td>CheXzero_trial_004</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;5e-05&quot;, &quot;weight_decay&quot;: &quot;0.001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.8063</td><td>0.0073</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.8063</td><td>12915.5630</td></tr><tr><td>CheXzero_trial_003</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;5e-05&quot;, &quot;weight_decay&quot;: &quot;0.0001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.7875</td><td>0.0061</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.7875</td><td>5670.0650</td></tr></tbody></table>
+            </section>
+            
+
+            <section class="panel">
+              <div class="section-head">
+                <div>
+                  <h2>DINOv2 ViT-S</h2>
+                  <p>Best child run: <strong>DINOv2_ViT-S_trial_002</strong></p>
+                </div>
+                <div class="badge">Parent run: 6200c75c0e0f42ad899da40d58271181</div>
+              </div>
+              <div class="summary-grid"><div class="summary-item"><div class="k">Primary</div><div class="v">0.8218</div></div><div class="summary-item"><div class="k">Average Precision</div><div class="v">0.0073</div></div><div class="summary-item"><div class="k">Balanced Accuracy</div><div class="v">0.5000</div></div><div class="summary-item"><div class="k">Accuracy</div><div class="v">0.9990</div></div><div class="summary-item"><div class="k">Precision</div><div class="v">0.0000</div></div><div class="summary-item"><div class="k">Recall</div><div class="v">0.0000</div></div><div class="summary-item"><div class="k">F1 Score</div><div class="v">0.0000</div></div><div class="summary-item"><div class="k">Auc Roc</div><div class="v">0.8218</div></div><div class="summary-item"><div class="k">Feature Set</div><div class="v"></div></div></div>
+              <table><thead><tr><th>Trial Run</th><th>Feature Set</th><th>Hyperparameters</th><th>Primary</th><th>Avg Precision</th><th>Balanced Acc</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th><th>AUC</th><th>Duration (s)</th></tr></thead><tbody><tr class="best-row"><td>DINOv2_ViT-S_trial_002</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;5e-05&quot;, &quot;weight_decay&quot;: &quot;0.001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.8218</td><td>0.0073</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.8218</td><td>13759.1425</td></tr><tr><td>DINOv2_ViT-S_trial_001</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;5e-05&quot;, &quot;weight_decay&quot;: &quot;0.0001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.7936</td><td>0.0052</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.7936</td><td>14271.4833</td></tr><tr><td>DINOv2_ViT-S_trial_004</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;0.0001&quot;, &quot;weight_decay&quot;: &quot;0.001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.7381</td><td>0.0027</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.7381</td><td>13709.7308</td></tr><tr><td>DINOv2_ViT-S_trial_003</td><td></td><td><code>{&quot;learning_rate&quot;: &quot;0.0001&quot;, &quot;weight_decay&quot;: &quot;0.0001&quot;, &quot;optimizer&quot;: &quot;adamw&quot;, &quot;epochs&quot;: &quot;5&quot;}</code></td><td>0.6359</td><td>0.0018</td><td>0.5000</td><td>0.9990</td><td>0.0000</td><td>0.0000</td><td>0.0000</td><td>0.6359</td><td>13672.1315</td></tr></tbody></table>
+            </section>
+            
+  </div>
+</body>
+</html>

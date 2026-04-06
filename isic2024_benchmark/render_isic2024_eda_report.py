@@ -50,6 +50,8 @@ def main() -> None:
 
     report = template_path.read_text(encoding="utf-8")
     replacements = {
+        "{{reading_guide}}": build_reading_guide(),
+        "{{analysis_principles}}": build_analysis_principles(overview),
         "{{dataset_overview_table}}": build_dataset_overview_table(overview),
         "{{dataset_overview_interpretation}}": build_dataset_overview_interpretation(overview),
         "{{class_balance_interpretation}}": build_class_balance_interpretation(overview),
@@ -67,6 +69,9 @@ def main() -> None:
         "{{numeric_interpretation}}": build_numeric_interpretation(numeric),
         "{{leakage_table}}": build_leakage_table(feature_sets),
         "{{leakage_interpretation}}": build_leakage_interpretation(feature_sets),
+        "{{experiment_design_summary}}": build_experiment_design_summary(feature_sets),
+        "{{column_policy_table}}": build_column_policy_table(feature_sets),
+        "{{column_policy_interpretation}}": build_column_policy_interpretation(feature_sets),
         "{{feature_set_table}}": build_feature_set_table(feature_sets),
         "{{feature_set_interpretation}}": build_feature_set_interpretation(feature_sets),
         "{{baseline_table}}": build_baseline_table(baseline),
@@ -157,6 +162,28 @@ def build_dataset_overview_table(overview: dict) -> str:
     return dataframe_to_markdown(rows)
 
 
+def build_reading_guide() -> str:
+    return (
+        "> **핵심 방향**: 이 EDA의 목적은 보기 좋은 탐색 그 자체가 아니라, "
+        "어떤 컬럼을 메인 baseline에 허용할지와 어떤 컬럼을 leakage 후보로 격리할지를 결정하는 데 있다.\n\n"
+        "- `strict`는 메인 비교용 현실형 baseline이다.\n"
+        "- `relaxed`는 보조 메타데이터가 성능에 미치는 영향을 점검하기 위한 보조 실험이다.\n"
+        "- `oracle`은 leakage 상한선을 확인하기 위한 참고 세트다.\n"
+        "- 따라서 이 보고서에서는 `성능이 높은가`보다 `어떤 정보 때문에 높아졌는가`를 더 중요하게 본다."
+    )
+
+
+def build_analysis_principles(overview: dict) -> str:
+    return (
+        "- **불균형 우선 해석**: 양성 비율이 매우 낮기 때문에 정확도보다 `average precision`, `AUC`, `balanced accuracy`, `recall`을 우선 본다.\n"
+        "- **그룹 분리 우선**: 동일 환자 표본이 많으므로 `patient_id -> lesion_id -> isic_id` 정책으로 split을 해석한다.\n"
+        "- **컬럼 허용 여부 우선**: 모든 컬럼을 동일하게 보지 않고, 식별자, 편향 가능 메타데이터, 진단 leakage, 일반 feature를 구분한다.\n"
+        "- **공정한 비교 우선**: tabular 결과와 image 결과를 나중에 연결하기 위해, 메인 baseline은 설명 가능한 정보만 남긴 `strict`를 중심으로 설계한다.\n\n"
+        f"> 현재 데이터는 총 `{overview['rows']:,}`건이며, 양성 비율은 `{overview['target_distribution']['positive_ratio']:.6f}`이다. "
+        "이 조건에서는 EDA의 역할이 단순 요약보다 실험 설계 근거 정리에 더 가깝다."
+    )
+
+
 def build_dataset_overview_interpretation(overview: dict) -> str:
     positive_ratio = overview["target_distribution"]["positive_ratio"]
     return (
@@ -217,7 +244,7 @@ def build_attribution_interpretation(attribution: pd.DataFrame) -> str:
         "이는 수집 기관에 따라 표본 구성과 난이도가 다를 수 있음을 시사한다. 다시 말해 `attribution`은 병변의 본질적 성질을 설명하는 변수라기보다, "
         "데이터가 어떤 환경에서 수집되었는지를 반영하는 변수일 가능성이 높다.\n\n"
         "`attribution`은 `iddx_*`처럼 직접적인 leakage 컬럼으로 보기는 어렵지만, 분포 차이를 통해 모델 성능에 간접적인 영향을 줄 수 있다. "
-        "따라서 완전 제외보다는 `strict` 세트에 포함하되, 결과 해석 시 기관별 편향 가능성을 항상 함께 고려하는 것이 바람직하다."
+        "따라서 메인 비교용 `strict`에서는 제외하고, `relaxed`에서만 별도 비교하여 기관별 편향 가능성을 점검하는 것이 바람직하다."
     )
 
 
@@ -227,8 +254,9 @@ def build_numeric_interpretation(numeric: pd.DataFrame) -> str:
     mel = numeric[(numeric["column"] == "mel_thick_mm") & (numeric["group"] == "target_1")].iloc[0]
     return (
         f"`tbp_lv_dnn_lesion_confidence`의 평균은 음성 `{tbp_neg['mean']}`, 양성 `{tbp_pos['mean']}`로 차이가 나타난다. "
+        "이 값은 악성 확률이라기보다 TBP 시스템이 해당 부위를 병변으로 얼마나 확신하는지를 나타내는 lesion confidence score에 가깝다. "
         "평균 차이만으로 모든 것이 설명되지는 않지만, 최소한 이 컬럼이 양성과 음성을 구분하는 데 일정 수준의 신호를 제공하고 있음을 보여준다. "
-        "현재 `strict` 세트에서 가장 핵심적인 수치형 변수로 남는 이유도 여기에 있다.\n\n"
+        "현재 `strict` 세트에서 유지되는 핵심 image-derived 수치형 변수로 남는 이유도 여기에 있다.\n\n"
         f"반면 `mel_thick_mm`는 양성에서만 유효값 `{mel['count']}`개가 관측되었다. "
         "이런 패턴은 모델이 병변 특성을 학습한다기보다, 후속 진단 과정에서만 기록된 정보를 통해 양성을 맞히게 만들 수 있다. "
         "따라서 이 변수는 설명용으로는 의미가 있지만, 메인 baseline feature로 사용하기에는 위험하다. "
@@ -256,6 +284,87 @@ def build_leakage_interpretation(feature_sets: dict) -> str:
     )
 
 
+def build_experiment_design_summary(feature_sets: dict) -> str:
+    return (
+        "> **실험 설계 관점 요약**\n"
+        ">\n"
+        "> 이 보고서는 컬럼을 모두 같은 수준의 입력으로 취급하지 않는다. "
+        "식별자, 기관/출처 메타데이터, 진단 계열 정보, 일반 임상/TBP 수치형 feature를 분리해서 다루며, "
+        "메인 baseline에는 설명 가능성과 공정성을 우선한다.\n"
+        ">\n"
+        "> 즉, EDA의 목표는 `무엇이 보이는가`를 나열하는 것이 아니라, "
+        "`무엇을 학습에 허용할 것인가`를 결정하는 것이다."
+    )
+
+
+def _column_membership(feature_sets: dict, column: str) -> str:
+    memberships = [name for name, columns in feature_sets["feature_sets"].items() if column in columns]
+    if not memberships:
+        return "excluded"
+    return ", ".join(memberships)
+
+
+def build_column_policy_table(feature_sets: dict) -> str:
+    rows = [
+        {
+            "column_or_group": "`patient_id`, `isic_id`, `image_path`, `split_group_id`",
+            "observation": "식별자 또는 분할 기준",
+            "decision": "학습 입력으로 사용하지 않음",
+            "placement": "excluded",
+        },
+        {
+            "column_or_group": "`lesion_id`",
+            "observation": "병변 식별 메타데이터",
+            "decision": "메인 기준에서는 제외하고 편향 점검용으로만 사용",
+            "placement": _column_membership(feature_sets, "lesion_id"),
+        },
+        {
+            "column_or_group": "`attribution`, `copyright_license`",
+            "observation": "기관/출처 메타데이터",
+            "decision": "메타데이터 편향 가능성 점검용",
+            "placement": _column_membership(feature_sets, "attribution"),
+        },
+        {
+            "column_or_group": "`iddx_1`, `iddx_full`",
+            "observation": "진단 결과와 거의 직접 연결",
+            "decision": "leakage 상한선 확인용으로만 사용",
+            "placement": _column_membership(feature_sets, "iddx_1"),
+        },
+        {
+            "column_or_group": "`mel_thick_mm`, `mel_mitotic_index`",
+            "observation": "후속 진단 계열 + 극단적 결측",
+            "decision": "메인 baseline에는 부적절",
+            "placement": _column_membership(feature_sets, "mel_thick_mm"),
+        },
+        {
+            "column_or_group": "`tbp_lv_dnn_lesion_confidence`",
+            "observation": "모든 샘플에 존재하는 lesion confidence score",
+            "decision": "설명 가능한 핵심 수치형 신호로 유지",
+            "placement": _column_membership(feature_sets, "tbp_lv_dnn_lesion_confidence"),
+        },
+        {
+            "column_or_group": "기본 임상 + 대부분의 `tbp_lv_*`",
+            "observation": "결측이 적고 일반 feature로 해석 가능",
+            "decision": "메인 baseline 중심 입력",
+            "placement": "strict, relaxed, oracle",
+        },
+    ]
+    return dataframe_to_markdown(pd.DataFrame(rows))
+
+
+def build_column_policy_interpretation(feature_sets: dict) -> str:
+    strict_count = len(feature_sets["feature_sets"]["strict"])
+    relaxed_count = len(feature_sets["feature_sets"]["relaxed"])
+    oracle_count = len(feature_sets["feature_sets"]["oracle"])
+    return (
+        f"현재 추천안에서 `strict`는 `{strict_count}`개, `relaxed`는 `{relaxed_count}`개, `oracle`은 `{oracle_count}`개 컬럼으로 구성된다. "
+        "이 차이는 단순히 컬럼 수를 늘리고 줄이는 문제가 아니라, 어떤 정보를 공정한 메인 비교에 허용할 것인지에 대한 정책 차이를 반영한다.\n\n"
+        "특히 `strict`는 실제 성능을 보고하는 기준선이고, `relaxed`는 메타데이터 편향을 점검하는 보조 세트이며, "
+        "`oracle`은 진단 leakage가 얼마나 큰지 확인하는 상한선이다. 따라서 `strict` 대비 `relaxed` 또는 `oracle`의 성능 상승은 "
+        "모델 구조의 우수성이라기보다 입력 정보의 성격 변화로 먼저 해석해야 한다."
+    )
+
+
 def build_feature_set_table(feature_sets: dict) -> str:
     rows = []
     for name, columns in feature_sets["feature_sets"].items():
@@ -267,7 +376,9 @@ def build_feature_set_interpretation(feature_sets: dict) -> str:
     return (
         "`strict`는 현실형 비교 기준으로, 실제 메인 결과표에 가장 적합하다. "
         "`relaxed`는 주의가 필요한 보조 정보까지 일부 포함하여, 어떤 컬럼이 성능을 얼마나 끌어올리는지 탐색하는 실험 세트다. "
-        "`oracle`은 진단 계열 변수까지 포함하는 상한선 세트로, 모델 성능 자체보다는 leakage 영향의 크기를 보여주는 참고 기준으로 이해해야 한다."
+        "`oracle`은 진단 계열 변수까지 포함하는 상한선 세트로, 모델 성능 자체보다는 leakage 영향의 크기를 보여주는 참고 기준으로 이해해야 한다.\n\n"
+        "> **해석 원칙**: `strict`보다 높은 성능이 관찰되더라도, 먼저 모델이 더 좋아졌다고 결론내리지 않고 "
+        "어떤 추가 컬럼이 들어갔는지를 확인해야 한다."
     )
 
 def build_baseline_table(baseline: pd.DataFrame) -> str:
