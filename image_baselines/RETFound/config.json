@@ -1,5 +1,0 @@
-﻿{
-  "model": {"display_name": "RETFound", "backend": "timm", "architecture": "vit_large_patch16_224", "pretrained": false, "global_pool": "avg", "checkpoint_path": "./artifacts/cache/torch/checkpoints/checkpoint-best.pth"},
-  "dataset": {"image_size": 224, "batch_size": 8, "num_workers": 0, "validation_ratio": 0.2, "seed": 42},
-  "search_space": {"epochs": [5], "learning_rate": [0.00005, 0.0001], "weight_decay": [0.0001, 0.001], "optimizer": ["adamw"]}
-}

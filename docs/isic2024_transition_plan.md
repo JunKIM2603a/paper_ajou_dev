@@ -2,8 +2,8 @@
 
 ## 현재 진행 상태
 
-- `1st_after` → `image_baselines` 변경 완료
-- `cbis_ddsm_benchmark` → `isic2024_benchmark` 변경 완료
+- `1st_after` -> `image_baselines` 변경 완료
+- `cbis_ddsm_benchmark` -> `isic2024_benchmark` 변경 완료
 - `ISIC2024` tabular EDA 구현 완료
 - feature set 추천(`strict / relaxed / oracle`) 구현 완료
 - `ISIC2024` tabular baseline + MLflow CSV/HTML 리포트 구현 완료

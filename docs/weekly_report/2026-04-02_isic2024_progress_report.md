@@ -41,8 +41,8 @@
 
 - 프로젝트 전체 개요와 실행 경로: [README](../../README.md)
 - 데이터/모델 흐름 다이어그램: [program_diagram.md](../program_diagram.md)
-- 상세 EDA 보고서: [artifacts/eda/isic2024/eda_report.md](../../artifacts/eda/isic2024/eda_report.md), [artifacts/eda/isic2024/isic2024_presentation_only_eda.ipynb](../../artifacts/eda/isic2024/isic2024_presentation_only_eda.ipynb)
-- feature set 추천 파일: [artifacts/eda/isic2024/feature_sets_recommended.json](../../artifacts/eda/isic2024/feature_sets_recommended.json)
+- 상세 EDA 보고서 생성 경로: `artifacts/eda/isic2024/eda_report.md`, `artifacts/eda/isic2024/isic2024_presentation_only_eda.ipynb` (자동생성 산출물, 현재 저장소에는 미포함)
+- feature set 추천 파일 생성 경로: `artifacts/eda/isic2024/feature_sets_recommended.json` (자동생성 산출물, 현재 저장소에는 미포함)
 
 ### 2.2 Tabular Baselines
 
@@ -68,9 +68,9 @@
 
 관련 기존 자료는 다음과 같다.
 
-- Tabular 부모 run 요약 CSV: [artifacts/tabular/mlflow_leaderboard.csv](../../artifacts/tabular/mlflow_leaderboard.csv)
-- Tabular 전체 비교용 HTML 리포트: [artifacts/tabular/mlflow_report.html](../../artifacts/tabular/mlflow_report.html)
-- feature set별 개별 trial 결과 폴더: [artifacts/tabular_runs](../../artifacts/tabular_runs)
+- Tabular 부모 run 요약 CSV 생성 경로: `artifacts/tabular/mlflow_leaderboard.csv` (자동생성 산출물, 현재 저장소에는 미포함)
+- Tabular 전체 비교용 HTML 리포트 생성 경로: `artifacts/tabular/mlflow_report.html` (자동생성 산출물, 현재 저장소에는 미포함)
+- feature set별 개별 trial 결과 폴더 생성 경로: `artifacts/tabular_runs` (자동생성 산출물, 현재 저장소에는 미포함)
 
 ### 2.3 Image Baselines
 
@@ -86,9 +86,9 @@
 
 관련 기존 자료는 다음과 같다.
 
-- 이미지 baseline 설정 폴더: [image_baselines](../../image_baselines)
-- 이미지 파이프라인 검증용 smoke 리포트: [artifacts/image_smoke/mlflow_report.html](../../artifacts/image_smoke/mlflow_report.html)
-- 대표 이미지 결과 예시: [artifacts/BioMedCLIP](../../artifacts/BioMedCLIP), [artifacts/ResNet-50](../../artifacts/ResNet-50)
+- 이미지 baseline 설정 폴더: [src/image_baselines](../../src/image_baselines)
+- 이미지 파이프라인 검증용 smoke 리포트 생성 경로: `artifacts/image_smoke/mlflow_report.html` (자동생성 산출물, 현재 저장소에는 미포함)
+- 대표 이미지 결과 예시 생성 경로: `artifacts/BioMedCLIP`, `artifacts/ResNet-50` (자동생성 산출물, 현재 저장소에는 미포함)
 - `MedCLIP` 환경 주의사항: [README](../../README.md)
 
 ## 3. 향후 진행 방향

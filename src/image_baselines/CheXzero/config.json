@@ -1,0 +1,5 @@
+﻿{
+  "model": {"display_name": "CheXzero", "backend": "open_clip", "model_name": "ViT-B-32", "pretrained": null, "checkpoint_path": "./checkpoints/CheXzero/best_128_5e-05_original_22000_0.855.pt"},
+  "dataset": {"image_size": 224, "batch_size": 8, "num_workers": 0, "validation_ratio": 0.2, "seed": 42},
+  "search_space": {"epochs": [5], "learning_rate": [0.00001, 0.00005], "weight_decay": [0.0001, 0.001], "optimizer": ["adamw"]}
+}

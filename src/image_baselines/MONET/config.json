@@ -1,0 +1,22 @@
+{
+  "model": {
+    "display_name": "MONET",
+    "backend": "huggingface_clip",
+    "hf_model_id": "chanwkim/monet",
+    "feature_dim": 768,
+    "checkpoint_path": null
+  },
+  "dataset": {
+    "image_size": 224,
+    "batch_size": 4,
+    "num_workers": 0,
+    "validation_ratio": 0.2,
+    "seed": 42
+  },
+  "search_space": {
+    "epochs": [5],
+    "learning_rate": [0.00001, 0.00005],
+    "weight_decay": [0.0001, 0.001],
+    "optimizer": ["adamw"]
+  }
+}
