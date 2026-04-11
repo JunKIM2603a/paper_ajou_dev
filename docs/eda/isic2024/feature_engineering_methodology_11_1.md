@@ -13,7 +13,7 @@
 - 계산 결과에서 `inf`, `-inf`는 `NaN`으로 바꾼 뒤 `0.0`으로 채운다.
 - 따라서 이 문서의 모든 screening 수치(`std diff`, `base corr`, `novelty score`)는 `train split only` 결과다.
 
-즉 `11.1`은 test를 들여다보는 단계가 아니라, `strict raw numeric metadata` 안에서 설명 가능한 조합 후보를 넓게 만들고 train 내부에서만 1차 검토하는 단계다.
+즉 `11.1`은 test를 들여다보는 단계가 아니라, `strict_raw_numeric` 안에서 설명 가능한 조합 후보를 넓게 만들고 train 내부에서만 1차 검토하는 단계다.
 
 ## 2. 문헌 축을 현재 메타데이터에 어떻게 옮겼는가
 
@@ -289,7 +289,7 @@ drop 사유도 단순하다.
 
 정리하면, 이번 `11.1`의 방법론은 아래 한 문장으로 요약할 수 있다.
 
-`ABCD / CASH / DermNet / SLICE-3D`의 해석축을 `strict numeric metadata`로 넓게 근사하고, train split 안에서 `분리력은 거의 없거나 기존 변수와 사실상 같은 후보`만 먼저 제거한 단계다.
+`ABCD / CASH / DermNet / SLICE-3D`의 해석축을 `strict_raw_numeric`으로 넓게 근사하고, train split 안에서 `분리력은 거의 없거나 기존 변수와 사실상 같은 후보`만 먼저 제거한 단계다.
 
 ## 참고 문헌
 

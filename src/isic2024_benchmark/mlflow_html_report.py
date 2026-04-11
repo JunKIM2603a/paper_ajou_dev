@@ -8,6 +8,7 @@ from pathlib import Path
 
 from isic2024_benchmark.metrics import PRIMARY_PAUC_METRIC
 from isic2024_benchmark.runtime_env import ensure_expected_conda_env, get_default_mlflow_tracking_uri
+from isic2024_benchmark.tabular_terms import FEATURE_SET_DISPLAY_ORDER, feature_set_display_name, normalize_feature_set_name
 
 
 PARENT_METRICS = [
@@ -30,9 +31,6 @@ CHILD_METRICS = [
     "test_f1_score",
     "test_auc_roc",
 ]
-FEATURE_SET_DISPLAY_ORDER = {"strict": 0, "relaxed": 1, "oracle": 2}
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Export an HTML report from MLflow runs.")
     parser.add_argument("--tracking-uri", default=get_default_mlflow_tracking_uri())
@@ -391,7 +389,7 @@ def build_feature_set_panels(feature_set_records: dict[str, list], child_sort_me
       {table}
     </section>
             """.format(
-                feature_set_label=escape(feature_set.title()),
+                feature_set_label=escape(feature_set_display_name(feature_set)),
                 feature_set=escape(feature_set),
                 child_sort_metric=escape(child_sort_metric),
                 row_count=len(rows),
@@ -527,7 +525,7 @@ def select_best_child_rows_by_feature_set(child_records: list, child_sort_metric
     metric_key = f"metrics.{child_sort_metric}"
     feature_sets = sorted(
         {
-            safe_value(row.get("params.feature_set"))
+            normalize_feature_set_name(safe_value(row.get("params.feature_set")))
             for row in child_records
             if safe_value(row.get("params.feature_set"))
         },
@@ -541,7 +539,7 @@ def select_best_child_rows_by_feature_set(child_records: list, child_sort_metric
         selected = []
         seen_models: set[str] = set()
         for row in child_records:
-            if safe_value(row.get("params.feature_set")) != feature_set:
+            if normalize_feature_set_name(safe_value(row.get("params.feature_set"))) != feature_set:
                 continue
             model_name = safe_value(row.get("tags.model_name"))
             if not model_name or not safe_value(row.get(metric_key)):

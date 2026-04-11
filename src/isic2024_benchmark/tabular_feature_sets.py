@@ -1,131 +1,104 @@
 from __future__ import annotations
 
-import csv
 import json
 from pathlib import Path
 
+from isic2024_benchmark.final_tabular_inputs import load_strict_preprocessing_spec
 from isic2024_benchmark.tabular_data import DEFAULT_TARGET_COLUMN
+from isic2024_benchmark.tabular_terms import (
+    FEATURE_SET_ALIASES,
+    RELAXED,
+    STRICT_BASE,
+    STRICT_FE,
+    STRICT_MAIN_INPUT,
+)
 
 
 TARGET_COLUMN = DEFAULT_TARGET_COLUMN
-IDENTIFIER_COLUMNS = {"isic_id", "patient_id", "image_path", "image_exists", "split_group_id"}
-RELAXED_ONLY_COLUMNS = {"lesion_id", "attribution", "copyright_license"}
-HIGH_LEAKAGE_COLUMNS = {
-    "iddx_1",
-    "iddx_2",
-    "iddx_3",
-    "iddx_4",
-    "iddx_5",
-    "iddx_full",
-    "mel_mitotic_index",
-    "mel_thick_mm",
-}
-STRICT_MIN_NON_MISSING_RATIO = 0.95
-RELAXED_MIN_NON_MISSING_RATIO = 0.05
+FINAL_INPUTS_RELATIVE_PATH = Path("final_inputs") / "final_feature_sets_v3.json"
 
 
-def load_dataset_overview(eda_dir: str | Path) -> dict:
-    return json.loads((Path(eda_dir) / "dataset_overview.json").read_text(encoding="utf-8"))
-
-
-def load_missingness_summary(eda_dir: str | Path) -> dict[str, dict[str, float]]:
-    path = Path(eda_dir) / "missingness_summary.csv"
-    summary: dict[str, dict[str, float]] = {}
-    with path.open("r", encoding="utf-8", newline="") as file:
-        for row in csv.DictReader(file):
-            summary[row["column"]] = {
-                "missing_ratio": float(row["missing_ratio"]),
-                "non_missing_ratio": float(row["non_missing_ratio"]),
-            }
-    return summary
-
-
-def load_target_rate_summary(eda_dir: str | Path, column: str) -> dict[str, dict[str, float]]:
-    path = Path(eda_dir) / f"target_rate_by_{column}.csv"
+def load_final_feature_sets_v3(eda_dir: str | Path) -> dict:
+    path = Path(eda_dir) / FINAL_INPUTS_RELATIVE_PATH
     if not path.exists():
-        return {}
-    summary: dict[str, dict[str, float]] = {}
-    with path.open("r", encoding="utf-8", newline="") as file:
-        for row in csv.DictReader(file):
-            key = row[column]
-            summary[key] = {
-                "count": int(row["count"]),
-                "positive_count": int(row["positive_count"]),
-                "negative_count": int(row["negative_count"]),
-                "positive_ratio": float(row["positive_ratio"]),
-            }
-    return summary
+        raise FileNotFoundError(
+            "Notebook-derived final feature payload was not found at "
+            f"'{path}'. Run 'src/eda/isic2024_eda_20260411.ipynb' and regenerate "
+            "the final_inputs cells before launching tabular baselines."
+        )
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def recommend_feature_sets(eda_dir: str | Path) -> dict[str, object]:
-    overview = load_dataset_overview(eda_dir)
-    missingness = load_missingness_summary(eda_dir)
-    iddx_1_rates = load_target_rate_summary(eda_dir, "iddx_1")
-    iddx_full_rates = load_target_rate_summary(eda_dir, "iddx_full")
+    return recommend_feature_sets_from_final_inputs(eda_dir)
 
-    all_columns = [column for column in overview["columns"] if column != TARGET_COLUMN]
-    strict: list[str] = []
-    relaxed: list[str] = []
-    oracle: list[str] = []
 
-    for column in all_columns:
-        non_missing_ratio = missingness.get(column, {}).get("non_missing_ratio", 0.0)
+def recommend_feature_sets_from_final_inputs(eda_dir: str | Path) -> dict[str, object]:
+    final_sets = load_final_feature_sets_v3(eda_dir)
+    strict_preprocessing_spec = load_strict_preprocessing_spec(eda_dir)
 
-        if column in IDENTIFIER_COLUMNS:
-            continue
-        if column in RELAXED_ONLY_COLUMNS:
-            relaxed.append(column)
-            oracle.append(column)
-            continue
-        if column in HIGH_LEAKAGE_COLUMNS:
-            oracle.append(column)
-            continue
-
-        if non_missing_ratio >= STRICT_MIN_NON_MISSING_RATIO:
-            strict.append(column)
-            relaxed.append(column)
-            oracle.append(column)
-        elif non_missing_ratio >= RELAXED_MIN_NON_MISSING_RATIO:
-            relaxed.append(column)
-            oracle.append(column)
-
-    included_columns = set(strict) | set(relaxed) | set(oracle)
-    excluded_columns = sorted(column for column in all_columns if column not in included_columns)
+    strict_raw_numeric = list(final_sets.get("strict_raw_numeric_columns", strict_preprocessing_spec["strict_numeric_columns"]))
+    strict_base = list(
+        final_sets.get(
+            "strict_base_columns",
+            list(
+                dict.fromkeys(
+                    strict_preprocessing_spec["strict_numeric_columns"]
+                    + strict_preprocessing_spec["strict_categorical_columns"]
+                    + [f"{column}__missing" for column in strict_preprocessing_spec["numeric_missing_indicator_columns"]]
+                )
+            ),
+        )
+    )
+    strict_fe = list(final_sets.get("strict_fe_columns", final_sets.get("selected_engineered_lite_v3_columns", [])))
+    strict_main_input = list(final_sets.get("strict_main_input_columns", final_sets.get("strict_final_v3_columns", [])))
+    relaxed = list(final_sets.get("relaxed_columns", final_sets.get("relaxed_final_v3_columns", [])))
+    selected_engineered = list(final_sets.get("strict_fe_expanded_columns", final_sets.get("selected_engineered_v3_columns", [])))
+    oracle_source = list(final_sets.get("oracle_supervision_source_columns", []))
+    reference_only = list(final_sets.get("reference_only_columns", []))
+    label_source = list(final_sets.get("label_source_columns", []))
 
     evidence = {
-        "iddx_1_target_rates": iddx_1_rates,
-        "iddx_full_target_rates_sample": dict(list(iddx_full_rates.items())[:10]),
-        "missingness_snapshot": {
-            key: missingness[key]
-            for key in sorted(missingness)
-            if key in {"lesion_id", "mel_mitotic_index", "mel_thick_mm", "tbp_lv_dnn_lesion_confidence", "patient_id"}
-        },
+        "feature_sets_source": FINAL_INPUTS_RELATIVE_PATH.as_posix(),
+        "notebook_source": "src/eda/isic2024_eda_20260411.ipynb",
+        "strict_raw_numeric_columns": strict_raw_numeric,
+        "strict_base_columns": strict_base,
+        "strict_fe_columns": strict_fe,
+        "strict_fe_expanded_columns": selected_engineered,
+        "oracle_supervision_source_columns": oracle_source,
+        "reference_only_columns": reference_only,
+        "label_source_columns": label_source,
     }
 
     return {
         "target_column": TARGET_COLUMN,
-        "strict_min_non_missing_ratio": STRICT_MIN_NON_MISSING_RATIO,
-        "relaxed_min_non_missing_ratio": RELAXED_MIN_NON_MISSING_RATIO,
-        "excluded_columns": excluded_columns,
-        "high_leakage_risk_columns": sorted(HIGH_LEAKAGE_COLUMNS),
+        "strict_min_non_missing_ratio": None,
+        "relaxed_min_non_missing_ratio": None,
+        "excluded_columns": [],
+        "high_leakage_risk_columns": sorted(set(reference_only + label_source + oracle_source)),
         "feature_sets": {
-            "strict": strict,
-            "relaxed": relaxed,
-            "oracle": oracle,
+            STRICT_BASE: strict_base,
+            STRICT_FE: strict_fe,
+            STRICT_MAIN_INPUT: strict_main_input,
+            RELAXED: relaxed,
         },
+        "feature_set_aliases": FEATURE_SET_ALIASES,
         "rationales": {
-            "strict": [
-                "TBP/기본 임상 메타데이터 중심의 현실형 baseline 세트입니다.",
-                "식별자, 환자/병변 식별 정보, 진단 계열 컬럼, mel 계열 컬럼, 기관/라이선스 컬럼을 제외합니다.",
-                f"결측이 심한 컬럼은 non-missing ratio `{STRICT_MIN_NON_MISSING_RATIO:.2f}` 이상일 때만 포함합니다.",
+            STRICT_BASE: [
+                "notebook final_inputs의 strict_base_columns를 사용합니다.",
+                "전처리된 base metadata만으로 구성된 tabular 기준선입니다.",
             ],
-            "relaxed": [
-                "strict 세트에 더해 lesion/기관 메타데이터와 중간 결측 컬럼을 포함합니다.",
-                "메인 결과표보다는 보조 비교와 편향 점검에 적합합니다.",
+            STRICT_FE: [
+                "notebook final_inputs의 strict_fe_columns를 사용합니다.",
+                "최종 선택 engineered feature만으로 구성된 FE-only 기준선입니다.",
             ],
-            "oracle": [
-                "relaxed 세트에 진단 계열과 mel 계열 컬럼을 추가한 leakage 상한선 세트입니다.",
-                "현실형 baseline이 아니라 leakage 영향을 확인하기 위한 참고용 세트입니다.",
+            STRICT_MAIN_INPUT: [
+                "notebook final_inputs의 strict_main_input_columns를 사용합니다.",
+                "현재 논문 본선 기준의 메인 tabular 입력 세트입니다.",
+            ],
+            RELAXED: [
+                "notebook final_inputs의 relaxed_columns를 사용합니다.",
+                f"{STRICT_MAIN_INPUT}에 provenance/context 컬럼을 일부 추가한 보조 비교 세트입니다.",
             ],
         },
         "evidence": evidence,

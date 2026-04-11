@@ -4,8 +4,8 @@
 
 - `1st_after` -> `image_baselines` 변경 완료
 - `cbis_ddsm_benchmark` -> `isic2024_benchmark` 변경 완료
-- `ISIC2024` tabular EDA 구현 완료
-- feature set 추천(`strict / relaxed / oracle`) 구현 완료
+- `ISIC2024` tabular EDA source of truth를 notebook으로 정리 완료
+- feature set 추천(`strict_base / strict_fe / strict_main_input / relaxed`) 연결 완료
 - `ISIC2024` tabular baseline + MLflow CSV/HTML 리포트 구현 완료
 - `ISIC2024` image manifest builder / split / smoke 검증 완료
 
@@ -59,18 +59,17 @@
 
 ### 구현 내용
 
-- `GroundTruth + Supplement` 병합 로더 구현
-- 결측률 요약 생성
-- 범주형 분포 요약 생성
-- `iddx_1`, `iddx_full`, `attribution`별 타깃 비율 산출
-- feature set 추천 파일 생성
+- 본선 EDA notebook: `src/eda/isic2024_eda_20260411.ipynb`
+- 최종 용어 체계: `strict_raw_numeric / strict_base / strict_fe / strict_main_input / relaxed / oracle`
+- 최종 tabular 입력 계약과 FE 선택 결과를 notebook에서 저장
+- baseline은 notebook의 `final_inputs` 산출물을 기준으로 실행
 
 ### 산출물
 
-- `artifacts/eda/isic2024/report.md`
-- `artifacts/eda/isic2024/dataset_overview.json`
-- `artifacts/eda/isic2024/missingness_summary.csv`
-- `artifacts/eda/isic2024/feature_sets_recommended.json`
+- `artifacts/eda/isic2024/final_inputs/final_feature_sets_v3.json`
+- `artifacts/eda/isic2024/final_inputs/final_feature_set_summary_v3.csv`
+- `artifacts/eda/isic2024/thesis_plan/*.csv`
+- `artifacts/eda/isic2024/final_inputs/feature_sets_recommended.json`
 
 ## 목표 2. Tabular Baseline + MLflow + HTML 리더보드
 
@@ -95,15 +94,15 @@
 
 ### 현재 해석
 
-- `strict`는 메인 baseline 비교용으로 적절
-- `relaxed`는 특정 컬럼이 성능을 크게 끌어올릴 수 있음을 보여줌
-- `oracle`에서 거의 완벽한 성능이 나오는 것은 leakage가 강하다는 직접 증거
+- `strict_main_input`은 메인 baseline 비교용으로 적절
+- `strict_base`와 `strict_fe`를 함께 비교하면 base 대비 FE 추가 이득을 분리해 볼 수 있음
+- `relaxed`는 provenance/context 컬럼의 영향 확인용 보조 비교 세트
 
 ### 권장 사용 방식
 
-1. 메인 표: `strict`
-2. 보조 비교: `relaxed`
-3. leakage 분석: `oracle`
+1. 메인 표: `strict_main_input`
+2. 분해 비교: `strict_base`, `strict_fe`
+3. 보조 비교: `relaxed`
 
 ## 목표 3. Image Baseline + MLflow + HTML 리더보드
 

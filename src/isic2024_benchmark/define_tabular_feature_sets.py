@@ -11,7 +11,7 @@ from isic2024_benchmark.tabular_feature_sets import recommend_feature_sets
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Define tabular feature sets from EDA artifacts.")
     parser.add_argument("--eda-dir", default="artifacts/eda/isic2024")
-    parser.add_argument("--output", default="artifacts/eda/isic2024/feature_sets_recommended.json")
+    parser.add_argument("--output", default="artifacts/eda/isic2024/final_inputs/feature_sets_recommended.json")
     return parser.parse_args()
 
 

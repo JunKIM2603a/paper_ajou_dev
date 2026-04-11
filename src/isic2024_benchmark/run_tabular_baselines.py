@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from isic2024_benchmark.config_utils import expand_search_space, sanitize_run_name
+from isic2024_benchmark.final_tabular_inputs import build_final_feature_frames, is_final_inputs_feature_payload
 from isic2024_benchmark.metrics import PRIMARY_PAUC_METRIC, binary_classification_metrics
 from isic2024_benchmark.reproducibility import DEFAULT_SEED, set_global_seed
 from isic2024_benchmark.runtime_env import ensure_expected_conda_env, get_default_mlflow_tracking_uri
@@ -15,25 +16,45 @@ from isic2024_benchmark.tabular_baselines import (
     build_catboost_estimator,
     build_preprocessor,
     build_sklearn_estimator,
+    build_torch_estimator,
     build_xgboost_estimator,
+    device_uses_cuda,
     get_model_specs,
     split_feature_types,
 )
 from isic2024_benchmark.tabular_data import DEFAULT_DATASET_ROOT, DEFAULT_TARGET_COLUMN, load_tabular_dataframe
 from isic2024_benchmark.tabular_feature_sets import recommend_feature_sets
+from isic2024_benchmark.tabular_terms import (
+    STRICT_BASE,
+    STRICT_FE,
+    STRICT_MAIN_INPUT,
+    normalize_feature_set_name,
+    normalize_feature_set_names,
+)
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run ISIC2024 challenge tabular baseline models.")
     parser.add_argument("--dataset-root", default=str(DEFAULT_DATASET_ROOT))
     parser.add_argument("--eda-dir", default="artifacts/eda/isic2024")
-    parser.add_argument("--feature-set-json", default="artifacts/eda/isic2024/feature_sets_recommended.json")
+    parser.add_argument("--feature-set-json", default="artifacts/eda/isic2024/final_inputs/feature_sets_recommended.json")
     parser.add_argument("--tracking-uri", default=get_default_mlflow_tracking_uri())
     parser.add_argument("--experiment-name", default="ISIC2024-Tabular-Benchmark")
     parser.add_argument("--output-root", default="artifacts/tabular_runs")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--test-size", type=float, default=0.2)
     parser.add_argument("--validation-size", type=float, default=0.2)
+    parser.add_argument(
+        "--device",
+        default="cpu",
+        help="Runtime device for tabular estimators. Use `cuda` to enable GPU-capable backends.",
+    )
+    parser.add_argument(
+        "--feature-sets",
+        nargs="*",
+        default=[STRICT_BASE, STRICT_FE, STRICT_MAIN_INPUT],
+        help="Subset of feature sets to run. Example: --feature-sets strict_base strict_fe strict_main_input",
+    )
     parser.add_argument(
         "--models",
         nargs="*",
@@ -52,8 +73,26 @@ def main() -> None:
         ) from exc
 
     args = parse_args()
+    validate_runtime_device(args.device)
     ensure_feature_set_json(args.eda_dir, args.feature_set_json)
     feature_payload = json.loads(Path(args.feature_set_json).read_text(encoding="utf-8"))
+    raw_feature_sets = feature_payload.get("feature_sets", {})
+    feature_payload["feature_sets"] = {
+        normalize_feature_set_name(name): columns for name, columns in raw_feature_sets.items()
+    }
+    all_feature_sets = set(feature_payload["feature_sets"].keys())
+    if not all_feature_sets:
+        raise RuntimeError(f"No feature sets were found in {args.feature_set_json}")
+    requested_feature_sets = normalize_feature_set_names(args.feature_sets)
+    if requested_feature_sets:
+        unknown_feature_sets = sorted(set(requested_feature_sets) - all_feature_sets)
+        if unknown_feature_sets:
+            raise RuntimeError(
+                f"Requested feature sets are not available in {args.feature_set_json}: {unknown_feature_sets}"
+            )
+        available_feature_sets = set(requested_feature_sets)
+    else:
+        available_feature_sets = set(all_feature_sets)
 
     set_global_seed(args.seed)
     frame = load_merged_dataframe(args.dataset_root)
@@ -61,13 +100,23 @@ def main() -> None:
     if target_column != DEFAULT_TARGET_COLUMN:
         raise RuntimeError(f"Unexpected target column in feature set JSON: {target_column}")
     group_ids = frame["split_group_id"].copy()
+    use_final_inputs = is_final_inputs_feature_payload(feature_payload)
+    final_feature_frames = (
+        build_final_feature_frames(frame, args.eda_dir, sorted(available_feature_sets))
+        if use_final_inputs
+        else {}
+    )
 
     mlflow.set_tracking_uri(args.tracking_uri)
     mlflow.set_experiment(args.experiment_name)
 
     for spec in get_model_specs(args.models):
         parent_run_name = sanitize_run_name(spec.name)
-        combinations = expand_search_space(spec.search_space)
+        combinations = [
+            combination
+            for combination in expand_search_space(spec.search_space)
+            if combination.get("feature_set") in available_feature_sets
+        ]
         best_result = None
         best_run_name = None
 
@@ -88,6 +137,8 @@ def main() -> None:
                     "dataset_root": str(Path(args.dataset_root).resolve()),
                     "split_group_policy": "patient_id -> lesion_id -> isic_id",
                     "primary_metric_name": PRIMARY_PAUC_METRIC,
+                    "selected_feature_sets": ",".join(sorted(available_feature_sets)),
+                    "runtime_device": args.device,
                 }
             )
 
@@ -95,9 +146,26 @@ def main() -> None:
                 trial_seed = args.seed + index - 1
                 hyperparameters = dict(combination)
                 hyperparameters["seed"] = trial_seed
-                feature_set_name = hyperparameters["feature_set"]
+                feature_set_name = normalize_feature_set_name(hyperparameters["feature_set"])
+                hyperparameters["feature_set"] = feature_set_name
+                if feature_set_name not in available_feature_sets:
+                    print(
+                        f"[run_tabular_baselines] Skipping {spec.name} / {feature_set_name} "
+                        f"because it is not present in {args.feature_set_json}"
+                    )
+                    continue
                 features = feature_payload["feature_sets"][feature_set_name]
-                split_frame = frame[features + [target_column]].copy()
+                if use_final_inputs:
+                    split_frame = final_feature_frames[feature_set_name].copy()
+                    missing_features = [column for column in features if column not in split_frame.columns]
+                    if missing_features:
+                        raise RuntimeError(
+                            f"Final-input frame for '{feature_set_name}' is missing columns: {missing_features[:10]}"
+                        )
+                    split_frame = split_frame[features].copy()
+                    split_frame[target_column] = frame[target_column].values
+                else:
+                    split_frame = frame[features + [target_column]].copy()
 
                 trial_run_name = f"{parent_run_name}_trial_{index:03d}"
                 output_dir = Path(args.output_root) / parent_run_name / trial_run_name
@@ -111,6 +179,7 @@ def main() -> None:
                     test_size=args.test_size,
                     validation_size=args.validation_size,
                     output_dir=output_dir,
+                    device=args.device,
                 )
 
                 with mlflow.start_run(run_name=trial_run_name, nested=True):
@@ -125,6 +194,7 @@ def main() -> None:
                     mlflow.log_params({f"hp_{key}": normalize_param_value(value) for key, value in hyperparameters.items()})
                     mlflow.log_param("feature_count", len(features))
                     mlflow.log_param("feature_set", feature_set_name)
+                    mlflow.log_param("runtime_device", args.device)
                     mlflow.log_dict(summary["split_summary"], "split_summary.json")
                     mlflow.log_dict(summary["metrics"], "metrics.json")
                     mlflow.log_dict(summary["hyperparameters"], "hyperparameters.json")
@@ -189,6 +259,7 @@ def train_and_evaluate(
     test_size: float,
     validation_size: float,
     output_dir: Path,
+    device: str,
 ) -> dict[str, Any]:
     import pandas as pd
 
@@ -227,6 +298,7 @@ def train_and_evaluate(
         y_train=y_train,
         numeric_columns=numeric_columns,
         categorical_columns=categorical_columns,
+        device=device,
     )
     estimator.fit(X_train, y_train)
 
@@ -253,6 +325,7 @@ def train_and_evaluate(
             "split_group_policy": "patient_id -> lesion_id -> isic_id",
             "numeric_columns": numeric_columns,
             "categorical_columns": categorical_columns,
+            "runtime_device": device,
         },
         "metrics": metrics,
         "duration_seconds": duration_seconds,
@@ -274,10 +347,29 @@ def build_split_sets(*, group_ids, y, validation_size: float, test_size: float, 
     )
 
 
-def build_estimator(*, model_name: str, hyperparameters: dict[str, Any], X_train, y_train, numeric_columns, categorical_columns):
+def build_estimator(
+    *,
+    model_name: str,
+    hyperparameters: dict[str, Any],
+    X_train,
+    y_train,
+    numeric_columns,
+    categorical_columns,
+    device: str,
+):
     positive_count = max(int(y_train.sum()), 1)
     negative_count = max(int(len(y_train) - positive_count), 1)
     scale_pos_weight = negative_count / positive_count
+
+    if model_name in {"logistic_regression", "svm", "mlp"} and device_uses_cuda(device):
+        return build_torch_estimator(
+            model_name,
+            hyperparameters,
+            numeric_columns=numeric_columns,
+            categorical_columns=categorical_columns,
+            scale_pos_weight=scale_pos_weight,
+            device=device,
+        )
 
     if model_name in {"logistic_regression", "svm", "mlp"}:
         from sklearn.pipeline import Pipeline
@@ -290,7 +382,7 @@ def build_estimator(*, model_name: str, hyperparameters: dict[str, Any], X_train
         from sklearn.pipeline import Pipeline
 
         preprocessor = build_preprocessor(numeric_columns, categorical_columns)
-        estimator = build_xgboost_estimator(hyperparameters, scale_pos_weight=scale_pos_weight)
+        estimator = build_xgboost_estimator(hyperparameters, scale_pos_weight=scale_pos_weight, device=device)
         return Pipeline([("preprocessor", preprocessor), ("estimator", estimator)])
 
     if model_name == "catboost":
@@ -301,7 +393,7 @@ def build_estimator(*, model_name: str, hyperparameters: dict[str, Any], X_train
             train_frame[column] = train_frame[column].fillna("__missing__").astype(str)
         for column in numeric_columns:
             train_frame[column] = pd.to_numeric(train_frame[column], errors="coerce")
-        estimator = build_catboost_estimator(hyperparameters)
+        estimator = build_catboost_estimator(hyperparameters, device=device)
         estimator.fit(train_frame, y_train, cat_features=categorical_columns)
         return CatBoostWrapper(estimator=estimator, categorical_columns=categorical_columns, numeric_columns=numeric_columns)
 
@@ -353,6 +445,21 @@ def normalize_param_value(value: Any) -> Any:
     if isinstance(value, tuple):
         return list(value)
     return value
+
+
+def validate_runtime_device(device: str) -> None:
+    if not device_uses_cuda(device):
+        return
+    import torch
+
+    if not torch.cuda.is_available():
+        raise RuntimeError(
+            "GPU device was requested for tabular baselines, but torch.cuda.is_available() is False."
+        )
+    try:
+        torch.empty(1, device=device)
+    except Exception as exc:
+        raise RuntimeError(f"Failed to initialize tabular runtime device '{device}': {exc}") from exc
 
 
 if __name__ == "__main__":

@@ -5,6 +5,9 @@ from typing import Any
 
 import numpy as np
 
+from isic2024_benchmark.tabular_terms import ORACLE, RELAXED, STRICT_BASE, STRICT_FE, STRICT_MAIN_INPUT
+from isic2024_benchmark.tabular_torch import TorchTabularEstimator
+
 
 @dataclass(frozen=True)
 class TabularModelSpec:
@@ -18,7 +21,7 @@ MODEL_SPECS: dict[str, TabularModelSpec] = {
         name="logistic_regression",
         family="sklearn",
         search_space={
-            "feature_set": ["strict", "relaxed", "oracle"],
+            "feature_set": [STRICT_BASE, STRICT_FE, STRICT_MAIN_INPUT, RELAXED, ORACLE],
             "model_name": ["logistic_regression"],
             "C": [1.0],
             "max_iter": [1000],
@@ -28,7 +31,7 @@ MODEL_SPECS: dict[str, TabularModelSpec] = {
         name="svm",
         family="sklearn",
         search_space={
-            "feature_set": ["strict", "relaxed", "oracle"],
+            "feature_set": [STRICT_BASE, STRICT_FE, STRICT_MAIN_INPUT, RELAXED, ORACLE],
             "model_name": ["svm"],
             "C": [1.0],
             "max_iter": [20000],
@@ -38,7 +41,7 @@ MODEL_SPECS: dict[str, TabularModelSpec] = {
         name="mlp",
         family="sklearn",
         search_space={
-            "feature_set": ["strict", "relaxed", "oracle"],
+            "feature_set": [STRICT_BASE, STRICT_FE, STRICT_MAIN_INPUT, RELAXED, ORACLE],
             "model_name": ["mlp"],
             "hidden_layer_sizes": [(64, 32)],
             "alpha": [0.0001],
@@ -49,7 +52,7 @@ MODEL_SPECS: dict[str, TabularModelSpec] = {
         name="xgboost",
         family="xgboost",
         search_space={
-            "feature_set": ["strict", "relaxed", "oracle"],
+            "feature_set": [STRICT_BASE, STRICT_FE, STRICT_MAIN_INPUT, RELAXED, ORACLE],
             "model_name": ["xgboost"],
             "n_estimators": [200],
             "max_depth": [6],
@@ -62,7 +65,7 @@ MODEL_SPECS: dict[str, TabularModelSpec] = {
         name="catboost",
         family="catboost",
         search_space={
-            "feature_set": ["strict", "relaxed", "oracle"],
+            "feature_set": [STRICT_BASE, STRICT_FE, STRICT_MAIN_INPUT, RELAXED, ORACLE],
             "model_name": ["catboost"],
             "iterations": [300],
             "depth": [6],
@@ -156,36 +159,73 @@ def build_sklearn_estimator(model_name: str, hyperparameters: dict[str, Any]):
     return estimator
 
 
-def build_xgboost_estimator(hyperparameters: dict[str, Any], scale_pos_weight: float):
+def device_uses_cuda(device: str | None) -> bool:
+    return bool(device) and str(device).startswith("cuda")
+
+
+def build_xgboost_estimator(hyperparameters: dict[str, Any], scale_pos_weight: float, *, device: str = "cpu"):
     try:
         from xgboost import XGBClassifier
     except ImportError as exc:
         raise ImportError("xgboost is required for the xgboost tabular baseline.") from exc
 
-    return XGBClassifier(
+    estimator_kwargs = dict(
         objective="binary:logistic",
         eval_metric="logloss",
         random_state=int(hyperparameters["seed"]),
-        n_jobs=1,
         scale_pos_weight=scale_pos_weight,
         **strip_common_hyperparameters(hyperparameters),
     )
+    if device_uses_cuda(device):
+        estimator_kwargs.update(
+            {
+                "tree_method": "hist",
+                "device": "cuda",
+            }
+        )
+    else:
+        estimator_kwargs["n_jobs"] = 1
+    return XGBClassifier(**estimator_kwargs)
 
 
-def build_catboost_estimator(hyperparameters: dict[str, Any]):
+def build_catboost_estimator(hyperparameters: dict[str, Any], *, device: str = "cpu"):
     try:
         from catboost import CatBoostClassifier
     except ImportError as exc:
         raise ImportError("catboost is required for the catboost tabular baseline.") from exc
 
-    return CatBoostClassifier(
+    estimator_kwargs = dict(
         loss_function="Logloss",
-        eval_metric="PRAUC",
         random_seed=int(hyperparameters["seed"]),
         auto_class_weights="Balanced",
         verbose=False,
         allow_writing_files=False,
         **strip_common_hyperparameters(hyperparameters),
+    )
+    if device_uses_cuda(device):
+        estimator_kwargs["task_type"] = "GPU"
+        estimator_kwargs["eval_metric"] = "Logloss"
+    else:
+        estimator_kwargs["eval_metric"] = "PRAUC"
+    return CatBoostClassifier(**estimator_kwargs)
+
+
+def build_torch_estimator(
+    model_name: str,
+    hyperparameters: dict[str, Any],
+    *,
+    numeric_columns: list[str],
+    categorical_columns: list[str],
+    scale_pos_weight: float,
+    device: str,
+):
+    preprocessor = build_preprocessor(numeric_columns, categorical_columns)
+    return TorchTabularEstimator(
+        model_name=model_name,
+        preprocessor=preprocessor,
+        hyperparameters=hyperparameters,
+        device=device,
+        scale_pos_weight=scale_pos_weight,
     )
 
 
