@@ -1,9 +1,0 @@
-| col_1 | artifact | path |
-| --- | --- | --- |
-| 0 | feature_engineering_candidates_v2.csv | /home/junkim2603a/proj/paper_ajou_dev/artifact... |
-| 1 | feature_engineering_selection_v2.csv | /home/junkim2603a/proj/paper_ajou_dev/artifact... |
-| 2 | feature_engineering_pruning_v3.csv | /home/junkim2603a/proj/paper_ajou_dev/artifact... |
-| 3 | feature_engineering_pruning_lite_v3.csv | /home/junkim2603a/proj/paper_ajou_dev/artifact... |
-| 4 | final_feature_sets_v3.json | /home/junkim2603a/proj/paper_ajou_dev/artifact... |
-| 5 | final_feature_set_summary_v3.csv | /home/junkim2603a/proj/paper_ajou_dev/artifact... |
-| 6 | final_feature_membership_v3.csv | /home/junkim2603a/proj/paper_ajou_dev/artifact... |
