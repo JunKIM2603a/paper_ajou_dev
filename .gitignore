@@ -1,46 +1,38 @@
-# --- 1. IDE 및 로컬 환경 ---
-.vscode/
-.codex/
+# IDE and local environments
 .venv/
 
-# --- 2. Python 캐시 파일 ---
+# Python caches
 __pycache__/
 *.py[cod]
+.pytest_cache/
 
-# --- 3. 데이터셋 ---
-dataset/
+# Raw and generated data
+data/raw/**
+data/processed/**
+data/splits/**
+!data/raw/
+!data/processed/
+!data/splits/
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/splits/.gitkeep
 
-# --- 4. 실험 결과 전체 무시 ---
-artifacts/*
-mlruns/*
-mlartifacts/*
-mlflow.db
+# Experiment outputs and logs
+experiments/outputs/**
+experiments/logs/**
+!experiments/outputs/
+!experiments/logs/
+!experiments/outputs/.gitkeep
+!experiments/logs/.gitkeep
+
+# Model artifacts and local tracking stores
 *.pt
+*.pth
+*.ckpt
+mlartifacts/
+mlflow.db
+experiments/logs/mlflow.db
 
-# --- 5. [중요] 포함시키고 싶은 가벼운 결과물만 예외 처리 ---
-# (아래 주석을 해제하고 경로를 수정하여 사용하세요)
-# 중간 부모 폴더 예외 처리 (Git이 이 안으로 들어갈 수 있도록 허락)
-!artifacts/eda/
-artifacts/eda/*
-# 최종 목표 폴더 예외 처리
-!artifacts/eda/isic2024/
-# !artifacts/eda/isic2024/feature_engineering/*
-# !artifacts/eda/isic2024/figures/*
-# !artifacts/eda/isic2024/other_eda/*
-# !artifacts/eda/isic2024/eda_report.md
-# !artifacts/eda/isic2024/feature_engineering_methodology_11_1.md
-# !artifacts/eda/isic2024/isic2024_presentation_only_eda_chatgpt.ipynb
-# !artifacts/eda/isic2024/final_strict_imbalance_handling_comparison.ipynb
-# !artifacts/eda/isic2024/final_strict_vs_relaxed_vs_oracle_catboost_comparison.ipynb
-# !artifacts/eda/isic2024/final_strict_vs_strict_pruned_vs_strict_full_catboost_comparison.ipynb
-# !artifacts/eda/isic2024/report.md
-# !artifacts/eda/isic2024/strict_full_vs_final_strict_baseline_comparison.ipynb
-# !artifacts/eda/isic2024/strict_full_vs_strict_pruned_vs_strict_full_catboost_comparison.ipynb
-# !artifacts/eda/isic2024/strict_full_vs_final_strict_catboost_ablation.ipynb
-!artifacts/tabular/
-!artifacts/image_mlflow_leaderboard.csv
-!artifacts/image_mlflow_report.html
-
-# --- 6. OS 생성 파일 ---
+# OS files
 .DS_Store
 Thumbs.db

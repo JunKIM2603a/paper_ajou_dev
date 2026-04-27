@@ -1,0 +1,31 @@
+Use parallel subagents.
+
+Spawn these agents at the same time:
+1. researcher: check paper framing and related-work risk.
+2. data_guardian: audit patient-level leakage and train-only preprocessing.
+3. experimenter: design required comparison experiments.
+4. reviewer: check paper-readiness and metric risks.
+
+Wait for all agents to finish.
+Then merge their findings into one prioritized action plan.
+Do not edit code yet.
+
+
+
+구현까지 시킬 때:
+Use parallel subagents for planning first.
+
+Spawn:
+- data_guardian to audit split/preprocessing leakage risks.
+- experimenter to design the ablation protocol.
+- reviewer to identify paper-claim risks.
+
+Wait for all results.
+Then use engineer to implement only the agreed safe changes.
+After implementation, use reviewer again to review the diff.
+
+
+
+한 줄로 말하면:
+config.toml은 동시 실행 한도를 열어주는 설정이고,
+실제 멀티 에이전트 병렬 실행은 Codex 프롬프트에서 “spawn/use parallel subagents”라고 직접 지시해야 한다.

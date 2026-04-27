@@ -3,7 +3,7 @@
 ## 현재 진행 상태
 
 - `1st_after` -> `image_baselines` 변경 완료
-- `cbis_ddsm_benchmark` -> `isic2024_benchmark` 변경 완료
+- `cbis_ddsm_benchmark` -> `isic2024_multimodal` 변경 완료
 - `ISIC2024` tabular EDA source of truth를 notebook으로 정리 완료
 - feature set 추천(`strict_base / strict_fe / strict_main_input / relaxed`) 연결 완료
 - `ISIC2024` tabular baseline + MLflow CSV/HTML 리포트 구현 완료
@@ -59,17 +59,17 @@
 
 ### 구현 내용
 
-- 본선 EDA notebook: `src/eda/isic2024_eda_20260411.ipynb`
+- 본선 EDA notebook: `notebooks/isic_2024/isic2024_eda_20260411.ipynb`
 - 최종 용어 체계: `strict_raw_numeric / strict_base / strict_fe / strict_main_input / relaxed / oracle`
 - 최종 tabular 입력 계약과 FE 선택 결과를 notebook에서 저장
 - baseline은 notebook의 `final_inputs` 산출물을 기준으로 실행
 
 ### 산출물
 
-- `artifacts/eda/isic2024/final_inputs/final_feature_sets_v3.json`
-- `artifacts/eda/isic2024/final_inputs/final_feature_set_summary_v3.csv`
-- `artifacts/eda/isic2024/thesis_plan/*.csv`
-- `artifacts/eda/isic2024/final_inputs/feature_sets_recommended.json`
+- `experiments/evidence/eda/isic_2024/final_inputs/final_feature_sets_v3.json`
+- `experiments/evidence/eda/isic_2024/final_inputs/final_feature_set_summary_v3.csv`
+- `experiments/evidence/eda/isic_2024/thesis_plan/*.csv`
+- `experiments/evidence/eda/isic_2024/final_inputs/feature_sets_recommended.json`
 
 ## 목표 2. Tabular Baseline + MLflow + HTML 리더보드
 

@@ -4,10 +4,10 @@
 
 검토 기준:
 - 사용자가 제공한 정정 정보
-- `artifacts/eda/isic2024/splits/train_metadata_with_internal_split.csv`
-- `artifacts/eda/isic2024/splits/isic2024_internal_split_summary.csv`
-- `artifacts/eda/isic2024/model_inputs/current_model_regime_feature_sets.csv`
-- `artifacts/eda/isic2024/iddx_structure_review/iddx_structure_review.md`
+- `experiments/evidence/eda/isic_2024/splits/train_metadata_with_internal_split.csv`
+- `experiments/evidence/eda/isic_2024/splits/isic2024_internal_split_summary.csv`
+- `experiments/evidence/eda/isic_2024/model_inputs/current_model_regime_feature_sets.csv`
+- `experiments/evidence/eda/isic_2024/iddx_structure_review/iddx_structure_review.md`
 
 ## 1. 검증된 사실
 

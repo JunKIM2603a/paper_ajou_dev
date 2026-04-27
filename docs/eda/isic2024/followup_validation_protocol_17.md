@@ -2,7 +2,7 @@
 
 ## 1. Goal
 
-`11~16장`에서 확정한 `strict_base`, `strict_fe`, `strict_main_input`, 그리고 `auxiliary oracle supervision` 설계를 본선 EDA 흐름과 분리해서 재검증할 때의 공통 baseline 규약을 정리한다. 현재 baseline 실행의 tabular 축은 세 feature set을 함께 돌려 상대 기여를 비교하는 방식으로 두고, `relaxed`는 필요할 때만 보조 비교로 남겨 둔다. 이 문서는 `src/eda/isic2024_eda_20260411.ipynb`의 `17. 후속 검증 notebook 안내`를 보강하는 기준 문서다.
+`11~16장`에서 확정한 `strict_base`, `strict_fe`, `strict_main_input`, 그리고 `auxiliary oracle supervision` 설계를 본선 EDA 흐름과 분리해서 재검증할 때의 공통 baseline 규약을 정리한다. 현재 baseline 실행의 tabular 축은 세 feature set을 함께 돌려 상대 기여를 비교하는 방식으로 두고, `relaxed`는 필요할 때만 보조 비교로 남겨 둔다. 이 문서는 `notebooks/isic_2024/isic2024_eda_20260411.ipynb`의 `17. 후속 검증 notebook 안내`를 보강하는 기준 문서다.
 
 실행 코드와 분석 notebook의 역할 분리는 [followup_py_ipynb_split_strategy_17.md](/home/junkim2603a/proj/paper_ajou_dev/docs/eda/isic2024/followup_py_ipynb_split_strategy_17.md)에서 따로 정리한다.
 
@@ -22,7 +22,7 @@
 
 ## 3. Full Fine-Tuning Definition
 
-image baseline의 `full fine-tuning`은 backbone 전체와 새로 붙인 2-class classifier head를 모두 업데이트하는 설정을 뜻한다. 현재 `src/isic2024_benchmark/trainer.py`는 `optimizer(model.parameters())`를 사용하고, 별도 freezing 로직이 없으므로 runnable한 image config는 모두 full fine-tuning으로 학습된다.
+image baseline의 `full fine-tuning`은 backbone 전체와 새로 붙인 2-class classifier head를 모두 업데이트하는 설정을 뜻한다. 현재 `src/isic2024_multimodal/trainer.py`는 `optimizer(model.parameters())`를 사용하고, 별도 freezing 로직이 없으므로 runnable한 image config는 모두 full fine-tuning으로 학습된다.
 
 ## 4. Baseline Pool
 
@@ -76,21 +76,21 @@ tabular GPU backend는 다음처럼 둔다.
 tabular benchmark, single GPU:
 
 ```bash
-conda run -n paper_ajou_dev env PYTHONPATH=./src python -m isic2024_benchmark.run_tabular_baselines --dataset-root ./dataset/isic-2024-challenge --eda-dir ./artifacts/eda/isic2024 --feature-set-json ./artifacts/eda/isic2024/final_inputs/feature_sets_recommended.json --feature-sets strict_base strict_fe strict_main_input --experiment-name ISIC2024-Tabular-Benchmark --output-root ./artifacts/tabular_runs --device cuda
+conda run -n paper_ajou_dev env PYTHONPATH=./src python -m isic2024_multimodal.run_tabular_baselines --dataset-root ./data/raw/isic_2024_challenge --eda-dir ./experiments/evidence/eda/isic_2024 --feature-set-json ./experiments/evidence/eda/isic_2024/final_inputs/feature_sets_recommended.json --feature-sets strict_base strict_fe strict_main_input --experiment-name ISIC2024-Tabular-Benchmark --output-root ./experiments/outputs/tabular_baselines --device cuda
 ```
 
 tabular benchmark, 2-GPU parallel:
 
 ```bash
-conda run -n paper_ajou_dev env PYTHONPATH=./src python -m isic2024_benchmark.run_all_tabular_models --dataset-root ./dataset/isic-2024-challenge --eda-dir ./artifacts/eda/isic2024 --feature-set-json ./artifacts/eda/isic2024/final_inputs/feature_sets_recommended.json --feature-sets strict_base strict_fe strict_main_input --experiment-name ISIC2024-Tabular-Benchmark --output-root ./artifacts/tabular_runs --devices 0 1
+conda run -n paper_ajou_dev env PYTHONPATH=./src python -m isic2024_multimodal.run_all_tabular_models --dataset-root ./data/raw/isic_2024_challenge --eda-dir ./experiments/evidence/eda/isic_2024 --feature-set-json ./experiments/evidence/eda/isic_2024/final_inputs/feature_sets_recommended.json --feature-sets strict_base strict_fe strict_main_input --experiment-name ISIC2024-Tabular-Benchmark --output-root ./experiments/outputs/tabular_baselines --devices 0 1
 ```
 
 image benchmark:
 
 ```bash
-conda run -n paper_ajou_dev env PYTHONPATH=./src python -m isic2024_benchmark.run_all_models --dataset-root ./dataset/isic-2024-challenge --output-root ./artifacts --experiment-name ISIC2024-Image-Benchmark --seed 42 --devices 0 1 --exclude-models HAM10000
+conda run -n paper_ajou_dev env PYTHONPATH=./src python -m isic2024_multimodal.run_all_models --dataset-root ./data/raw/isic_2024_challenge --output-root ./experiments/outputs --experiment-name ISIC2024-Image-Benchmark --seed 42 --devices 0 1 --exclude-models HAM10000
 ```
 
-`MONET`은 `reference/MONET/README.md`의 Hugging Face 경로를 기준으로 `src/image_baselines/MONET/config.json`에서 바로 호출한다.
+`MONET`은 `reference/MONET/README.md`의 Hugging Face 경로를 기준으로 `experiments/configs/image_baselines/MONET/config.json`에서 바로 호출한다.
 
 image model은 tabular feature set을 직접 입력으로 쓰지 않으므로, 결과 해석에서는 각 image backbone을 `strict_base`, `strict_fe`, `strict_main_input` tabular 기준선과 나란히 놓고 비교한다.

@@ -1,6 +1,6 @@
 # 11.1 feature engineering 방법론 정리
 
-이 문서는 [`src/eda/isic2024_eda_20260411.ipynb`](/home/junkim2603a/proj/paper_ajou_dev/src/eda/isic2024_eda_20260411.ipynb) 의 `11.1 feature engineering 후보 생성과 1차 선별`이 실제로 어떤 규칙으로 구성됐는지를 풀어쓴 설명서다. 핵심은 `임상 문헌의 해석축을 train-metadata가 제공하는 수치 컬럼으로 근사`해서 넓은 후보군을 만든 뒤, `너무 약한 후보`와 `기존 base feature와 거의 같은 후보`만 먼저 걷어내는 것이다.
+이 문서는 [`notebooks/isic_2024/isic2024_eda_20260411.ipynb`](/home/junkim2603a/proj/paper_ajou_dev/notebooks/isic_2024/isic2024_eda_20260411.ipynb) 의 `11.1 feature engineering 후보 생성과 1차 선별`이 실제로 어떤 규칙으로 구성됐는지를 풀어쓴 설명서다. 핵심은 `임상 문헌의 해석축을 train-metadata가 제공하는 수치 컬럼으로 근사`해서 넓은 후보군을 만든 뒤, `너무 약한 후보`와 `기존 base feature와 거의 같은 후보`만 먼저 걷어내는 것이다.
 
 중요한 점은, 여기서 만드는 값이 임상 문헌의 공식 점수를 그대로 재현하는 것은 아니라는 점이다. 현재 데이터셋은 `ABCD`, `CASH`, `DermNet`이 직접 요구하는 병리적/시각적 annotation을 모두 제공하지 않는다. 따라서 이번 단계는 `문헌의 해석 방향`을 따르되, 실제 구현은 `ISIC 2024 train-metadata`의 색좌표, 형태, 위치, 환자 맥락 컬럼으로 근사한 `proxy feature engineering` 단계라고 보는 것이 맞다.
 
