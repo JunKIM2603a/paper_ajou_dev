@@ -24,9 +24,9 @@ FEATURE_SET_ALIASES = {
 FEATURE_SET_DISPLAY_NAMES = {
     STRICT_BASE: "Strict Base",
     STRICT_FE: "Strict FE",
-    STRICT_MAIN_INPUT: "Strict Main Input",
-    RELAXED: "Relaxed",
-    ORACLE: "Oracle",
+    STRICT_MAIN_INPUT: "strict_input",
+    RELAXED: "relaxed_context",
+    ORACLE: "reference_only / privileged candidate",
 }
 
 FEATURE_SET_DISPLAY_ORDER = {

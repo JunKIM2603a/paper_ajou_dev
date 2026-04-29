@@ -11,7 +11,9 @@ from isic2024_multimodal.features.tabular_terms import ORACLE, RELAXED, STRICT_B
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Export merged ISIC2024 challenge tabular dataset for baseline modeling.")
+    parser = argparse.ArgumentParser(
+        description="Export merged ISIC2024 challenge tabular dataset for strict_input baseline modeling."
+    )
     parser.add_argument("--dataset-root", default=str(DEFAULT_DATASET_ROOT))
     parser.add_argument("--feature-set-json", default="experiments/evidence/eda/isic_2024/final_inputs/feature_sets_recommended.json")
     parser.add_argument("--eda-dir", default="experiments/evidence/eda/isic_2024")
@@ -19,6 +21,10 @@ def parse_args() -> argparse.Namespace:
         "--feature-set",
         choices=[STRICT_BASE, STRICT_FE, STRICT_MAIN_INPUT, RELAXED, ORACLE, "strict"],
         default=STRICT_MAIN_INPUT,
+        help=(
+            "Feature set to export. 'strict' is a legacy alias for strict_main_input; "
+            "relaxed/oracle keys are compatibility names, not ordinary inference inputs."
+        ),
     )
     parser.add_argument("--output", default="experiments/tables/isic2024_strict_main_input.csv")
     return parser.parse_args()

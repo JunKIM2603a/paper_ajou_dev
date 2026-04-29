@@ -15,6 +15,8 @@ PRIMARY_PAUC_METRIC = "pauc_above_tpr80"
 STRICT_BASE = "strict_base"
 STRICT_FE = "strict_fe"
 STRICT_MAIN_INPUT = "strict_main_input"
+DEFAULT_HOLDOUT_SPLIT_CSV = "data/splits/isic2024_train_validation_test_split_seed42.csv"
+DEFAULT_CV_SPLIT_CSV = "data/splits/isic2024_train_validation_5fold_seed42.csv"
 
 
 def parse_args() -> argparse.Namespace:
@@ -26,8 +28,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--experiment-name", default="ISIC2024-Tabular-Baselines")
     parser.add_argument("--output-root", default="experiments/outputs/tabular_baselines")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
-    parser.add_argument("--test-size", type=float, default=0.2)
-    parser.add_argument("--validation-size", type=float, default=0.2)
+    parser.add_argument("--split-seed", type=int, default=DEFAULT_SEED)
+    parser.add_argument("--cv-fold", type=int, default=0)
+    parser.add_argument("--holdout-split-csv", default=DEFAULT_HOLDOUT_SPLIT_CSV)
+    parser.add_argument("--cv-split-csv", default=DEFAULT_CV_SPLIT_CSV)
+    parser.add_argument("--max-train-rows", type=int, default=None, help="Optional post-split row cap for smoke tests.")
+    parser.add_argument("--max-val-rows", type=int, default=None, help="Optional post-split row cap for smoke tests.")
+    parser.add_argument("--max-test-rows", type=int, default=None, help="Optional post-split row cap for smoke tests.")
     parser.add_argument(
         "--device",
         default="cpu",
@@ -37,12 +44,25 @@ def parse_args() -> argparse.Namespace:
         "--feature-sets",
         nargs="*",
         default=[STRICT_BASE, STRICT_FE, STRICT_MAIN_INPUT],
-        help="Subset of feature sets to run. Example: --feature-sets strict_base strict_fe strict_main_input",
+        help=(
+            "Subset of feature sets to run. Example: --feature-sets strict_base strict_fe strict_main_input. "
+            "strict_main_input is the strict_input contract; relaxed/oracle compatibility keys are not "
+            "ordinary inference-time inputs."
+        ),
     )
     parser.add_argument(
         "--models",
         nargs="*",
-        default=["logistic_regression", "svm", "mlp", "xgboost", "catboost"],
+        default=[
+            "logistic_regression",
+            "svm",
+            "mlp",
+            "xgboost",
+            "catboost",
+            "lightgbm",
+            "ft_transformer",
+            "ft_transformer_external",
+        ],
     )
     return parser.parse_args()
 
@@ -53,6 +73,7 @@ def main() -> None:
     global binary_classification_metrics
     global build_catboost_estimator
     global build_final_feature_frames
+    global build_lightgbm_estimator
     global build_preprocessor
     global build_sklearn_estimator
     global build_torch_estimator
@@ -68,10 +89,12 @@ def main() -> None:
     global sanitize_run_name
     global set_global_seed
     global split_feature_types
-    global split_group_ids
+    global select_threshold_by_f1
+    global thresholded_binary_classification_metrics
 
     from isic2024_multimodal.baselines.tabular.baselines import (
         build_catboost_estimator,
+        build_lightgbm_estimator,
         build_preprocessor,
         build_sklearn_estimator,
         build_torch_estimator,
@@ -80,9 +103,12 @@ def main() -> None:
         get_model_specs,
         split_feature_types,
     )
-    from isic2024_multimodal.data.splits import split_group_ids
     from isic2024_multimodal.data.tabular_dataset import load_tabular_dataframe
-    from isic2024_multimodal.evaluation.metrics import binary_classification_metrics
+    from isic2024_multimodal.evaluation.metrics import (
+        binary_classification_metrics,
+        select_threshold_by_f1,
+        thresholded_binary_classification_metrics,
+    )
     from isic2024_multimodal.features.final_tabular_inputs import (
         build_final_feature_frames,
         is_final_inputs_feature_payload,
@@ -124,7 +150,12 @@ def main() -> None:
     target_column = feature_payload["target_column"]
     if target_column != DEFAULT_TARGET_COLUMN:
         raise RuntimeError(f"Unexpected target column in feature set JSON: {target_column}")
-    group_ids = frame["split_group_id"].copy()
+    split_definition = load_locked_split_definition(
+        holdout_split_csv=args.holdout_split_csv,
+        cv_split_csv=args.cv_split_csv,
+        cv_fold=args.cv_fold,
+    )
+    sample_ids = frame["isic_id"].astype(str).copy()
     use_final_inputs = is_final_inputs_feature_payload(feature_payload)
     final_feature_frames = (
         build_final_feature_frames(frame, args.eda_dir, sorted(available_feature_sets))
@@ -157,11 +188,18 @@ def main() -> None:
             mlflow.log_params(
                 {
                     "seed": args.seed,
-                    "test_size": args.test_size,
-                    "validation_size": args.validation_size,
+                    "split_seed": args.split_seed,
+                    "cv_fold": args.cv_fold,
+                    "holdout_split_csv": str(Path(args.holdout_split_csv).resolve()),
+                    "cv_split_csv": str(Path(args.cv_split_csv).resolve()),
+                    "split_source": "locked_split_csv",
+                    "max_train_rows": args.max_train_rows,
+                    "max_val_rows": args.max_val_rows,
+                    "max_test_rows": args.max_test_rows,
                     "dataset_root": str(Path(args.dataset_root).resolve()),
                     "split_group_policy": "patient_id -> lesion_id -> isic_id",
                     "primary_metric_name": PRIMARY_PAUC_METRIC,
+                    "threshold_source": "validation_f1",
                     "selected_feature_sets": ",".join(sorted(available_feature_sets)),
                     "runtime_device": args.device,
                 }
@@ -197,14 +235,17 @@ def main() -> None:
                 output_dir.mkdir(parents=True, exist_ok=True)
                 summary = train_and_evaluate(
                     frame=split_frame,
-                    group_ids=group_ids,
+                    sample_ids=sample_ids,
+                    split_definition=split_definition,
                     target_column=target_column,
                     model_name=spec.name,
                     hyperparameters=hyperparameters,
-                    test_size=args.test_size,
-                    validation_size=args.validation_size,
                     output_dir=output_dir,
                     device=args.device,
+                    include_test=False,
+                    max_train_rows=args.max_train_rows,
+                    max_val_rows=args.max_val_rows,
+                    max_test_rows=args.max_test_rows,
                 )
 
                 with mlflow.start_run(run_name=trial_run_name, nested=True):
@@ -229,23 +270,44 @@ def main() -> None:
                     mlflow.log_metric("duration_seconds", float(summary["duration_seconds"]))
                     mlflow.log_artifact(str(output_dir / "summary.json"))
 
-                score = summary["metrics"]["val"][PRIMARY_PAUC_METRIC]
-                if score != score:
-                    score = summary["metrics"]["val"]["auc_roc"]
-                if score != score:
-                    score = summary["metrics"]["test"]["average_precision"]
+                score = select_trial_score(summary)
                 if best_result is None or score > best_result["score"]:
                     best_result = {
                         "score": score,
                         "summary": summary,
                         "hyperparameters": hyperparameters,
+                        "feature_set_name": feature_set_name,
+                        "features": features,
                     }
                     best_run_name = trial_run_name
 
             if best_result is None:
                 raise RuntimeError(f"No successful tabular trials completed for {spec.name}")
 
-            mlflow.log_dict(best_result["summary"], "best_summary.json")
+            best_feature_set_name = best_result["feature_set_name"]
+            best_features = best_result["features"]
+            if use_final_inputs:
+                best_split_frame = final_feature_frames[best_feature_set_name][best_features].copy()
+                best_split_frame[target_column] = frame[target_column].values
+            else:
+                best_split_frame = frame[best_features + [target_column]].copy()
+            final_output_dir = Path(args.output_root) / parent_run_name / "best_final_test"
+            best_final_summary = train_and_evaluate(
+                frame=best_split_frame,
+                sample_ids=sample_ids,
+                split_definition=split_definition,
+                target_column=target_column,
+                model_name=spec.name,
+                hyperparameters=best_result["hyperparameters"],
+                output_dir=final_output_dir,
+                device=args.device,
+                include_test=True,
+                max_train_rows=args.max_train_rows,
+                max_val_rows=args.max_val_rows,
+                max_test_rows=args.max_test_rows,
+            )
+
+            mlflow.log_dict(best_final_summary, "best_summary.json")
             mlflow.set_tag("best_child_run_name", best_run_name)
             mlflow.log_params(
                 {
@@ -254,7 +316,9 @@ def main() -> None:
                 }
             )
             mlflow.log_param("best_feature_set", best_result["hyperparameters"]["feature_set"])
-            for metric_name, metric_value in best_result["summary"]["metrics"]["test"].items():
+            mlflow.log_param("selected_threshold", best_final_summary["selected_threshold"])
+            mlflow.log_param("threshold_source", best_final_summary["threshold_source"])
+            for metric_name, metric_value in best_final_summary["metrics"]["test"].items():
                 mlflow.log_metric(f"best_{metric_name}", float(metric_value))
 
 
@@ -262,7 +326,31 @@ def ensure_feature_set_json(eda_dir: str, feature_set_json: str) -> None:
     path = Path(feature_set_json)
     if path.exists():
         return
-    payload = recommend_feature_sets(eda_dir)
+    try:
+        payload = recommend_feature_sets(eda_dir)
+    except FileNotFoundError:
+        from isic2024_multimodal.cli.export_strict_input_dataset import STRICT_INPUT_COLUMNS
+
+        payload = {
+            "target_column": DEFAULT_TARGET_COLUMN,
+            "feature_sets": {
+                STRICT_MAIN_INPUT: STRICT_INPUT_COLUMNS,
+            },
+            "feature_set_aliases": {
+                "strict": STRICT_MAIN_INPUT,
+                STRICT_MAIN_INPUT: STRICT_MAIN_INPUT,
+            },
+            "rationales": {
+                STRICT_MAIN_INPUT: [
+                    "Fallback feature payload from export_strict_input_dataset strict input contract.",
+                    "Generate notebook-derived final_inputs evidence before paper-facing strict_base/strict_fe comparisons.",
+                ],
+            },
+            "evidence": {
+                "feature_sets_source": "export_strict_input_dataset.STRICT_INPUT_COLUMNS",
+                "paper_valid_scope": "strict_main_input smoke/baseline only",
+            },
+        }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -274,46 +362,58 @@ def load_merged_dataframe(dataset_root: str):
     return frame
 
 
+def select_trial_score(summary: dict[str, Any]) -> float:
+    val_metrics = summary["metrics"]["val"]
+    score = val_metrics[PRIMARY_PAUC_METRIC]
+    if score != score:
+        score = val_metrics["auc_roc"]
+    if score != score:
+        score = val_metrics["average_precision"]
+    return float(score)
+
+
 def train_and_evaluate(
     *,
     frame,
-    group_ids,
+    sample_ids,
+    split_definition: dict[str, Any],
     target_column: str,
     model_name: str,
     hyperparameters: dict[str, Any],
-    test_size: float,
-    validation_size: float,
     output_dir: Path,
     device: str,
+    include_test: bool,
+    max_train_rows: int | None = None,
+    max_val_rows: int | None = None,
+    max_test_rows: int | None = None,
 ) -> dict[str, Any]:
-    import pandas as pd
-
     start = time.time()
+    output_dir.mkdir(parents=True, exist_ok=True)
     seed = int(hyperparameters["seed"])
     set_global_seed(seed)
 
     X = frame.drop(columns=[target_column]).copy()
     y = frame[target_column].astype(float).astype(int)
-    split_sets = build_split_sets(
-        group_ids=group_ids,
-        y=y,
-        validation_size=validation_size,
-        test_size=test_size,
-        seed=seed,
-    )
 
     for column in X.columns:
         X[column] = X[column].where(X[column].notna(), None)
 
-    train_mask = group_ids.isin(split_sets["train"])
-    val_mask = group_ids.isin(split_sets["val"])
-    test_mask = group_ids.isin(split_sets["test"])
+    sample_ids = sample_ids.astype(str)
+    train_mask = sample_ids.isin(split_definition["train_ids"])
+    val_mask = sample_ids.isin(split_definition["val_ids"])
+    test_mask = sample_ids.isin(split_definition["test_ids"])
     X_train = X.loc[train_mask].copy()
     X_val = X.loc[val_mask].copy()
-    X_test = X.loc[test_mask].copy()
     y_train = y.loc[train_mask].copy()
     y_val = y.loc[val_mask].copy()
-    y_test = y.loc[test_mask].copy()
+    if include_test:
+        X_test = X.loc[test_mask].copy()
+        y_test = y.loc[test_mask].copy()
+
+    X_train, y_train = limit_split_rows(X_train, y_train, max_train_rows, seed=seed)
+    X_val, y_val = limit_split_rows(X_val, y_val, max_val_rows, seed=seed + 1)
+    if include_test:
+        X_test, y_test = limit_split_rows(X_test, y_test, max_test_rows, seed=seed + 2)
 
     numeric_columns, categorical_columns = split_feature_types(X_train)
     estimator = build_estimator(
@@ -327,30 +427,45 @@ def train_and_evaluate(
     )
     estimator.fit(X_train, y_train)
 
+    val_labels, val_probabilities = predict_probabilities(estimator, X_val, y_val)
+    selected_threshold = select_threshold_by_f1(val_labels, val_probabilities)
     metrics = {
-        "train": evaluate_predictions(estimator, X_train, y_train),
-        "val": evaluate_predictions(estimator, X_val, y_val),
-        "test": evaluate_predictions(estimator, X_test, y_test),
+        "train": evaluate_predictions(estimator, X_train, y_train, threshold=selected_threshold),
+        "val": evaluate_predictions(estimator, X_val, y_val, threshold=selected_threshold),
     }
+    if include_test:
+        metrics["test"] = evaluate_predictions(estimator, X_test, y_test, threshold=selected_threshold)
     duration_seconds = time.time() - start
 
     summary = {
         "model_name": model_name,
         "hyperparameters": {key: normalize_param_value(value) for key, value in hyperparameters.items()},
+        "threshold_source": "validation_f1",
+        "selected_threshold": selected_threshold,
+        "split_source": "locked_split_csv",
         "split_summary": {
             "num_train_rows": int(len(X_train)),
             "num_val_rows": int(len(X_val)),
-            "num_test_rows": int(len(X_test)),
+            "num_test_rows": int(len(X_test) if include_test else split_definition["num_test_rows"]),
             "num_train_positive": int(y_train.sum()),
             "num_val_positive": int(y_val.sum()),
-            "num_test_positive": int(y_test.sum()),
-            "num_train_groups": int(len(split_sets["train"])),
-            "num_val_groups": int(len(split_sets["val"])),
-            "num_test_groups": int(len(split_sets["test"])),
+            "num_test_positive": int(y_test.sum() if include_test else y.loc[test_mask].sum()),
+            "num_train_groups": int(split_definition["num_train_patients"]),
+            "num_val_groups": int(split_definition["num_val_patients"]),
+            "num_test_groups": int(split_definition["num_test_patients"]),
+            "locked_num_train_rows": int(split_definition["num_train_rows"]),
+            "locked_num_val_rows": int(split_definition["num_val_rows"]),
+            "locked_num_test_rows": int(split_definition["num_test_rows"]),
             "split_group_policy": "patient_id -> lesion_id -> isic_id",
+            "holdout_split_csv": split_definition["holdout_split_csv"],
+            "cv_split_csv": split_definition["cv_split_csv"],
+            "cv_fold": split_definition["cv_fold"],
             "numeric_columns": numeric_columns,
             "categorical_columns": categorical_columns,
             "runtime_device": device,
+            "max_train_rows": max_train_rows,
+            "max_val_rows": max_val_rows,
+            "max_test_rows": max_test_rows,
         },
         "metrics": metrics,
         "duration_seconds": duration_seconds,
@@ -359,17 +474,94 @@ def train_and_evaluate(
     return summary
 
 
-def build_split_sets(*, group_ids, y, validation_size: float, test_size: float, seed: int) -> dict[str, set[str]]:
+def limit_split_rows(X, y, max_rows: int | None, *, seed: int):
+    if max_rows is None or max_rows <= 0 or len(X) <= max_rows:
+        return X, y
+
     import pandas as pd
 
-    group_frame = pd.DataFrame({"group_id": group_ids, "target": y})
-    group_labels = group_frame.groupby("group_id")["target"].max().astype(int).to_dict()
-    return split_group_ids(
-        group_labels,
-        validation_ratio=validation_size,
-        test_ratio=test_size,
-        seed=seed,
-    )
+    positive_index = y.loc[y.astype(int).eq(1)].index.to_list()
+    negative_index = y.loc[y.astype(int).eq(0)].index.to_list()
+    rng = __import__("random").Random(seed)
+    rng.shuffle(positive_index)
+    rng.shuffle(negative_index)
+    if positive_index and negative_index:
+        positive_target = max(1, round(max_rows * len(positive_index) / len(y)))
+        positive_target = min(positive_target, len(positive_index))
+        negative_target = max_rows - positive_target
+        negative_target = max(1, min(negative_target, len(negative_index)))
+        selected_index = positive_index[:positive_target] + negative_index[:negative_target]
+    else:
+        selected_index = list(X.index[:max_rows])
+    selected_index = pd.Index(selected_index)
+    return X.loc[selected_index].copy(), y.loc[selected_index].copy()
+
+
+def load_locked_split_definition(*, holdout_split_csv: str, cv_split_csv: str, cv_fold: int) -> dict[str, Any]:
+    import pandas as pd
+
+    holdout_path = Path(holdout_split_csv)
+    cv_path = Path(cv_split_csv)
+    if not holdout_path.exists() or not cv_path.exists():
+        missing_paths = [str(path) for path in [holdout_path, cv_path] if not path.exists()]
+        raise FileNotFoundError(
+            "Locked split CSV files are required for paper-valid tabular baselines. "
+            f"Missing: {missing_paths}. Generate them with: "
+            "`PYTHONPATH=./src python -m isic2024_multimodal.cli.export_strict_input_dataset`"
+        )
+
+    holdout_frame = pd.read_csv(holdout_path, low_memory=False)
+    cv_frame = pd.read_csv(cv_path, low_memory=False)
+    required_holdout_columns = {"isic_id", "patient_id", "split"}
+    required_cv_columns = {"isic_id", "patient_id", "cv_validation_fold"}
+    if not required_holdout_columns.issubset(holdout_frame.columns):
+        raise RuntimeError(f"Holdout split CSV is missing columns: {sorted(required_holdout_columns - set(holdout_frame.columns))}")
+    if not required_cv_columns.issubset(cv_frame.columns):
+        raise RuntimeError(f"CV split CSV is missing columns: {sorted(required_cv_columns - set(cv_frame.columns))}")
+
+    holdout_frame["isic_id"] = holdout_frame["isic_id"].astype(str)
+    holdout_frame["patient_id"] = holdout_frame["patient_id"].astype(str)
+    cv_frame["isic_id"] = cv_frame["isic_id"].astype(str)
+    cv_frame["patient_id"] = cv_frame["patient_id"].astype(str)
+    cv_frame["cv_validation_fold"] = cv_frame["cv_validation_fold"].astype(int)
+
+    train_validation_frame = holdout_frame.loc[holdout_frame["split"].eq("train_validation_data")].copy()
+    test_frame = holdout_frame.loc[holdout_frame["split"].eq("test_data")].copy()
+    val_frame = cv_frame.loc[cv_frame["cv_validation_fold"].eq(int(cv_fold))].copy()
+    if val_frame.empty:
+        raise RuntimeError(f"No rows found for cv_fold={cv_fold} in {cv_split_csv}")
+
+    train_validation_ids = set(train_validation_frame["isic_id"])
+    val_ids = set(val_frame["isic_id"])
+    train_ids = train_validation_ids - val_ids
+    test_ids = set(test_frame["isic_id"])
+    train_patients = set(train_validation_frame.loc[train_validation_frame["isic_id"].isin(train_ids), "patient_id"])
+    val_patients = set(val_frame["patient_id"])
+    test_patients = set(test_frame["patient_id"])
+    overlap_checks = {
+        "train_val_patient_overlap": len(train_patients & val_patients),
+        "train_test_patient_overlap": len(train_patients & test_patients),
+        "val_test_patient_overlap": len(val_patients & test_patients),
+    }
+    failed_checks = {key: value for key, value in overlap_checks.items() if value != 0}
+    if failed_checks:
+        raise RuntimeError(f"Locked split patient overlap audit failed: {failed_checks}")
+
+    return {
+        "train_ids": train_ids,
+        "val_ids": val_ids,
+        "test_ids": test_ids,
+        "holdout_split_csv": str(holdout_path),
+        "cv_split_csv": str(cv_path),
+        "cv_fold": int(cv_fold),
+        "num_train_rows": len(train_ids),
+        "num_val_rows": len(val_ids),
+        "num_test_rows": len(test_ids),
+        "num_train_patients": len(train_patients),
+        "num_val_patients": len(val_patients),
+        "num_test_patients": len(test_patients),
+        "overlap_checks": overlap_checks,
+    }
 
 
 def build_estimator(
@@ -386,7 +578,9 @@ def build_estimator(
     negative_count = max(int(len(y_train) - positive_count), 1)
     scale_pos_weight = negative_count / positive_count
 
-    if model_name in {"logistic_regression", "svm", "mlp"} and device_uses_cuda(device):
+    if model_name in {"logistic_regression", "svm", "mlp", "ft_transformer", "ft_transformer_external"} and (
+        device_uses_cuda(device) or model_name in {"ft_transformer", "ft_transformer_external"}
+    ):
         return build_torch_estimator(
             model_name,
             hyperparameters,
@@ -408,6 +602,13 @@ def build_estimator(
 
         preprocessor = build_preprocessor(numeric_columns, categorical_columns)
         estimator = build_xgboost_estimator(hyperparameters, scale_pos_weight=scale_pos_weight, device=device)
+        return Pipeline([("preprocessor", preprocessor), ("estimator", estimator)])
+
+    if model_name == "lightgbm":
+        from sklearn.pipeline import Pipeline
+
+        preprocessor = build_preprocessor(numeric_columns, categorical_columns)
+        estimator = build_lightgbm_estimator(hyperparameters, scale_pos_weight=scale_pos_weight, device=device)
         return Pipeline([("preprocessor", preprocessor), ("estimator", estimator)])
 
     if model_name == "catboost":
@@ -451,19 +652,22 @@ class CatBoostWrapper:
         return self.estimator.predict_proba(self._prepare(X))
 
 
-def evaluate_predictions(estimator, X, y_true) -> dict[str, float]:
-    y_pred = estimator.predict(X)
+def predict_probabilities(estimator, X, y_true) -> tuple[list[int], list[float]]:
     if hasattr(estimator, "predict_proba"):
         y_score = estimator.predict_proba(X)[:, 1]
     elif hasattr(estimator, "decision_function"):
         y_score = estimator.decision_function(X)
     else:
-        y_score = y_pred
+        y_score = estimator.predict(X)
 
     labels = [int(value) for value in y_true.tolist()]
-    predictions = [int(value) for value in list(y_pred)]
     probabilities = [float(value) for value in list(y_score)]
-    return binary_classification_metrics(labels, predictions, probabilities)
+    return labels, probabilities
+
+
+def evaluate_predictions(estimator, X, y_true, *, threshold: float) -> dict[str, float]:
+    labels, probabilities = predict_probabilities(estimator, X, y_true)
+    return thresholded_binary_classification_metrics(labels, probabilities, threshold=threshold)
 
 
 def normalize_param_value(value: Any) -> Any:

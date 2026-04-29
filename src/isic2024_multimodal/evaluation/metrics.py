@@ -57,6 +57,54 @@ def binary_classification_metrics(
     }
 
 
+def thresholded_binary_classification_metrics(
+    labels: list[int],
+    probabilities: list[float],
+    *,
+    threshold: float,
+    min_tpr: float = PRIMARY_MIN_TPR,
+) -> dict[str, float]:
+    predictions = [int(float(probability) >= threshold) for probability in probabilities]
+    metrics = binary_classification_metrics(labels, predictions, probabilities, min_tpr=min_tpr)
+    metrics["threshold"] = float(threshold)
+    return metrics
+
+
+def select_threshold_by_f1(labels: list[int], probabilities: list[float]) -> float:
+    if len(labels) != len(probabilities):
+        raise ValueError("labels and probabilities must have the same length")
+    if not labels:
+        raise ValueError("Cannot select threshold from an empty validation set")
+
+    candidate_thresholds = sorted({float(probability) for probability in probabilities})
+    if not candidate_thresholds:
+        return 0.5
+
+    best_threshold = candidate_thresholds[0]
+    best_score = -1.0
+    for threshold in candidate_thresholds:
+        predictions = [int(float(probability) >= threshold) for probability in probabilities]
+        score = _f1_from_predictions(labels, predictions)
+        if score > best_score or (score == best_score and abs(threshold - 0.5) < abs(best_threshold - 0.5)):
+            best_score = score
+            best_threshold = threshold
+    return float(best_threshold)
+
+
+def _f1_from_predictions(labels: list[int], predictions: list[int]) -> float:
+    tp = fp = fn = 0
+    for label, pred in zip(labels, predictions, strict=True):
+        if label == 1 and pred == 1:
+            tp += 1
+        elif label == 0 and pred == 1:
+            fp += 1
+        elif label == 1 and pred == 0:
+            fn += 1
+    precision = _safe_div(tp, tp + fp)
+    recall = _safe_div(tp, tp + fn)
+    return _safe_div(2 * precision * recall, precision + recall)
+
+
 def roc_auc_score(labels: list[int], probabilities: list[float]) -> float:
     positives = sum(1 for value in labels if value == 1)
     negatives = len(labels) - positives

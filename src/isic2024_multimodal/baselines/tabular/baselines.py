@@ -5,8 +5,11 @@ from typing import Any
 
 import numpy as np
 
-from isic2024_multimodal.features.tabular_terms import ORACLE, RELAXED, STRICT_BASE, STRICT_FE, STRICT_MAIN_INPUT
+from isic2024_multimodal.features.tabular_terms import STRICT_BASE, STRICT_FE, STRICT_MAIN_INPUT
 from isic2024_multimodal.models.tabular.torch_estimator import TorchTabularEstimator
+
+
+DEFAULT_STRICT_FEATURE_SETS = [STRICT_BASE, STRICT_FE, STRICT_MAIN_INPUT]
 
 
 @dataclass(frozen=True)
@@ -21,7 +24,7 @@ MODEL_SPECS: dict[str, TabularModelSpec] = {
         name="logistic_regression",
         family="sklearn",
         search_space={
-            "feature_set": [STRICT_BASE, STRICT_FE, STRICT_MAIN_INPUT, RELAXED, ORACLE],
+            "feature_set": DEFAULT_STRICT_FEATURE_SETS,
             "model_name": ["logistic_regression"],
             "C": [1.0],
             "max_iter": [1000],
@@ -31,7 +34,7 @@ MODEL_SPECS: dict[str, TabularModelSpec] = {
         name="svm",
         family="sklearn",
         search_space={
-            "feature_set": [STRICT_BASE, STRICT_FE, STRICT_MAIN_INPUT, RELAXED, ORACLE],
+            "feature_set": DEFAULT_STRICT_FEATURE_SETS,
             "model_name": ["svm"],
             "C": [1.0],
             "max_iter": [20000],
@@ -41,7 +44,7 @@ MODEL_SPECS: dict[str, TabularModelSpec] = {
         name="mlp",
         family="sklearn",
         search_space={
-            "feature_set": [STRICT_BASE, STRICT_FE, STRICT_MAIN_INPUT, RELAXED, ORACLE],
+            "feature_set": DEFAULT_STRICT_FEATURE_SETS,
             "model_name": ["mlp"],
             "hidden_layer_sizes": [(64, 32)],
             "alpha": [0.0001],
@@ -52,7 +55,7 @@ MODEL_SPECS: dict[str, TabularModelSpec] = {
         name="xgboost",
         family="xgboost",
         search_space={
-            "feature_set": [STRICT_BASE, STRICT_FE, STRICT_MAIN_INPUT, RELAXED, ORACLE],
+            "feature_set": DEFAULT_STRICT_FEATURE_SETS,
             "model_name": ["xgboost"],
             "n_estimators": [200],
             "max_depth": [6],
@@ -65,11 +68,56 @@ MODEL_SPECS: dict[str, TabularModelSpec] = {
         name="catboost",
         family="catboost",
         search_space={
-            "feature_set": [STRICT_BASE, STRICT_FE, STRICT_MAIN_INPUT, RELAXED, ORACLE],
+            "feature_set": DEFAULT_STRICT_FEATURE_SETS,
             "model_name": ["catboost"],
             "iterations": [300],
             "depth": [6],
             "learning_rate": [0.05],
+        },
+    ),
+    "lightgbm": TabularModelSpec(
+        name="lightgbm",
+        family="lightgbm",
+        search_space={
+            "feature_set": DEFAULT_STRICT_FEATURE_SETS,
+            "model_name": ["lightgbm"],
+            "n_estimators": [300],
+            "num_leaves": [31],
+            "learning_rate": [0.05],
+            "subsample": [0.8],
+            "colsample_bytree": [0.8],
+        },
+    ),
+    "ft_transformer": TabularModelSpec(
+        name="ft_transformer",
+        family="torch",
+        search_space={
+            "feature_set": DEFAULT_STRICT_FEATURE_SETS,
+            "model_name": ["ft_transformer"],
+            "max_iter": [50],
+            "learning_rate": [0.001],
+            "weight_decay": [0.00001],
+            "d_token": [64],
+            "n_blocks": [2],
+            "n_heads": [4],
+            "attention_dropout": [0.1],
+            "ffn_dropout": [0.1],
+        },
+    ),
+    "ft_transformer_external": TabularModelSpec(
+        name="ft_transformer_external",
+        family="torch_external",
+        search_space={
+            "feature_set": DEFAULT_STRICT_FEATURE_SETS,
+            "model_name": ["ft_transformer_external"],
+            "max_iter": [50],
+            "learning_rate": [0.001],
+            "weight_decay": [0.00001],
+            "d_token": [64],
+            "n_blocks": [2],
+            "n_heads": [4],
+            "attention_dropout": [0.1],
+            "ffn_dropout": [0.1],
         },
     ),
 }
@@ -208,6 +256,26 @@ def build_catboost_estimator(hyperparameters: dict[str, Any], *, device: str = "
     else:
         estimator_kwargs["eval_metric"] = "PRAUC"
     return CatBoostClassifier(**estimator_kwargs)
+
+
+def build_lightgbm_estimator(hyperparameters: dict[str, Any], scale_pos_weight: float, *, device: str = "cpu"):
+    try:
+        from lightgbm import LGBMClassifier
+    except ImportError as exc:
+        raise ImportError("lightgbm is required for the lightgbm tabular baseline.") from exc
+
+    estimator_kwargs = dict(
+        objective="binary",
+        random_state=int(hyperparameters["seed"]),
+        scale_pos_weight=scale_pos_weight,
+        verbose=-1,
+        **strip_common_hyperparameters(hyperparameters),
+    )
+    if device_uses_cuda(device):
+        estimator_kwargs["device_type"] = "gpu"
+    else:
+        estimator_kwargs["n_jobs"] = 1
+    return LGBMClassifier(**estimator_kwargs)
 
 
 def build_torch_estimator(

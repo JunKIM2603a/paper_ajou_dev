@@ -86,7 +86,7 @@ def recommend_feature_sets_from_final_inputs(eda_dir: str | Path) -> dict[str, o
         "rationales": {
             STRICT_BASE: [
                 "notebook final_inputs의 strict_base_columns를 사용합니다.",
-                "전처리된 base metadata만으로 구성된 tabular 기준선입니다.",
+                "strict_input 후보 중 전처리된 base tabular metadata만으로 구성된 기준선입니다.",
             ],
             STRICT_FE: [
                 "notebook final_inputs의 strict_fe_columns를 사용합니다.",
@@ -94,11 +94,11 @@ def recommend_feature_sets_from_final_inputs(eda_dir: str | Path) -> dict[str, o
             ],
             STRICT_MAIN_INPUT: [
                 "notebook final_inputs의 strict_main_input_columns를 사용합니다.",
-                "현재 논문 본선 기준의 메인 tabular 입력 세트입니다.",
+                "현재 논문 본선 기준인 strict_input 계약의 구현 산출물입니다.",
             ],
             RELAXED: [
                 "notebook final_inputs의 relaxed_columns를 사용합니다.",
-                f"{STRICT_MAIN_INPUT}에 provenance/context 컬럼을 일부 추가한 보조 비교 세트입니다.",
+                f"{STRICT_MAIN_INPUT}에 provenance/context 컬럼을 일부 추가한 sensitivity check이며 메인 inference input 후보가 아닙니다.",
             ],
         },
         "evidence": evidence,

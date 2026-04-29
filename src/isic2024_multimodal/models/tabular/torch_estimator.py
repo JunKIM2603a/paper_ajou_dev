@@ -203,6 +203,21 @@ class TorchTabularEstimator:
         if self.model_name == "mlp":
             hidden_layer_sizes = self.hyperparameters.get("hidden_layer_sizes", (64, 32))
             return _MLPBinaryModel(input_dim, hidden_layer_sizes=tuple(hidden_layer_sizes))
+        if self.model_name == "ft_transformer":
+            from isic2024_multimodal.models.tabular.ft_transformer import FTTransformerBinaryModel
+
+            return FTTransformerBinaryModel(
+                input_dim,
+                d_token=int(self.hyperparameters.get("d_token", 64)),
+                n_blocks=int(self.hyperparameters.get("n_blocks", 2)),
+                n_heads=int(self.hyperparameters.get("n_heads", 4)),
+                attention_dropout=float(self.hyperparameters.get("attention_dropout", 0.1)),
+                ffn_dropout=float(self.hyperparameters.get("ffn_dropout", 0.1)),
+            )
+        if self.model_name == "ft_transformer_external":
+            from isic2024_multimodal.models.tabular.ft_transformer import build_external_ft_transformer_binary_model
+
+            return build_external_ft_transformer_binary_model(input_dim, self.hyperparameters)
         raise ValueError(f"Unsupported torch tabular model: {self.model_name}")
 
     def _max_epochs(self) -> int:
@@ -220,6 +235,8 @@ class TorchTabularEstimator:
             return 5e-2
         if self.model_name == "mlp":
             return 1e-3
+        if self.model_name in {"ft_transformer", "ft_transformer_external"}:
+            return float(self.hyperparameters.get("learning_rate", 1e-3))
         return 1e-3
 
     def _weight_decay(self, num_rows: int) -> float:
@@ -228,6 +245,8 @@ class TorchTabularEstimator:
             return 1.0 / (c_value * max(num_rows, 1))
         if self.model_name == "mlp":
             return float(self.hyperparameters.get("alpha", 1e-4))
+        if self.model_name in {"ft_transformer", "ft_transformer_external"}:
+            return float(self.hyperparameters.get("weight_decay", 1e-5))
         return 0.0
 
     def _svm_c_scale(self) -> float:

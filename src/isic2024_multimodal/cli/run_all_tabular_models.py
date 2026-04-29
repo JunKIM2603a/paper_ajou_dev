@@ -22,7 +22,16 @@ from isic2024_multimodal.utils.runtime_env import (
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = PACKAGE_ROOT.parent
 REPO_ROOT = SRC_ROOT.parent
-DEFAULT_MODELS = ["logistic_regression", "svm", "mlp", "xgboost", "catboost"]
+DEFAULT_MODELS = [
+    "logistic_regression",
+    "svm",
+    "mlp",
+    "xgboost",
+    "catboost",
+    "lightgbm",
+    "ft_transformer",
+    "ft_transformer_external",
+]
 DEFAULT_FEATURE_SETS = ["strict_base", "strict_fe", "strict_main_input"]
 
 
@@ -42,8 +51,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--tracking-uri", default=get_repo_default_mlflow_tracking_uri())
     parser.add_argument("--experiment-name", default="ISIC2024-Tabular-Baselines")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
-    parser.add_argument("--test-size", type=float, default=0.2)
-    parser.add_argument("--validation-size", type=float, default=0.2)
+    parser.add_argument("--split-seed", type=int, default=DEFAULT_SEED)
+    parser.add_argument("--cv-fold", type=int, default=0)
+    parser.add_argument("--holdout-split-csv", default="data/splits/isic2024_train_validation_test_split_seed42.csv")
+    parser.add_argument("--cv-split-csv", default="data/splits/isic2024_train_validation_5fold_seed42.csv")
+    parser.add_argument("--max-train-rows", type=int, default=None)
+    parser.add_argument("--max-val-rows", type=int, default=None)
+    parser.add_argument("--max-test-rows", type=int, default=None)
     parser.add_argument("--devices", nargs="*", type=int, default=None, help="Visible GPU indices to run in parallel.")
     parser.add_argument("--models", nargs="*", default=DEFAULT_MODELS)
     parser.add_argument("--feature-sets", nargs="*", default=DEFAULT_FEATURE_SETS)
@@ -163,16 +177,26 @@ def build_command(model_name: str, args: argparse.Namespace, *, device: int | No
         args.tracking_uri,
         "--seed",
         str(args.seed),
-        "--test-size",
-        str(args.test_size),
-        "--validation-size",
-        str(args.validation_size),
+        "--split-seed",
+        str(args.split_seed),
+        "--cv-fold",
+        str(args.cv_fold),
+        "--holdout-split-csv",
+        str(resolve_repo_path(args.holdout_split_csv)),
+        "--cv-split-csv",
+        str(resolve_repo_path(args.cv_split_csv)),
         "--models",
         model_name,
     ]
     if args.feature_sets:
         command.append("--feature-sets")
         command.extend(args.feature_sets)
+    if args.max_train_rows is not None:
+        command.extend(["--max-train-rows", str(args.max_train_rows)])
+    if args.max_val_rows is not None:
+        command.extend(["--max-val-rows", str(args.max_val_rows)])
+    if args.max_test_rows is not None:
+        command.extend(["--max-test-rows", str(args.max_test_rows)])
     if device is not None:
         command.extend(["--device", "cuda"])
     return command
