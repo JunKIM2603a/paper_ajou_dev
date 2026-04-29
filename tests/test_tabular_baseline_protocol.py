@@ -8,6 +8,12 @@ import pandas as pd
 from isic2024_multimodal.baselines.tabular.baselines import build_lightgbm_estimator
 from isic2024_multimodal.cli.run_tabular_baseline import load_locked_split_definition, select_trial_score
 from isic2024_multimodal.evaluation.metrics import select_threshold_by_f1, thresholded_binary_classification_metrics
+from isic2024_multimodal.features.tabular_missing import (
+    CATEGORICAL_MISSING_VALUE,
+    CatBoostMissingValuePreprocessor,
+    build_tabular_preprocessor,
+    missing_value_policy_summary,
+)
 
 
 def write_split_csvs(tmp_path):
@@ -118,6 +124,73 @@ def test_lightgbm_builder_receives_train_only_scale_pos_weight(monkeypatch) -> N
     assert captured_kwargs["n_estimators"] == 10
     assert "model_name" not in captured_kwargs
     assert "feature_set" not in captured_kwargs
+
+
+def test_tabular_preprocessor_uses_train_median_and_missing_category() -> None:
+    train = pd.DataFrame(
+        {
+            "age_approx": [10.0, None, 30.0],
+            "sex": ["male", None, "female"],
+            "anatom_site_general": [None, "torso", "lower extremity"],
+        }
+    )
+    val = pd.DataFrame(
+        {
+            "age_approx": [None],
+            "sex": [None],
+            "anatom_site_general": ["head/neck"],
+        }
+    )
+
+    preprocessor = build_tabular_preprocessor(
+        numeric_columns=["age_approx"],
+        categorical_columns=["sex", "anatom_site_general"],
+    )
+    train_matrix = preprocessor.fit_transform(train)
+    val_matrix = preprocessor.transform(val)
+
+    numeric_imputer = preprocessor.named_transformers_["numeric"].named_steps["imputer"]
+    categorical_imputer = preprocessor.named_transformers_["categorical"].named_steps["imputer"]
+
+    assert numeric_imputer.statistics_.tolist() == [20.0]
+    assert categorical_imputer.statistics_.tolist() == [CATEGORICAL_MISSING_VALUE, CATEGORICAL_MISSING_VALUE]
+    assert train_matrix[1, 1] == 1.0
+    assert val_matrix[0, 1] == 1.0
+
+
+def test_catboost_missing_preprocessor_preserves_native_categoricals() -> None:
+    train = pd.DataFrame(
+        {
+            "age_approx": [20.0, None, 60.0],
+            "tbp_lv_A": [1.0, None, 3.0],
+            "sex": ["male", None, "female"],
+        }
+    )
+    val = pd.DataFrame({"age_approx": [None], "tbp_lv_A": [None], "sex": [None]})
+    preprocessor = CatBoostMissingValuePreprocessor(
+        numeric_columns=["age_approx", "tbp_lv_A"],
+        categorical_columns=["sex"],
+    )
+
+    train_prepared = preprocessor.fit_transform(train)
+    val_prepared = preprocessor.transform(val)
+
+    assert preprocessor.numeric_medians_ == {"age_approx": 40.0, "tbp_lv_A": 2.0}
+    assert train_prepared.loc[1, "age_approx"] == 40.0
+    assert train_prepared.loc[1, "age_approx__missing"] == 1
+    assert val_prepared.loc[0, "age_approx"] == 40.0
+    assert val_prepared.loc[0, "age_approx__missing"] == 1
+    assert val_prepared.loc[0, "sex"] == CATEGORICAL_MISSING_VALUE
+    assert "sex__missing" not in val_prepared.columns
+
+
+def test_missing_value_policy_is_logged_as_explicit_contract() -> None:
+    policy = missing_value_policy_summary()
+
+    assert policy["numeric_imputation"] == "train_median"
+    assert policy["categorical_imputation"] == "constant___missing__"
+    assert policy["numeric_missing_indicators"] == ["age_approx"]
+    assert policy["catboost_categorical_handling"] == "native_cat_features_with___missing__"
 
 
 def test_repo_native_ft_transformer_forward_shape() -> None:

@@ -5,6 +5,7 @@ from typing import Any
 
 import numpy as np
 
+from isic2024_multimodal.features.tabular_missing import build_tabular_preprocessor
 from isic2024_multimodal.features.tabular_terms import STRICT_BASE, STRICT_FE, STRICT_MAIN_INPUT
 from isic2024_multimodal.models.tabular.torch_estimator import TorchTabularEstimator
 
@@ -141,39 +142,7 @@ def split_feature_types(frame) -> tuple[list[str], list[str]]:
 
 
 def build_preprocessor(numeric_columns: list[str], categorical_columns: list[str]):
-    from sklearn.compose import ColumnTransformer
-    from sklearn.impute import SimpleImputer
-    from sklearn.pipeline import Pipeline
-    from sklearn.preprocessing import OneHotEncoder, StandardScaler
-
-    transformers = []
-    if numeric_columns:
-        transformers.append(
-            (
-                "numeric",
-                Pipeline(
-                    steps=[
-                        ("imputer", SimpleImputer(strategy="median")),
-                        ("scaler", StandardScaler()),
-                    ]
-                ),
-                numeric_columns,
-            )
-        )
-    if categorical_columns:
-        transformers.append(
-            (
-                "categorical",
-                Pipeline(
-                    steps=[
-                        ("imputer", SimpleImputer(strategy="most_frequent")),
-                        ("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
-                    ]
-                ),
-                categorical_columns,
-            )
-        )
-    return ColumnTransformer(transformers=transformers)
+    return build_tabular_preprocessor(numeric_columns, categorical_columns)
 
 
 def build_sklearn_estimator(model_name: str, hyperparameters: dict[str, Any]):

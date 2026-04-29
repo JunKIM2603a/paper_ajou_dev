@@ -202,6 +202,7 @@ def main() -> None:
                     "threshold_source": "validation_f1",
                     "selected_feature_sets": ",".join(sorted(available_feature_sets)),
                     "runtime_device": args.device,
+                    **missing_value_policy_params(),
                 }
             )
 
@@ -261,6 +262,7 @@ def main() -> None:
                     mlflow.log_param("feature_count", len(features))
                     mlflow.log_param("feature_set", feature_set_name)
                     mlflow.log_param("runtime_device", args.device)
+                    mlflow.log_params(missing_value_policy_params(summary["missing_value_policy"]))
                     mlflow.log_dict(summary["split_summary"], "split_summary.json")
                     mlflow.log_dict(summary["metrics"], "metrics.json")
                     mlflow.log_dict(summary["hyperparameters"], "hyperparameters.json")
@@ -387,6 +389,8 @@ def train_and_evaluate(
     max_val_rows: int | None = None,
     max_test_rows: int | None = None,
 ) -> dict[str, Any]:
+    from isic2024_multimodal.features.tabular_missing import missing_value_policy_summary
+
     start = time.time()
     output_dir.mkdir(parents=True, exist_ok=True)
     seed = int(hyperparameters["seed"])
@@ -443,6 +447,7 @@ def train_and_evaluate(
         "threshold_source": "validation_f1",
         "selected_threshold": selected_threshold,
         "split_source": "locked_split_csv",
+        "missing_value_policy": missing_value_policy_summary(),
         "split_summary": {
             "num_train_rows": int(len(X_train)),
             "num_val_rows": int(len(X_val)),
@@ -574,6 +579,8 @@ def build_estimator(
     categorical_columns,
     device: str,
 ):
+    from isic2024_multimodal.features.tabular_missing import CatBoostMissingValuePreprocessor
+
     positive_count = max(int(y_train.sum()), 1)
     negative_count = max(int(len(y_train) - positive_count), 1)
     scale_pos_weight = negative_count / positive_count
@@ -612,38 +619,29 @@ def build_estimator(
         return Pipeline([("preprocessor", preprocessor), ("estimator", estimator)])
 
     if model_name == "catboost":
-        import pandas as pd
-
-        train_frame = X_train.copy()
-        for column in categorical_columns:
-            train_frame[column] = train_frame[column].fillna("__missing__").astype(str)
-        for column in numeric_columns:
-            train_frame[column] = pd.to_numeric(train_frame[column], errors="coerce")
+        preprocessor = CatBoostMissingValuePreprocessor(
+            numeric_columns=list(numeric_columns),
+            categorical_columns=list(categorical_columns),
+        )
+        train_frame = preprocessor.fit_transform(X_train)
         estimator = build_catboost_estimator(hyperparameters, device=device)
         estimator.fit(train_frame, y_train, cat_features=categorical_columns)
-        return CatBoostWrapper(estimator=estimator, categorical_columns=categorical_columns, numeric_columns=numeric_columns)
+        return CatBoostWrapper(estimator=estimator, preprocessor=preprocessor, categorical_columns=categorical_columns)
 
     raise ValueError(f"Unsupported tabular model: {model_name}")
 
 
 class CatBoostWrapper:
-    def __init__(self, *, estimator, categorical_columns: list[str], numeric_columns: list[str]) -> None:
+    def __init__(self, *, estimator, preprocessor, categorical_columns: list[str]) -> None:
         self.estimator = estimator
+        self.preprocessor = preprocessor
         self.categorical_columns = categorical_columns
-        self.numeric_columns = numeric_columns
 
     def fit(self, X, y):
         return self
 
     def _prepare(self, X):
-        import pandas as pd
-
-        frame = X.copy()
-        for column in self.categorical_columns:
-            frame[column] = frame[column].fillna("__missing__").astype(str)
-        for column in self.numeric_columns:
-            frame[column] = pd.to_numeric(frame[column], errors="coerce")
-        return frame
+        return self.preprocessor.transform(X)
 
     def predict(self, X):
         return self.estimator.predict(self._prepare(X))
@@ -674,6 +672,19 @@ def normalize_param_value(value: Any) -> Any:
     if isinstance(value, tuple):
         return list(value)
     return value
+
+
+def missing_value_policy_params(policy: dict[str, Any] | None = None) -> dict[str, Any]:
+    from isic2024_multimodal.features.tabular_missing import missing_value_policy_summary
+
+    payload = policy or missing_value_policy_summary()
+    params = {}
+    for key, value in payload.items():
+        if isinstance(value, list):
+            params[key] = ",".join(str(item) for item in value)
+        else:
+            params[key] = value
+    return params
 
 
 def validate_runtime_device(device: str) -> None:

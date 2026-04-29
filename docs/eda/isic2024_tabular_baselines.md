@@ -19,6 +19,105 @@ ft_transformer_external
 
 `ft_transformer`는 repo-native PyTorch implementation이다. `ft_transformer_external`은 optional `rtdl_revisiting_models` dependency가 필요하며, package가 없으면 해당 모델만 명확한 ImportError로 실패한다.
 
+## Missing Value Policy
+
+Strict tabular baseline의 결측치 처리는 training pipeline 안에서만 수행한다. Export 단계는 raw strict input 값을 보존하고 결측치를 채우지 않는다.
+
+현재 strict input에서 결측이 관측된 model feature는 다음과 같다.
+
+```text
+age_approx
+sex
+anatom_site_general
+```
+
+`lesion_id`도 결측이 많지만 identifier이므로 모델 결측 처리 대상이 아니다. `isic_id`, `patient_id`, `lesion_id`는 split과 audit metadata로만 사용한다.
+
+`iddx_full`, diagnosis text, pathology-derived fields, `iddx_1`-`iddx_5`, `mel_mitotic_index`, `mel_thick_mm`는 strict baseline 입력이 아니다. 이 컬럼들은 결측 처리, feature engineering, inference input에 포함하지 않는다.
+
+모든 imputer, encoder, scaler는 fold의 train split에서만 fit한다. Validation/test는 train-fitted transform만 적용한다.
+
+모델별 정책은 다음과 같다.
+
+```text
+logistic_regression, svm, mlp, xgboost, lightgbm, ft_transformer, ft_transformer_external
+  numeric: train median imputation
+  numeric missing indicator: age_approx__missing
+  categorical: constant "__missing__" fill + one-hot encoding
+
+catboost
+  numeric: train median imputation
+  numeric missing indicator: age_approx__missing
+  categorical: constant "__missing__" fill
+  categorical encoding: one-hot을 하지 않고 CatBoost native cat_features로 전달
+```
+
+CatBoost의 categorical 처리는 다른 모델과 의도적으로 다르다. CatBoost는 categorical feature를 native categorical 입력으로 받을 수 있으므로, categorical 결측은 `__missing__` 문자열 category로 보존하고 `cat_features`에 포함한다. Numeric 결측 정책은 다른 모델과 비교 가능하도록 train median + missing indicator로 통일한다.
+
+## GPU Runtime Policy
+
+Tabular baseline은 기본적으로 CPU에서 실행한다. GPU를 사용하려면 단일 runner에는 `--device cuda`, all-model runner에는 `--devices`를 명시한다.
+
+GPU 사용 전에는 `paper` 환경에서 PyTorch CUDA가 실제 GPU를 볼 수 있는지 확인한다.
+
+```bash
+conda run -n paper python -c "import torch; print(torch.__version__); print(torch.version.cuda); print(torch.cuda.is_available()); print(torch.cuda.device_count())"
+```
+
+`torch.cuda.is_available()`가 `True`이고 `torch.cuda.device_count()`가 1 이상이어야 GPU 실행이 가능하다. Driver 535 / CUDA 12.x 환경에서는 CUDA 13 wheel이 맞지 않으므로, 현재 확인한 기준은 다음과 같다.
+
+```text
+torch==2.5.1+cu121
+torchvision==0.20.1+cu121
+torchaudio==2.5.1+cu121
+lightgbm==4.6.0
+```
+
+모델별 GPU 처리 방식은 다음과 같다.
+
+```text
+xgboost
+  GPU option: device="cuda", tree_method="hist"
+
+catboost
+  GPU option: task_type="GPU"
+  categorical input: native cat_features 유지
+
+lightgbm
+  GPU option: device_type="gpu"
+
+ft_transformer, ft_transformer_external
+  PyTorch tensor/model을 CUDA device에 올려 학습
+
+logistic_regression, svm, mlp
+  CPU 기본값: sklearn estimator
+  --device cuda 사용 시: repo-native torch estimator
+```
+
+따라서 paper-facing tabular baseline 비교에서 `logistic_regression`, `svm`, `mlp`의 CPU 결과와 GPU 결과는 같은 estimator 구현으로 해석하지 않는다. GPU 실행은 주로 `xgboost`, `catboost`, `lightgbm`, `ft_transformer`, `ft_transformer_external`에 사용한다.
+
+단일 GPU 실행:
+
+```bash
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_tabular_baseline \
+  --dataset-root data/raw \
+  --models xgboost catboost lightgbm ft_transformer ft_transformer_external \
+  --feature-sets strict_main_input \
+  --device cuda
+```
+
+여러 GPU 병렬 실행:
+
+```bash
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_all_tabular_models \
+  --dataset-root data/raw \
+  --models xgboost catboost lightgbm ft_transformer ft_transformer_external \
+  --feature-sets strict_main_input \
+  --devices 0 1
+```
+
+`run_all_tabular_models --devices 0 1`은 모델별 subprocess에 `CUDA_VISIBLE_DEVICES`를 하나씩 배정하고, 각 subprocess에 `--device cuda`를 전달한다. GPU가 보이지 않거나 PyTorch CUDA 초기화가 실패하면 runner가 실행 전에 중단된다.
+
 ## Split Protocol
 
 기본 실행은 locked split artifacts를 사용한다.
@@ -67,6 +166,15 @@ PYTHONPATH=./src python -m isic2024_multimodal.cli.run_tabular_baseline \
   --feature-sets strict_main_input
 ```
 
+GPU paper-facing candidate run:
+
+```bash
+PYTHONPATH=./src python -m isic2024_multimodal.cli.run_tabular_baseline \
+  --models xgboost catboost lightgbm ft_transformer ft_transformer_external \
+  --feature-sets strict_main_input \
+  --device cuda
+```
+
 All-model runner:
 
 ```bash
@@ -96,6 +204,7 @@ selected_threshold
 train/val/test metrics
 numeric_columns
 categorical_columns
+missing_value_policy
 ```
 
 Generated outputs belong under:

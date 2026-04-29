@@ -216,6 +216,7 @@ def build_export_summary(
     cv_counts = summarize_cv_split(frame, cv_split_frame)
     overlap_summary = summarize_patient_overlap(holdout_split_frame, cv_split_frame)
     disallowed_present = sorted(set(strict_frame.columns) & DISALLOWED_MAIN_COLUMNS)
+    missingness_summary = summarize_missingness(frame)
 
     return {
         "dataset_name": "isic2024_strict_input_iddx_full_contract",
@@ -251,6 +252,7 @@ def build_export_summary(
         },
         "holdout_summary": holdout_counts,
         "cv_summary": cv_counts,
+        "missingness_summary": missingness_summary,
         "overlap_summary": overlap_summary,
         "leakage_controls": {
             "patient_disjoint_holdout": overlap_summary["train_validation_test_patient_overlap"] == 0,
@@ -260,6 +262,31 @@ def build_export_summary(
             "train_only_preprocessing_performed": False,
         },
     }
+
+
+def summarize_missingness(frame) -> list[dict[str, Any]]:
+    row_count = max(int(len(frame)), 1)
+    rows = []
+    column_roles = {
+        **{column: "identifier" for column in IDENTIFIER_COLUMNS},
+        **{column: "feature" for column in STRICT_INPUT_COLUMNS},
+        **{column: "privileged_excluded" for column in DISALLOWED_MAIN_COLUMNS if column in frame.columns},
+    }
+    for column, role in column_roles.items():
+        if column not in frame.columns:
+            continue
+        missing_count = int(frame[column].isna().sum())
+        if missing_count == 0:
+            continue
+        rows.append(
+            {
+                "column": column,
+                "role": role,
+                "missing_count": missing_count,
+                "missing_rate": missing_count / row_count,
+            }
+        )
+    return sorted(rows, key=lambda item: (-item["missing_count"], item["column"]))
 
 
 def summarize_holdout_split(frame, holdout_split_frame) -> list[dict[str, Any]]:

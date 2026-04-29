@@ -36,7 +36,9 @@ isic2024_multimodal/
 
 ## 기본 경로
 
-- Dataset root: `data/raw/isic_2024_challenge`
+- Dataset root: `data/raw`
+  - 현재 로컬 raw 파일은 `data/raw/train-metadata.csv`, `data/raw/train-image/image/` 형태로 배치되어 있다.
+  - 새 raw data를 정리할 때는 `data/raw/isic_2024_challenge/` 아래에 두는 것을 권장한다.
 - Image baseline config: `experiments/configs/image_baselines`
 - Tabular evidence root: `experiments/evidence/eda/isic_2024`
 - Output: `experiments/outputs`
@@ -46,54 +48,281 @@ isic2024_multimodal/
 
 ## 자주 쓰는 명령
 
-프로젝트 conda 환경을 사용하고 `PYTHONPATH=./src`를 유지한다.
+모든 명령은 프로젝트 conda 환경을 사용하고 `PYTHONPATH=./src`를 유지한다. 현재 로컬 환경 이름은 `paper`이다.
+
+공통 실행 형식은 다음과 같다.
+
+```bash
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m <module>
+```
+
+- `conda run -n paper`: `paper` conda 환경에서 실행한다.
+- `ISIC2024_EXPECTED_CONDA_ENV=paper`: 일부 CLI의 conda 환경 검사를 현재 로컬 env 이름에 맞춘다.
+- `env PYTHONPATH=./src`: `src/` 아래의 `isic2024_multimodal` 패키지를 import할 수 있게 한다.
+- `python -m isic2024_multimodal.cli.<command>`: `src/isic2024_multimodal/cli/` 아래의 CLI entrypoint를 실행한다.
+
+### 1. Strict input dataset과 patient-level split 생성
 
 Strict input dataset, train-only `iddx_full` sidecar, patient-level split artifact를 생성한다. 자세한 설명은 `docs/eda/isic2024_strict_input_export.md`에 있다.
 
 ```bash
-conda run -n paper_ajou_dev env PYTHONPATH=./src python -m isic2024_multimodal.cli.export_strict_input_dataset
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.export_strict_input_dataset \
+  --dataset-root data/raw
 ```
 
+생성되는 주요 파일은 다음과 같다.
+
+- `data/processed/isic2024_strict_model_input.csv`
+  - ordinary inference-time tabular feature만 포함한다.
+  - `iddx_full`, diagnosis text, pathology-derived field는 포함하지 않는다.
+- `data/processed/isic2024_iddx_full_train_only_sidecar.csv`
+  - `iddx_full`을 `iddx_full_train_only`로 분리한 sidecar 파일이다.
+  - LUPI / privileged supervision candidate에서 training-only signal로만 사용해야 한다.
+- `data/splits/isic2024_train_validation_test_split_seed42.csv`
+  - patient-level holdout train/validation pool과 test split이다.
+- `data/splits/isic2024_train_validation_5fold_seed42.csv`
+  - train/validation pool 내부의 patient-level 5-fold split이다.
+- `experiments/evidence/validation_protocol/isic2024_strict_input_export_summary_seed42.json`
+  - column contract, split count, patient overlap audit 요약이다.
+
+기본값을 바꿔야 할 때 사용할 수 있는 주요 옵션은 다음과 같다.
+
 ```bash
-conda run -n paper_ajou_dev env PYTHONPATH=./src python -m pytest tests/test_strict_input_export.py
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.export_strict_input_dataset \
+  --dataset-root data/raw \
+  --seed 42 \
+  --test-size 0.20 \
+  --cv-folds 5
 ```
+
+주의: `data/raw/isic_2024_challenge/`는 읽기 전용 raw data 영역이다. 이 명령은 raw data를 수정하지 않고 `data/processed/`, `data/splits/`, `experiments/evidence/`에 파생 artifact를 쓴다.
+
+### 2. Strict input export 테스트
+
+```bash
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m pytest tests/test_strict_input_export.py
+```
+
+이 테스트는 strict input export 로직이 기본 contract를 지키는지 확인한다. 특히 ordinary input에 `iddx_full` 같은 privileged field가 섞이지 않았는지, patient-level split artifact가 기대 구조를 갖는지 확인하는 용도다.
+
+### 3. Tabular baseline 실행
 
 Tabular baseline은 locked split CSV와 validation-selected threshold를 사용한다. 자세한 설명은 `docs/eda/isic2024_tabular_baselines.md`에 있다.
 
+GPU 사용 전에는 `paper` 환경에서 CUDA가 보이는지 확인한다.
+
 ```bash
-conda run -n paper_ajou_dev env PYTHONPATH=./src python -m isic2024_multimodal.cli.run_tabular_baseline \
-  --models logistic_regression svm mlp xgboost catboost lightgbm ft_transformer \
+conda run -n paper python -c "import torch; print(torch.__version__); print(torch.version.cuda); print(torch.cuda.is_available()); print(torch.cuda.device_count())"
+```
+
+`torch.cuda.is_available()`가 `True`이고 GPU 수가 1 이상이어야 tabular GPU 실행이 가능하다. 현재 GPU 사용을 위해 확인한 기준 환경은 `torch 2.5.1+cu121`, `torchvision 0.20.1+cu121`, `torchaudio 2.5.1+cu121`, `lightgbm 4.6.0`이다.
+
+GPU를 사용할 수 있으면 GPU-capable tabular 모델은 기본적으로 `--device cuda`로 실행한다.
+
+```bash
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_tabular_baseline \
+  --dataset-root data/raw \
+  --models xgboost catboost lightgbm ft_transformer ft_transformer_external \
+  --feature-sets strict_main_input \
+  --device cuda
+```
+
+이 명령은 GPU-capable tabular-only baseline을 실행한다.
+
+- `--models`: 실행할 tabular model 목록이다.
+- `--feature-sets strict_main_input`: strict inference-time input feature set만 사용한다.
+- `--device cuda`: XGBoost/CatBoost/LightGBM/PyTorch 계열 모델에 GPU runtime을 요청한다.
+- 기본 split 파일:
+  - `data/splits/isic2024_train_validation_test_split_seed42.csv`
+  - `data/splits/isic2024_train_validation_5fold_seed42.csv`
+- threshold는 validation set에서 F1 기준으로 선택한다.
+- test fold는 threshold 선택, feature selection, preprocessing fitting에 사용하면 안 된다.
+
+`logistic_regression`, `svm`, `mlp`는 CPU 실행 시 sklearn estimator를 쓰지만 `--device cuda`를 주면 repo-native torch estimator로 바뀐다. Paper-facing sklearn baseline으로 비교하려면 이 세 모델은 CPU 명령으로 따로 실행한다.
+
+```bash
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_tabular_baseline \
+  --dataset-root data/raw \
+  --models logistic_regression svm mlp \
   --feature-sets strict_main_input
 ```
 
+빠른 smoke test는 모델과 row 수를 줄여서 실행한다.
+
 ```bash
-conda run -n paper_ajou_dev env PYTHONPATH=./src python -m isic2024_multimodal.cli.run_image_baseline \
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_tabular_baseline \
+  --dataset-root data/raw \
+  --models xgboost \
+  --feature-sets strict_main_input \
+  --device cuda \
+  --max-train-rows 1000 \
+  --max-val-rows 500 \
+  --max-test-rows 500
+```
+
+옵션을 생략하면 기본값이 `--device cpu`라서 GPU를 사용하지 않는다.
+
+### 4. Image baseline 단일 config 실행
+
+```bash
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_image_baseline \
+  --dataset-root data/raw \
   --config experiments/configs/image_baselines/resnet50/config.json
 ```
 
-```bash
-conda run -n paper_ajou_dev env PYTHONPATH=./src python -m isic2024_multimodal.cli.run_all_image_models
-```
+이 명령은 지정한 image baseline config 하나를 실행한다.
+
+- `--config`: image model config JSON 경로다.
+- 기본 dataset root는 `data/raw/isic_2024_challenge`다.
+- 기본 output root는 `experiments/outputs/image_baselines`다.
+- split은 image manifest의 group id를 기준으로 만든다. group id는 `patient_id`, `lesion_id`, `isic_id` 순서로 fallback한다.
+
+빠른 동작 확인은 epoch, trial, sample 수를 줄여서 실행한다.
 
 ```bash
-conda run -n paper_ajou_dev env PYTHONPATH=./src python -m isic2024_multimodal.cli.run_tabular_baseline
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_image_baseline \
+  --dataset-root data/raw \
+  --config experiments/configs/image_baselines/resnet50/config.json \
+  --max-trials 1 \
+  --epochs-override 1 \
+  --max-train-samples 256 \
+  --max-val-samples 128 \
+  --max-test-samples 128
 ```
 
-```bash
-conda run -n paper_ajou_dev env PYTHONPATH=./src python -m isic2024_multimodal.cli.run_all_tabular_models
-```
+사전학습 가중치나 외부 model hub 접근 없이 smoke test가 필요하면 다음 옵션을 추가한다.
 
 ```bash
-conda run -n paper_ajou_dev env PYTHONPATH=./src python -m isic2024_multimodal.cli.generate_reports \
+--disable-pretrained
+```
+
+### 5. 모든 image baseline 실행
+
+```bash
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_all_image_models \
+  --dataset-root data/raw
+```
+
+`experiments/configs/image_baselines/*/config.json`을 찾아 순차 실행한다. 실행 후 기본적으로 MLflow CSV/HTML report도 생성한다.
+
+자주 쓰는 옵션은 다음과 같다.
+
+```bash
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_all_image_models \
+  --dataset-root data/raw \
+  --models resnet50 \
+  --max-trials 1 \
+  --epochs-override 1 \
+  --max-train-samples 256 \
+  --max-val-samples 128 \
+  --max-test-samples 128
+```
+
+GPU를 여러 개 사용할 수 있으면 다음처럼 병렬 실행할 수 있다.
+
+```bash
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_all_image_models \
+  --dataset-root data/raw \
+  --devices 0 1
+```
+
+### 6. 모든 tabular model 실행
+
+```bash
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_all_tabular_models \
+  --dataset-root data/raw \
+  --models xgboost catboost lightgbm ft_transformer ft_transformer_external \
+  --feature-sets strict_main_input \
+  --devices 0 1
+```
+
+GPU-capable tabular model 목록을 모델 단위로 병렬 실행하고, 실행 후 report를 생성한다. `--devices 0 1`은 모델별 subprocess에 `CUDA_VISIBLE_DEVICES`를 하나씩 배정하고 각 subprocess에는 `--device cuda`를 전달한다. GPU가 보이지 않거나 PyTorch CUDA 초기화가 실패하면 실행 전에 중단된다.
+
+CPU sklearn baseline을 전체 runner로 실행하려면 GPU 옵션 없이 별도로 실행한다.
+
+```bash
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_all_tabular_models \
+  --dataset-root data/raw \
+  --models logistic_regression svm mlp \
+  --feature-sets strict_main_input
+```
+
+빠른 GPU smoke test는 모델과 row 수를 줄여서 실행한다.
+
+```bash
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_all_tabular_models \
+  --dataset-root data/raw \
+  --models xgboost \
+  --feature-sets strict_main_input \
+  --max-train-rows 1000 \
+  --max-val-rows 500 \
+  --max-test-rows 500 \
+  --devices 0 1
+```
+
+### 7. MLflow report 생성
+
+```bash
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.generate_reports \
   --experiment-name ISIC2024-Tabular-Baselines \
   --output-prefix experiments/tables/tabular_mlflow_report
 ```
 
-멀티모달 entrypoint는 향후 통합 지점으로 준비되어 있다.
+이 명령은 MLflow에 기록된 run을 CSV와 HTML로 정리한다.
+
+생성 파일은 다음과 같다.
+
+- `experiments/tables/tabular_mlflow_report.csv`
+- `experiments/tables/tabular_mlflow_report.html`
+
+기본 정렬 기준은 `best_pauc_above_tpr80`이다. ultra-rare malignant target에서는 accuracy 단독 보고가 아니라 pAUC, AUC, F1, precision, recall, balanced accuracy를 함께 확인해야 한다.
+
+### 8. Multimodal entrypoint 확인
+
+멀티모달 entrypoint는 향후 `image + strict_input` fusion 실험의 통합 지점으로 준비되어 있다.
 
 ```bash
-conda run -n paper_ajou_dev env PYTHONPATH=./src python -m isic2024_multimodal.cli.run_multimodal_experiment --help
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_multimodal_experiment --help
 ```
+
+`--help`는 실제 학습을 실행하지 않고 사용 가능한 옵션만 출력한다.
+
+### 권장 실행 순서
+
+처음 환경을 준비하거나 새 split으로 실험을 시작할 때는 다음 순서를 권장한다.
+
+```bash
+# 1. strict input과 patient-level split 생성
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.export_strict_input_dataset \
+  --dataset-root data/raw
+
+# 2. export contract 테스트
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m pytest tests/test_strict_input_export.py
+
+# 3. 빠른 tabular GPU smoke test
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_tabular_baseline \
+  --dataset-root data/raw \
+  --models xgboost \
+  --feature-sets strict_main_input \
+  --device cuda \
+  --max-train-rows 1000 \
+  --max-val-rows 500 \
+  --max-test-rows 500
+
+# 4. 결과 report 생성
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.generate_reports \
+  --experiment-name ISIC2024-Tabular-Baselines \
+  --output-prefix experiments/tables/tabular_mlflow_report
+```
+
+### 실험 안전 원칙
+
+- paper-facing 실험은 patient-level split을 사용해야 한다.
+- preprocessing, imputation, scaling, encoding, feature selection, class weight, sampler는 training fold에서만 fit해야 한다.
+- threshold는 validation set에서만 선택해야 한다.
+- `iddx_full`과 diagnosis text는 ordinary inference-time input이 아니다.
+- LUPI / privileged supervision은 `train-only privileged supervision candidate`로 명시된 실험에서만 사용한다.
+- test fold는 최종 보고용이며 model selection, threshold selection, calibration fitting에 사용하지 않는다.
 
 ## 버전 관리 원칙
 

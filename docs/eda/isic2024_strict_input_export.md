@@ -113,6 +113,8 @@ The CLI fails if critical controls fail.
 
 Train-only preprocessing belongs in later model training code and must be fit inside `cv_train` or `final_train` only.
 
+The export summary may record missingness evidence for strict input features, identifiers, and excluded privileged/reference columns. This evidence is descriptive only. The export CLI must not impute missing values, because imputation parameters must be learned separately inside each training fold.
+
 ## Current Seed 42 Evidence
 
 The generated summary file records the export evidence:

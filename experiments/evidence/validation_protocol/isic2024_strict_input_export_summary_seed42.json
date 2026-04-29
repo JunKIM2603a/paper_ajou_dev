@@ -5,7 +5,7 @@
   "cv_folds": 5,
   "sample_count_bins": 5,
   "source": {
-    "dataset_root": "data/raw/isic_2024_challenge",
+    "dataset_root": "data/raw",
     "row_count": 401059,
     "patient_count": 1042,
     "isic_id_unique": true,
@@ -137,6 +137,68 @@
       "patients": 161,
       "positive_rows": 62,
       "positive_rate_pct": 0.09662
+    }
+  ],
+  "missingness_summary": [
+    {
+      "column": "iddx_5",
+      "role": "privileged_excluded",
+      "missing_count": 401058,
+      "missing_rate": 0.9999975066012732
+    },
+    {
+      "column": "mel_mitotic_index",
+      "role": "privileged_excluded",
+      "missing_count": 401006,
+      "missing_rate": 0.9998678498674759
+    },
+    {
+      "column": "mel_thick_mm",
+      "role": "privileged_excluded",
+      "missing_count": 400996,
+      "missing_rate": 0.9998429158802071
+    },
+    {
+      "column": "iddx_4",
+      "role": "privileged_excluded",
+      "missing_count": 400508,
+      "missing_rate": 0.9986261373014943
+    },
+    {
+      "column": "iddx_3",
+      "role": "privileged_excluded",
+      "missing_count": 399994,
+      "missing_rate": 0.9973445303558828
+    },
+    {
+      "column": "iddx_2",
+      "role": "privileged_excluded",
+      "missing_count": 399991,
+      "missing_rate": 0.9973370501597022
+    },
+    {
+      "column": "lesion_id",
+      "role": "identifier",
+      "missing_count": 379001,
+      "missing_rate": 0.945000610882688
+    },
+    {
+      "column": "sex",
+      "role": "feature",
+      "missing_count": 11517,
+      "missing_rate": 0.028716473137368817
+    },
+    {
+      "column": "anatom_site_general",
+      "role": "feature",
+      "missing_count": 5756,
+      "missing_rate": 0.014352003071867231
+    },
+    {
+      "column": "age_approx",
+      "role": "feature",
+      "missing_count": 2798,
+      "missing_rate": 0.006976529637783967
     }
   ],
   "overlap_summary": {

@@ -10,6 +10,7 @@ from isic2024_multimodal.cli.export_strict_input_dataset import (
     build_holdout_split_frame,
     build_iddx_sidecar,
     build_strict_model_input,
+    summarize_missingness,
     summarize_patient_overlap,
     validate_source_frame,
 )
@@ -59,6 +60,23 @@ def test_iddx_sidecar_is_one_to_one_aligned_with_main_table() -> None:
     assert "iddx_full" not in sidecar_frame.columns
     assert strict_frame["isic_id"].equals(sidecar_frame["isic_id"])
     assert sidecar_frame["isic_id"].is_unique
+
+
+def test_missingness_summary_records_roles_without_imputation() -> None:
+    frame = make_synthetic_frame()
+    frame.loc[0, "age_approx"] = None
+    frame.loc[1, "sex"] = None
+    frame.loc[2, "lesion_id"] = None
+    frame.loc[3, "iddx_full"] = None
+
+    summary = summarize_missingness(frame)
+    by_column = {item["column"]: item for item in summary}
+
+    assert by_column["age_approx"]["role"] == "feature"
+    assert by_column["sex"]["role"] == "feature"
+    assert by_column["lesion_id"]["role"] == "identifier"
+    assert by_column["iddx_full"]["role"] == "privileged_excluded"
+    assert pd.isna(frame.loc[0, "age_approx"])
 
 
 def test_patient_disjoint_holdout_and_cv_splits() -> None:
