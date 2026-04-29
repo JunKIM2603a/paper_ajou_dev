@@ -1,0 +1,184 @@
+{
+  "dataset_name": "isic2024_strict_input_iddx_full_contract",
+  "seed": 42,
+  "test_size": 0.2,
+  "cv_folds": 5,
+  "sample_count_bins": 5,
+  "source": {
+    "dataset_root": "data/raw/isic_2024_challenge",
+    "row_count": 401059,
+    "patient_count": 1042,
+    "isic_id_unique": true,
+    "positive_rows": 393
+  },
+  "outputs": {
+    "strict_output": "data/processed/isic2024_strict_model_input.csv",
+    "iddx_sidecar_output": "data/processed/isic2024_iddx_full_train_only_sidecar.csv",
+    "holdout_split_output": "data/splits/isic2024_train_validation_test_split_seed42.csv",
+    "cv_split_output": "data/splits/isic2024_train_validation_5fold_seed42.csv",
+    "summary_output": "experiments/evidence/validation_protocol/isic2024_strict_input_export_summary_seed42.json"
+  },
+  "strict_input_contract": {
+    "identifier_columns": [
+      "isic_id",
+      "patient_id",
+      "lesion_id"
+    ],
+    "target_column": "target",
+    "strict_input_columns": [
+      "age_approx",
+      "sex",
+      "anatom_site_general",
+      "clin_size_long_diam_mm",
+      "tbp_tile_type",
+      "tbp_lv_A",
+      "tbp_lv_Aext",
+      "tbp_lv_B",
+      "tbp_lv_Bext",
+      "tbp_lv_C",
+      "tbp_lv_Cext",
+      "tbp_lv_H",
+      "tbp_lv_Hext",
+      "tbp_lv_L",
+      "tbp_lv_Lext",
+      "tbp_lv_areaMM2",
+      "tbp_lv_area_perim_ratio",
+      "tbp_lv_color_std_mean",
+      "tbp_lv_deltaA",
+      "tbp_lv_deltaB",
+      "tbp_lv_deltaL",
+      "tbp_lv_deltaLB",
+      "tbp_lv_deltaLBnorm",
+      "tbp_lv_eccentricity",
+      "tbp_lv_location",
+      "tbp_lv_location_simple",
+      "tbp_lv_minorAxisMM",
+      "tbp_lv_nevi_confidence",
+      "tbp_lv_norm_border",
+      "tbp_lv_norm_color",
+      "tbp_lv_perimeterMM",
+      "tbp_lv_radial_color_std_max",
+      "tbp_lv_stdL",
+      "tbp_lv_stdLExt",
+      "tbp_lv_symm_2axis",
+      "tbp_lv_symm_2axis_angle",
+      "tbp_lv_x",
+      "tbp_lv_y",
+      "tbp_lv_z"
+    ],
+    "strict_input_column_count": 39,
+    "disallowed_main_columns_present": [],
+    "inference_requires_iddx_full": false
+  },
+  "sidecar_contract": {
+    "columns": [
+      "isic_id",
+      "patient_id",
+      "lesion_id",
+      "target",
+      "iddx_full_train_only"
+    ],
+    "role": "train-only privileged supervision candidate sidecar",
+    "ordinary_inference_input": false,
+    "row_aligned_with_strict_input": true
+  },
+  "split_scores": {
+    "holdout_balance_score": 0.40051804680086267,
+    "cv_balance_score": 3.0795167180795278
+  },
+  "holdout_summary": [
+    {
+      "split": "test_data",
+      "rows": 80212,
+      "patients": 210,
+      "positive_rows": 79,
+      "positive_rate_pct": 0.09849
+    },
+    {
+      "split": "train_validation_data",
+      "rows": 320847,
+      "patients": 832,
+      "positive_rows": 314,
+      "positive_rate_pct": 0.09787
+    }
+  ],
+  "cv_summary": [
+    {
+      "cv_validation_fold": 0,
+      "rows": 64170,
+      "patients": 174,
+      "positive_rows": 63,
+      "positive_rate_pct": 0.09818
+    },
+    {
+      "cv_validation_fold": 1,
+      "rows": 64169,
+      "patients": 169,
+      "positive_rows": 63,
+      "positive_rate_pct": 0.09818
+    },
+    {
+      "cv_validation_fold": 2,
+      "rows": 64170,
+      "patients": 165,
+      "positive_rows": 63,
+      "positive_rate_pct": 0.09818
+    },
+    {
+      "cv_validation_fold": 3,
+      "rows": 64169,
+      "patients": 163,
+      "positive_rows": 63,
+      "positive_rate_pct": 0.09818
+    },
+    {
+      "cv_validation_fold": 4,
+      "rows": 64169,
+      "patients": 161,
+      "positive_rows": 62,
+      "positive_rate_pct": 0.09662
+    }
+  ],
+  "overlap_summary": {
+    "train_validation_test_patient_overlap": 0,
+    "cv": [
+      {
+        "cv_fold": 0,
+        "cv_train_cv_validation_patient_overlap": 0,
+        "cv_validation_test_data_patient_overlap": 0,
+        "cv_train_test_data_patient_overlap": 0
+      },
+      {
+        "cv_fold": 1,
+        "cv_train_cv_validation_patient_overlap": 0,
+        "cv_validation_test_data_patient_overlap": 0,
+        "cv_train_test_data_patient_overlap": 0
+      },
+      {
+        "cv_fold": 2,
+        "cv_train_cv_validation_patient_overlap": 0,
+        "cv_validation_test_data_patient_overlap": 0,
+        "cv_train_test_data_patient_overlap": 0
+      },
+      {
+        "cv_fold": 3,
+        "cv_train_cv_validation_patient_overlap": 0,
+        "cv_validation_test_data_patient_overlap": 0,
+        "cv_train_test_data_patient_overlap": 0
+      },
+      {
+        "cv_fold": 4,
+        "cv_train_cv_validation_patient_overlap": 0,
+        "cv_validation_test_data_patient_overlap": 0,
+        "cv_train_test_data_patient_overlap": 0
+      }
+    ]
+  },
+  "leakage_controls": {
+    "patient_disjoint_holdout": true,
+    "patient_disjoint_cv": true,
+    "iddx_full_excluded_from_strict_input": true,
+    "diagnosis_reference_columns_excluded_from_strict_input": true,
+    "train_only_preprocessing_performed": false
+  }
+}
