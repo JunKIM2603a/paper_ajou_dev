@@ -16,6 +16,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--tracking-uri", default=get_default_mlflow_tracking_uri())
     parser.add_argument("--experiment-name", default="ISIC2024-Multimodal")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    parser.add_argument("--run-group-id", default=None)
+    parser.add_argument("--dataset-id", default=None)
+    parser.add_argument("--dataset-spec", default=None)
+    parser.add_argument("--model-family", default="multimodal_baselines")
     return parser.parse_args()
 
 

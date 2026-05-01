@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import atexit
 import os
 import subprocess
 import sys
@@ -35,11 +36,16 @@ DEFAULT_MODELS = [
 DEFAULT_FEATURE_SETS = ["strict_base", "strict_fe", "strict_main_input"]
 
 
+def make_run_group_id(prefix: str = "tabular_all") -> str:
+    return f"{prefix}_{time.strftime('%Y%m%d_%H%M%S')}"
+
+
 @dataclass
 class RunningJob:
     device: int
     model_name: str
     process: subprocess.Popen
+    started_at: float
 
 
 def parse_args() -> argparse.Namespace:
@@ -50,6 +56,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-root", default="experiments/outputs/tabular_baselines")
     parser.add_argument("--tracking-uri", default=get_repo_default_mlflow_tracking_uri())
     parser.add_argument("--experiment-name", default="ISIC2024-Tabular-Baselines")
+    parser.add_argument("--run-group-id", default=None, help="Optional MLflow run group tag. Defaults to a timestamp.")
+    parser.add_argument("--dataset-id", default=None, help="Versioned dataset id for registry/report filtering.")
+    parser.add_argument("--dataset-spec", default=None, help="Dataset spec JSON path used for this run.")
+    parser.add_argument("--model-family", default="tabular_baselines", help="Experiment family tag.")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--split-seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--cv-fold", type=int, default=0)
@@ -76,12 +86,35 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    command_start = time.time()
     load_project_env()
     args = parse_args()
+    args.run_group_id = args.run_group_id or make_run_group_id()
+    command_status = {"value": "failed"}
+
+    def log_command_end() -> None:
+        log_event(
+            f"End status={command_status['value']} "
+            f"run_group_id={args.run_group_id} duration={format_duration(time.time() - command_start)}"
+        )
+
+    atexit.register(log_command_end)
     ensure_expected_conda_env()
+    log_event(
+        "Start "
+        f"run_group_id={args.run_group_id} models={','.join(args.models)} "
+        f"feature_sets={','.join(args.feature_sets)} devices={args.devices or 'cpu'}"
+    )
 
     if args.devices:
         validate_gpu_request(args.devices)
+    preflight_device = args.devices[0] if args.devices else None
+    preflight_failures = run_preflight(args, device=preflight_device)
+    if preflight_failures:
+        log_event("Preflight failed; no model jobs were launched.")
+        raise SystemExit(1)
+
+    if args.devices:
         failures = run_parallel(args)
     else:
         failures = run_sequential(args)
@@ -90,10 +123,30 @@ def main() -> None:
     failures.extend(report_failures)
 
     if failures:
-        print("[run_all_tabular_models] Completed with failures:")
+        log_event(f"Completed with {len(failures)} failure(s):")
         for failure in failures:
             print(f"  - {failure['model']} (returncode={failure['returncode']})")
         raise SystemExit(1)
+    command_status["value"] = "ok"
+
+
+def current_timestamp() -> str:
+    return time.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def format_duration(seconds: float) -> str:
+    seconds = max(0.0, float(seconds))
+    if seconds < 60:
+        return f"{seconds:.1f}s"
+    minutes, remaining_seconds = divmod(seconds, 60)
+    if minutes < 60:
+        return f"{int(minutes)}m {remaining_seconds:.1f}s"
+    hours, remaining_minutes = divmod(minutes, 60)
+    return f"{int(hours)}h {int(remaining_minutes)}m {remaining_seconds:.1f}s"
+
+
+def log_event(message: str) -> None:
+    print(f"[{current_timestamp()}] [run_all_tabular_models] {message}", flush=True)
 
 
 def validate_gpu_request(devices: list[int]) -> None:
@@ -115,8 +168,13 @@ def run_sequential(args: argparse.Namespace) -> list[dict[str, str | int]]:
     env = build_subprocess_env()
     for model_name in args.models:
         command = build_command(model_name, args, device=None)
-        print(f"[run_all_tabular_models] Running {model_name}")
+        model_start = time.time()
+        log_event(f"Start model={model_name} device=cpu")
         result = subprocess.run(command, check=False, cwd=REPO_ROOT, env=env)
+        log_event(
+            f"Finished model={model_name} device=cpu returncode={result.returncode} "
+            f"duration={format_duration(time.time() - model_start)}"
+        )
         if result.returncode != 0:
             failures.append({"model": model_name, "returncode": result.returncode})
     return failures
@@ -135,16 +193,20 @@ def run_parallel(args: argparse.Namespace) -> list[dict[str, str | int]]:
             model_name = pending.popleft()
             command = build_command(model_name, args, device=device)
             env = build_subprocess_env(device=device)
-            print(f"[run_all_tabular_models] Launching {model_name} on GPU {device}")
+            started_at = time.time()
+            log_event(f"Start model={model_name} gpu={device}")
             process = subprocess.Popen(command, cwd=REPO_ROOT, env=env)
-            active[device] = RunningJob(device=device, model_name=model_name, process=process)
+            active[device] = RunningJob(device=device, model_name=model_name, process=process, started_at=started_at)
 
         completed_devices: list[int] = []
         for device, job in active.items():
             returncode = job.process.poll()
             if returncode is None:
                 continue
-            print(f"[run_all_tabular_models] Finished {job.model_name} on GPU {device} (returncode={returncode})")
+            log_event(
+                f"Finished model={job.model_name} gpu={device} returncode={returncode} "
+                f"duration={format_duration(time.time() - job.started_at)}"
+            )
             if returncode != 0:
                 failures.append({"model": job.model_name, "returncode": returncode})
             completed_devices.append(device)
@@ -156,6 +218,75 @@ def run_parallel(args: argparse.Namespace) -> list[dict[str, str | int]]:
             time.sleep(2)
 
     return failures
+
+
+def run_preflight(args: argparse.Namespace, *, device: int | None) -> list[dict[str, str | int]]:
+    command = build_preflight_command(args, device=device)
+    env = build_subprocess_env(device=device)
+    preflight_start = time.time()
+    log_event("Start preflight")
+    result = subprocess.run(command, check=False, cwd=REPO_ROOT, env=env)
+    log_event(
+        f"Finished preflight returncode={result.returncode} "
+        f"duration={format_duration(time.time() - preflight_start)}"
+    )
+    if result.returncode != 0:
+        return [{"model": "preflight", "returncode": result.returncode}]
+    return []
+
+
+def build_preflight_command(args: argparse.Namespace, *, device: int | None) -> list[str]:
+    command = [
+        sys.executable,
+        "-m",
+        "isic2024_multimodal.cli.run_tabular_baseline",
+        "--dataset-root",
+        str(resolve_repo_path(args.dataset_root)),
+        "--eda-dir",
+        str(resolve_repo_path(args.eda_dir)),
+        "--feature-set-json",
+        str(resolve_repo_path(args.feature_set_json)),
+        "--experiment-name",
+        args.experiment_name,
+        "--run-group-id",
+        args.run_group_id,
+        "--dataset-id",
+        getattr(args, "dataset_id", None) or "",
+        "--dataset-spec",
+        getattr(args, "dataset_spec", None) or "",
+        "--model-family",
+        getattr(args, "model_family", "tabular_baselines"),
+        "--output-root",
+        str(resolve_repo_path(args.output_root)),
+        "--tracking-uri",
+        args.tracking_uri,
+        "--seed",
+        str(args.seed),
+        "--split-seed",
+        str(args.split_seed),
+        "--cv-fold",
+        str(args.cv_fold),
+        "--holdout-split-csv",
+        str(resolve_repo_path(args.holdout_split_csv)),
+        "--cv-split-csv",
+        str(resolve_repo_path(args.cv_split_csv)),
+        "--preflight-only",
+    ]
+    if args.models:
+        command.append("--models")
+        command.extend(args.models)
+    if args.feature_sets:
+        command.append("--feature-sets")
+        command.extend(args.feature_sets)
+    if args.max_train_rows is not None:
+        command.extend(["--max-train-rows", str(args.max_train_rows)])
+    if args.max_val_rows is not None:
+        command.extend(["--max-val-rows", str(args.max_val_rows)])
+    if args.max_test_rows is not None:
+        command.extend(["--max-test-rows", str(args.max_test_rows)])
+    if device is not None:
+        command.extend(["--device", "cuda"])
+    return command
 
 
 def build_command(model_name: str, args: argparse.Namespace, *, device: int | None) -> list[str]:
@@ -171,6 +302,14 @@ def build_command(model_name: str, args: argparse.Namespace, *, device: int | No
         str(resolve_repo_path(args.feature_set_json)),
         "--experiment-name",
         args.experiment_name,
+        "--run-group-id",
+        args.run_group_id,
+        "--dataset-id",
+        getattr(args, "dataset_id", None) or "",
+        "--dataset-spec",
+        getattr(args, "dataset_spec", None) or "",
+        "--model-family",
+        getattr(args, "model_family", "tabular_baselines"),
         "--output-root",
         str(resolve_repo_path(args.output_root)),
         "--tracking-uri",
@@ -219,6 +358,12 @@ def generate_reports(args: argparse.Namespace) -> list[dict[str, str | int]]:
                 args.tracking_uri,
                 "--experiment-name",
                 args.experiment_name,
+                "--run-group-id",
+                args.run_group_id,
+                "--dataset-id",
+                getattr(args, "dataset_id", None) or "",
+                "--model-family",
+                getattr(args, "model_family", "tabular_baselines"),
                 "--sort-metric",
                 f"best_{PRIMARY_PAUC_METRIC}",
                 "--output",
@@ -236,6 +381,12 @@ def generate_reports(args: argparse.Namespace) -> list[dict[str, str | int]]:
                 args.tracking_uri,
                 "--experiment-name",
                 args.experiment_name,
+                "--run-group-id",
+                args.run_group_id,
+                "--dataset-id",
+                getattr(args, "dataset_id", None) or "",
+                "--model-family",
+                getattr(args, "model_family", "tabular_baselines"),
                 "--parent-sort-metric",
                 f"best_{PRIMARY_PAUC_METRIC}",
                 "--child-sort-metric",
@@ -250,8 +401,13 @@ def generate_reports(args: argparse.Namespace) -> list[dict[str, str | int]]:
     env = build_subprocess_env()
     for spec in report_specs:
         spec["output"].parent.mkdir(parents=True, exist_ok=True)
-        print(f"[run_all_tabular_models] Generating {spec['name']} -> {spec['output']}")
+        report_start = time.time()
+        log_event(f"Start report={spec['name']} output={spec['output']}")
         result = subprocess.run(spec["command"], check=False, cwd=REPO_ROOT, env=env)
+        log_event(
+            f"Finished report={spec['name']} returncode={result.returncode} "
+            f"duration={format_duration(time.time() - report_start)}"
+        )
         if result.returncode != 0:
             failures.append({"model": spec["name"], "returncode": result.returncode})
     return failures

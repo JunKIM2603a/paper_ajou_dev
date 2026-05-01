@@ -21,6 +21,9 @@ from isic2024_multimodal.training.reproducibility import (
 )
 from isic2024_multimodal.utils.runtime_env import ensure_expected_conda_env, get_default_mlflow_tracking_uri, load_project_env
 
+DEFAULT_HOLDOUT_SPLIT_CSV = "data/splits/isic2024_train_validation_test_split_seed42.csv"
+DEFAULT_CV_SPLIT_CSV = "data/splits/isic2024_train_validation_5fold_seed42.csv"
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run an ISIC2024 image baseline experiment.")
@@ -45,6 +48,14 @@ def parse_args() -> argparse.Namespace:
         default="ISIC2024-Image-Baselines",
         help="MLflow experiment name.",
     )
+    parser.add_argument("--run-group-id", default=None, help="Optional run group tag used to scope MLflow reports.")
+    parser.add_argument("--dataset-id", default=None, help="Versioned dataset id for registry/report filtering.")
+    parser.add_argument("--dataset-spec", default=None, help="Dataset spec JSON path used for this run.")
+    parser.add_argument("--model-family", default="image_baselines", help="Experiment family tag.")
+    parser.add_argument("--holdout-split-csv", default=DEFAULT_HOLDOUT_SPLIT_CSV)
+    parser.add_argument("--cv-split-csv", default=DEFAULT_CV_SPLIT_CSV)
+    parser.add_argument("--cv-fold", type=int, default=0)
+    parser.add_argument("--preflight-only", action="store_true")
     parser.add_argument(
         "--device",
         default="auto",
@@ -116,7 +127,7 @@ def main() -> None:
     from isic2024_multimodal.data.image_dataset import (
         ImageClassificationDataset,
         build_manifest,
-        create_splits,
+        create_splits_from_locked_csvs,
         resolve_dataset_root,
     )
     from isic2024_multimodal.models.image.factory import build_model
@@ -164,13 +175,40 @@ def main() -> None:
         cache_path=Path(args.output_root) / "cache" / "isic2024_challenge_image_manifest.json",
     )
     _log(f"manifest ready: {len(manifest)} samples")
-    splits = create_splits(manifest, validation_ratio=validation_ratio, seed=seed, test_ratio=test_ratio)
+    splits = create_splits_from_locked_csvs(
+        manifest,
+        holdout_split_csv=args.holdout_split_csv,
+        cv_split_csv=args.cv_split_csv,
+        cv_fold=args.cv_fold,
+    )
     splits["train"] = _limit_samples(splits["train"], args.max_train_samples, seed=seed)
     splits["val"] = _limit_samples(splits["val"], args.max_val_samples, seed=seed + 1)
     splits["test"] = _limit_samples(splits["test"], args.max_test_samples, seed=seed + 2)
     _log(
         f"splits ready: train={len(splits['train'])}, val={len(splits['val'])}, test={len(splits['test'])}"
     )
+    if args.preflight_only:
+        print(
+            json.dumps(
+                {
+                    "status": "ok",
+                    "dataset_root": str(Path(args.dataset_root).resolve()),
+                    "resolved_dataset_root": str(resolved_dataset_root.resolve()),
+                    "dataset_id": args.dataset_id,
+                    "dataset_spec_path": args.dataset_spec,
+                    "model_family": args.model_family,
+                    "run_group_id": args.run_group_id,
+                    "split_source": "locked_split_csv",
+                    "holdout_split_csv": str(Path(args.holdout_split_csv).resolve()),
+                    "cv_split_csv": str(Path(args.cv_split_csv).resolve()),
+                    "cv_fold": args.cv_fold,
+                    "split_rows": {name: len(items) for name, items in splits.items()},
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return
 
     train_dataset = ImageClassificationDataset(splits["train"], image_size=image_size, augment=True)
     val_dataset = ImageClassificationDataset(splits["val"], image_size=image_size, augment=False)
@@ -242,6 +280,9 @@ def main() -> None:
                 "model_name": model_name,
                 "experiment_family": "isic2024_image_baseline",
                 "role": "model_parent",
+                "run_group_id": args.run_group_id or "",
+                "dataset_id": args.dataset_id or "",
+                "model_family": args.model_family,
             }
         )
         mlflow.log_params(
@@ -264,6 +305,14 @@ def main() -> None:
                 "num_val_samples": len(val_dataset),
                 "num_test_samples": len(test_dataset),
                 "primary_metric_name": PRIMARY_PAUC_METRIC,
+                "run_group_id": args.run_group_id,
+                "dataset_id": args.dataset_id,
+                "dataset_spec_path": args.dataset_spec,
+                "model_family": args.model_family,
+                "split_source": "locked_split_csv",
+                "holdout_split_csv": str(Path(args.holdout_split_csv).resolve()),
+                "cv_split_csv": str(Path(args.cv_split_csv).resolve()),
+                "cv_fold": args.cv_fold,
             }
         )
         mlflow.log_dict(config, "resolved_config.json")
@@ -285,12 +334,19 @@ def main() -> None:
                         "model_name": model_name,
                         "experiment_family": "isic2024_image_baseline",
                         "role": "hyperparameter_trial",
+                        "run_group_id": args.run_group_id or "",
+                        "dataset_id": args.dataset_id or "",
+                        "model_family": args.model_family,
                     }
                 )
                 mlflow.log_params(flatten_params(config["model"], prefix="model"))
                 mlflow.log_params({f"hp_{key}": value for key, value in hyperparameters.items()})
                 mlflow.log_param("trial_seed", trial_seed)
                 mlflow.log_param("trial_index", trial_index)
+                mlflow.log_param("run_group_id", args.run_group_id)
+                mlflow.log_param("dataset_id", args.dataset_id)
+                mlflow.log_param("dataset_spec_path", args.dataset_spec)
+                mlflow.log_param("model_family", args.model_family)
 
                 model = None
                 try:
@@ -313,6 +369,23 @@ def main() -> None:
                         hyperparameters=hyperparameters,
                         output_dir=output_dir,
                         mlflow_client=mlflow,
+                    )
+                    summary.update(
+                        {
+                            "model_name": model_name,
+                            "run_group_id": args.run_group_id,
+                            "dataset_id": args.dataset_id,
+                            "dataset_spec_path": args.dataset_spec,
+                            "model_family": args.model_family,
+                            "split_source": "locked_split_csv",
+                            "holdout_split_csv": str(Path(args.holdout_split_csv).resolve()),
+                            "cv_split_csv": str(Path(args.cv_split_csv).resolve()),
+                            "cv_fold": args.cv_fold,
+                        }
+                    )
+                    (output_dir / "summary.json").write_text(
+                        json.dumps(summary, ensure_ascii=False, indent=2),
+                        encoding="utf-8",
                     )
                     _log(f"trial complete: {run_name}")
 
@@ -367,6 +440,10 @@ def main() -> None:
         )
         mlflow.log_params({f"best_hp_{key}": value for key, value in best_result["hyperparameters"].items()})
         mlflow.log_param("best_trial_seed", best_result["trial_seed"])
+        mlflow.log_param("run_group_id", args.run_group_id)
+        mlflow.log_param("dataset_id", args.dataset_id)
+        mlflow.log_param("dataset_spec_path", args.dataset_spec)
+        mlflow.log_param("model_family", args.model_family)
         mlflow.set_tag("best_child_run_name", best_run_name)
         mlflow.log_dict(
             {

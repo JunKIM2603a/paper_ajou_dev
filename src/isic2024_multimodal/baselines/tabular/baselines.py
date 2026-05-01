@@ -11,6 +11,15 @@ from isic2024_multimodal.models.tabular.torch_estimator import TorchTabularEstim
 
 
 DEFAULT_STRICT_FEATURE_SETS = [STRICT_BASE, STRICT_FE, STRICT_MAIN_INPUT]
+CUDA_CAPABLE_MODEL_NAMES = {
+    "logistic_regression",
+    "svm",
+    "mlp",
+    "xgboost",
+    "catboost",
+    "ft_transformer",
+    "ft_transformer_external",
+}
 
 
 @dataclass(frozen=True)
@@ -96,6 +105,8 @@ MODEL_SPECS: dict[str, TabularModelSpec] = {
             "feature_set": DEFAULT_STRICT_FEATURE_SETS,
             "model_name": ["ft_transformer"],
             "max_iter": [50],
+            "batch_size": [2048],
+            "predict_batch_size": [2048],
             "learning_rate": [0.001],
             "weight_decay": [0.00001],
             "d_token": [64],
@@ -112,6 +123,8 @@ MODEL_SPECS: dict[str, TabularModelSpec] = {
             "feature_set": DEFAULT_STRICT_FEATURE_SETS,
             "model_name": ["ft_transformer_external"],
             "max_iter": [50],
+            "batch_size": [2048],
+            "predict_batch_size": [2048],
             "learning_rate": [0.001],
             "weight_decay": [0.00001],
             "d_token": [64],
@@ -180,6 +193,14 @@ def device_uses_cuda(device: str | None) -> bool:
     return bool(device) and str(device).startswith("cuda")
 
 
+def effective_tabular_device(model_name: str, requested_device: str | None) -> str:
+    if model_name == "lightgbm":
+        return "cpu"
+    if device_uses_cuda(requested_device) and model_name in CUDA_CAPABLE_MODEL_NAMES:
+        return "cuda"
+    return "cpu"
+
+
 def build_xgboost_estimator(hyperparameters: dict[str, Any], scale_pos_weight: float, *, device: str = "cpu"):
     try:
         from xgboost import XGBClassifier
@@ -240,10 +261,10 @@ def build_lightgbm_estimator(hyperparameters: dict[str, Any], scale_pos_weight: 
         verbose=-1,
         **strip_common_hyperparameters(hyperparameters),
     )
-    if device_uses_cuda(device):
-        estimator_kwargs["device_type"] = "gpu"
-    else:
-        estimator_kwargs["n_jobs"] = 1
+    # LightGBM's GPU backend uses OpenCL, not the CUDA runtime used by torch/XGBoost.
+    # Keep this baseline CPU-stable under WSL/CUDA environments unless OpenCL support is
+    # introduced and validated explicitly.
+    estimator_kwargs["n_jobs"] = 1
     return LGBMClassifier(**estimator_kwargs)
 
 

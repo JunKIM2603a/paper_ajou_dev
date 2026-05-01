@@ -1,0 +1,14 @@
+{
+  "family": "image_baselines",
+  "experiment_name": "ISIC2024-Image-Baselines",
+  "dataset_spec": "experiments/configs/dataset_specs/image_preprocessed_v1.json",
+  "config_root": "experiments/configs/image_baselines",
+  "models": ["resnet50"],
+  "smoke": {
+    "max_trials": 1,
+    "epochs": 1,
+    "max_train": 256,
+    "max_val": 128,
+    "max_test": 128
+  }
+}

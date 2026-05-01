@@ -29,6 +29,7 @@ isic2024_multimodal/
   baselines/        # image/tabular baseline 구현
   training/         # training loop와 재현성 helper
   evaluation/       # metric
+  experiments/      # dataset spec, family path, selection registry helper
   reporting/        # MLflow CSV/HTML report
   research/         # 향후 LUPI 변형 등 train-only privileged supervision candidate
   utils/            # config 및 runtime helper
@@ -45,6 +46,48 @@ isic2024_multimodal/
 - Table: `experiments/tables`
 - MLflow FileStore: `experiments/logs/mlruns`
 - MLflow SQLite DB 사용 시: `experiments/logs/mlflow.db`
+
+## 논문 실험 운영 구조
+
+Baseline과 final model 실험은 family 단위로 독립 관리한다. `tabular_baselines`와 `image_baselines`는 서로 순서 의존이 없는 단위 시험이고, `multimodal_baselines`는 tabular/image selection registry를 참조해 조합 후보를 만들 수 있다. `final_paper_model`은 multimodal baseline selection을 기반으로 ablation을 진행한다.
+
+```text
+experiments/configs/suites/              # family별 실행 suite
+experiments/configs/dataset_specs/       # versioned dataset input contract
+experiments/registry/models/             # 후보군 registry
+experiments/registry/selections/         # run_group별 best model reference
+experiments/outputs/<family>/<run_id>/   # family별 생성 결과
+experiments/tables/<family>/<run_id>/    # family별 leaderboard/report
+data/processed/datasets/<dataset_id>/    # raw에서 파생된 versioned dataset
+```
+
+공통 family runner는 운영 메타데이터를 먼저 남긴 뒤 기존 runner를 subprocess로 호출한다. 결과가 성공하면 local `summary.json`을 다시 훑어 family별 selection registry와 local leaderboard를 갱신한다.
+
+```bash
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_experiment_family \
+  --family tabular_baselines \
+  --config experiments/configs/suites/tabular_baselines.json \
+  --run-group-id tabular_strict_v1_gpu0 \
+  --devices 0
+```
+
+주요 공통 옵션은 다음과 같다.
+
+- `--dataset-spec`: `experiments/configs/dataset_specs/*.json` override
+- `--run-group-id`: 같은 실험 묶음을 재실행/조회하기 위한 id
+- `--smoke`: suite의 smoke cap을 적용하고 `experiments/outputs/smoke/<run_id>/<family>`에 저장
+- `--preflight-only`: dataset spec, split, output/table 경로 manifest만 확인
+- `--reset-family-output`: 해당 family/run group의 output/table만 삭제
+- `--skip-reports`: MLflow CSV/HTML report 생성을 생략
+
+Family reset은 다른 family, raw data, split, registry를 건드리지 않는다.
+
+```bash
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_experiment_family \
+  --family tabular_baselines \
+  --run-group-id tabular_strict_v1_gpu0 \
+  --reset-family-output
+```
 
 ## 자주 쓰는 명령
 
@@ -117,26 +160,42 @@ conda run -n paper python -c "import torch; print(torch.__version__); print(torc
 
 `torch.cuda.is_available()`가 `True`이고 GPU 수가 1 이상이어야 tabular GPU 실행이 가능하다. 현재 GPU 사용을 위해 확인한 기준 환경은 `torch 2.5.1+cu121`, `torchvision 0.20.1+cu121`, `torchaudio 2.5.1+cu121`, `lightgbm 4.6.0`이다.
 
-GPU를 사용할 수 있으면 GPU-capable tabular 모델은 기본적으로 `--device cuda`로 실행한다.
+GPU를 사용할 수 있으면 GPU-capable tabular 모델은 기본적으로 모델별 subprocess runner로 실행한다. 단일 GPU에서도 `run_all_tabular_models --devices 0`를 권장한다. 모델별 프로세스가 분리되어 FT-Transformer와 tree model 사이의 GPU 메모리 잔류 위험이 낮다.
+
+권장 초기화는 위의 `run_experiment_family --reset-family-output`이다. 기존 직접 runner 결과와 local MLflow history까지 모두 지우는 전체 실험 로그 초기화가 필요할 때만 아래 명령을 쓴다.
 
 ```bash
-conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_tabular_baseline \
+rm -rf experiments/outputs/tabular_baselines \
+       experiments/outputs/tabular_baselines_smoke \
+       experiments/logs/mlruns \
+       experiments/logs/mlflow.db
+```
+
+이 명령도 `data/raw`, `data/processed`, `data/splits`, `experiments/registry`는 삭제하지 않는다. split CSV는 paper-valid protocol의 입력이므로, split을 의도적으로 다시 만들 때가 아니면 유지한다.
+
+```bash
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_all_tabular_models \
   --dataset-root data/raw \
   --models xgboost catboost lightgbm ft_transformer ft_transformer_external \
   --feature-sets strict_main_input \
-  --device cuda
+  --devices 0
 ```
 
 이 명령은 GPU-capable tabular-only baseline을 실행한다.
 
 - `--models`: 실행할 tabular model 목록이다.
 - `--feature-sets strict_main_input`: strict inference-time input feature set만 사용한다.
-- `--device cuda`: XGBoost/CatBoost/LightGBM/PyTorch 계열 모델에 GPU runtime을 요청한다.
+- `--devices 0`: 모델별 subprocess에 GPU를 배정한다.
+- LightGBM은 WSL/CUDA 환경에서 OpenCL GPU를 요구하지 않도록 CPU backend로 실행된다. XGBoost, CatBoost, FT-Transformer 계열은 CUDA를 사용한다.
 - 기본 split 파일:
   - `data/splits/isic2024_train_validation_test_split_seed42.csv`
   - `data/splits/isic2024_train_validation_5fold_seed42.csv`
 - threshold는 validation set에서 F1 기준으로 선택한다.
 - test fold는 threshold 선택, feature selection, preprocessing fitting에 사용하면 안 된다.
+
+실행 로그는 `[YYYY-MM-DD HH:MM:SS]` prefix로 preflight, model subprocess, report 생성의 시작/종료와 duration을 찍는다. 각 model subprocess 내부에서는 data/protocol load, trial, final_test 시작/종료 시간이 남고, 각 `summary.json`에는 `started_at`, `ended_at`, `duration_seconds`, `timing_seconds`가 저장된다.
+
+`run_all_tabular_models`는 기본적으로 timestamp 기반 `run_group_id`를 만들고, 실행 후 CSV/HTML report를 해당 run group으로 필터링한다. 같은 결과 묶음을 명시적으로 재생산하거나 report를 다시 만들고 싶으면 `--run-group-id <id>`를 직접 지정한다.
 
 `logistic_regression`, `svm`, `mlp`는 CPU 실행 시 sklearn estimator를 쓰지만 `--device cuda`를 주면 repo-native torch estimator로 바뀐다. Paper-facing sklearn baseline으로 비교하려면 이 세 모델은 CPU 명령으로 따로 실행한다.
 
@@ -150,17 +209,20 @@ conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python
 빠른 smoke test는 모델과 row 수를 줄여서 실행한다.
 
 ```bash
-conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_tabular_baseline \
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_all_tabular_models \
   --dataset-root data/raw \
   --models xgboost \
   --feature-sets strict_main_input \
-  --device cuda \
+  --devices 0 \
   --max-train-rows 1000 \
   --max-val-rows 500 \
-  --max-test-rows 500
+  --max-test-rows 500 \
+  --output-root experiments/outputs/tabular_baselines_smoke \
+  --skip-reports
 ```
 
 옵션을 생략하면 기본값이 `--device cpu`라서 GPU를 사용하지 않는다.
+단일 모델 디버깅이 필요할 때만 `run_tabular_baseline --device cuda`를 직접 사용한다.
 
 ### 4. Image baseline 단일 config 실행
 
@@ -233,10 +295,23 @@ conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python
   --dataset-root data/raw \
   --models xgboost catboost lightgbm ft_transformer ft_transformer_external \
   --feature-sets strict_main_input \
-  --devices 0 1
+  --devices 0
 ```
 
-GPU-capable tabular model 목록을 모델 단위로 병렬 실행하고, 실행 후 report를 생성한다. `--devices 0 1`은 모델별 subprocess에 `CUDA_VISIBLE_DEVICES`를 하나씩 배정하고 각 subprocess에는 `--device cuda`를 전달한다. GPU가 보이지 않거나 PyTorch CUDA 초기화가 실패하면 실행 전에 중단된다.
+GPU-capable tabular model 목록을 모델 단위 subprocess로 실행하고, 실행 후 report를 생성한다. `--devices 0`은 각 subprocess에 `CUDA_VISIBLE_DEVICES=0`을 배정하고 `--device cuda`를 전달한다. GPU가 보이지 않거나 PyTorch CUDA 초기화가 실패하면 preflight 단계에서 중단된다.
+
+기존 직접 runner 결과와 local MLflow history를 함께 비우는 전체 로그 초기화가 필요할 때만 다음 명령을 쓴다. Family 단위 초기화는 `run_experiment_family --reset-family-output`을 우선 사용한다.
+
+```bash
+rm -rf experiments/outputs/tabular_baselines \
+       experiments/outputs/tabular_baselines_smoke \
+       experiments/logs/mlruns \
+       experiments/logs/mlflow.db
+```
+
+`data/raw`, `data/processed`, `data/splits`, `experiments/registry`는 이 초기화 대상이 아니다.
+
+실행 중에는 `run_all_tabular_models`가 preflight, 각 모델 subprocess, report 생성의 시작/종료 시각과 duration을 출력한다. `run_tabular_baseline`이 남기는 각 `summary.json`의 `timing_seconds`에서 `prepare_splits_seconds`, `build_estimator_seconds`, `fit_seconds`, `select_threshold_seconds`, `evaluate_train_seconds`, `evaluate_val_seconds`, `evaluate_test_seconds`를 확인할 수 있다.
 
 CPU sklearn baseline을 전체 runner로 실행하려면 GPU 옵션 없이 별도로 실행한다.
 
@@ -257,7 +332,9 @@ conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python
   --max-train-rows 1000 \
   --max-val-rows 500 \
   --max-test-rows 500 \
-  --devices 0 1
+  --devices 0 \
+  --output-root experiments/outputs/tabular_baselines_smoke \
+  --skip-reports
 ```
 
 ### 7. MLflow report 생성
@@ -300,14 +377,16 @@ conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python
 conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m pytest tests/test_strict_input_export.py
 
 # 3. 빠른 tabular GPU smoke test
-conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_tabular_baseline \
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_all_tabular_models \
   --dataset-root data/raw \
   --models xgboost \
   --feature-sets strict_main_input \
-  --device cuda \
+  --devices 0 \
   --max-train-rows 1000 \
   --max-val-rows 500 \
-  --max-test-rows 500
+  --max-test-rows 500 \
+  --output-root experiments/outputs/tabular_baselines_smoke \
+  --skip-reports
 
 # 4. 결과 report 생성
 conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.generate_reports \

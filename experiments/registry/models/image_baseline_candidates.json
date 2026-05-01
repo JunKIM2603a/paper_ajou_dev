@@ -1,0 +1,4 @@
+{
+  "family": "image_baselines",
+  "candidate_config_root": "experiments/configs/image_baselines"
+}

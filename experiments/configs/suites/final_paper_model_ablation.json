@@ -1,0 +1,7 @@
+{
+  "family": "final_paper_model",
+  "experiment_name": "ISIC2024-Final-Paper-Model",
+  "dataset_spec": "experiments/configs/dataset_specs/strict_main_input_plus_embeddings_v1.json",
+  "config": "experiments/configs/final_paper_model/default_ablation.json",
+  "selection_source": "experiments/registry/selections/best_multimodal_by_run_group.json"
+}

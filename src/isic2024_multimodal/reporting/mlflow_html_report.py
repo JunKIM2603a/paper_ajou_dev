@@ -38,6 +38,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", default="experiments/tables/mlflow_report.html")
     parser.add_argument("--parent-sort-metric", default=f"best_{PRIMARY_PAUC_METRIC}")
     parser.add_argument("--child-sort-metric", default=f"test_{PRIMARY_PAUC_METRIC}")
+    parser.add_argument("--run-group-id", default=None, help="Optional MLflow run_group_id tag filter.")
+    parser.add_argument("--dataset-id", default=None, help="Optional dataset_id tag filter.")
+    parser.add_argument("--model-family", default=None, help="Optional model_family tag filter.")
     return parser.parse_args()
 
 
@@ -56,12 +59,22 @@ def main() -> None:
 
     parent_runs = mlflow.search_runs(
         experiment_ids=[experiment.experiment_id],
-        filter_string="tags.role = 'model_parent'",
+        filter_string=build_filter_string(
+            "model_parent",
+            args.run_group_id,
+            dataset_id=args.dataset_id,
+            model_family=args.model_family,
+        ),
         order_by=[f"metrics.{args.parent_sort_metric} DESC", "attributes.start_time DESC"],
     )
     child_runs = mlflow.search_runs(
         experiment_ids=[experiment.experiment_id],
-        filter_string="tags.role = 'hyperparameter_trial'",
+        filter_string=build_filter_string(
+            "hyperparameter_trial",
+            args.run_group_id,
+            dataset_id=args.dataset_id,
+            model_family=args.model_family,
+        ),
         order_by=[f"metrics.{args.child_sort_metric} DESC"],
     )
 
@@ -76,6 +89,9 @@ def main() -> None:
             child_runs=child_runs,
             parent_sort_metric=args.parent_sort_metric,
             child_sort_metric=args.child_sort_metric,
+            run_group_id=args.run_group_id,
+            dataset_id=args.dataset_id,
+            model_family=args.model_family,
         ),
         encoding="utf-8",
     )
@@ -91,6 +107,9 @@ def build_html(
     child_runs,
     parent_sort_metric: str,
     child_sort_metric: str,
+    run_group_id: str | None = None,
+    dataset_id: str | None = None,
+    model_family: str | None = None,
 ) -> str:
     parent_records = select_best_parent_rows(parent_runs, parent_sort_metric)
     child_records = [row for _, row in child_runs.iterrows()]
@@ -289,6 +308,8 @@ def build_html(
       <p>Experiment ID: <code>{experiment_id}</code></p>
       <p>Tracking URI: <code>{tracking_uri}</code></p>
       <p>Generated at: {generated_at}</p>
+      <p>Run group: <code>{run_group_id}</code></p>
+      <p>Dataset: <code>{dataset_id}</code> / Family: <code>{model_family}</code></p>
       <p>Parent sort metric: <code>{parent_sort_metric}</code> / Child sort metric: <code>{child_sort_metric}</code></p>
     </section>
 
@@ -328,6 +349,9 @@ def build_html(
         experiment_id=escape(experiment_id),
         tracking_uri=escape(tracking_uri),
         generated_at=escape(generated_at),
+        run_group_id=escape(run_group_id or "all"),
+        dataset_id=escape(dataset_id or "all"),
+        model_family=escape(model_family or "all"),
         parent_sort_metric=escape(parent_sort_metric),
         child_sort_metric=escape(child_sort_metric),
         model_count=len({safe_value(row.get("tags.model_name")) for row in parent_records}),
@@ -504,6 +528,27 @@ def label_from_metric(metric_name: str) -> str:
     if PRIMARY_PAUC_METRIC in metric_name:
         return "pAUC @ TPR>=0.80"
     return metric_name.removeprefix("best_").replace("_", " ").title()
+
+
+def build_filter_string(
+    role: str,
+    run_group_id: str | None = None,
+    *,
+    dataset_id: str | None = None,
+    model_family: str | None = None,
+) -> str:
+    filters = [f"tags.role = '{escape_mlflow_filter_value(role)}'"]
+    if run_group_id:
+        filters.append(f"tags.run_group_id = '{escape_mlflow_filter_value(run_group_id)}'")
+    if dataset_id:
+        filters.append(f"tags.dataset_id = '{escape_mlflow_filter_value(dataset_id)}'")
+    if model_family:
+        filters.append(f"tags.model_family = '{escape_mlflow_filter_value(model_family)}'")
+    return " and ".join(filters)
+
+
+def escape_mlflow_filter_value(value: str) -> str:
+    return str(value).replace("\\", "\\\\").replace("'", "\\'")
 
 
 def select_best_parent_rows(parent_runs, parent_sort_metric: str) -> list:

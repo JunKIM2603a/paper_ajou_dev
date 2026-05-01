@@ -32,7 +32,7 @@ class Isic2024Paths:
     legacy_metadata_csv: Path | None = None
 
 
-def resolve_isic2024_dataset_root(dataset_root: str | Path) -> Isic2024Paths:
+def resolve_isic2024_dataset_root(dataset_root: str | Path, *, require_image_dir: bool = True) -> Isic2024Paths:
     dataset_root = Path(dataset_root)
     candidate_roots = [dataset_root]
 
@@ -64,7 +64,7 @@ def resolve_isic2024_dataset_root(dataset_root: str | Path) -> Isic2024Paths:
     for candidate in ordered_candidates:
         challenge_metadata = candidate / CHALLENGE_METADATA_FILE
         challenge_image_dir = candidate / CHALLENGE_IMAGE_DIR
-        if challenge_metadata.exists() and challenge_image_dir.is_dir():
+        if challenge_metadata.exists() and (challenge_image_dir.is_dir() or not require_image_dir):
             return Isic2024Paths(
                 dataset_root=candidate,
                 dataset_format="challenge",
@@ -77,7 +77,12 @@ def resolve_isic2024_dataset_root(dataset_root: str | Path) -> Isic2024Paths:
         legacy_supplement = candidate / LEGACY_SUPPLEMENT_FILE
         legacy_metadata = candidate / LEGACY_METADATA_FILE
         legacy_image_dir = candidate / LEGACY_IMAGE_DIR
-        if legacy_ground_truth.exists() and legacy_supplement.exists() and legacy_metadata.exists() and legacy_image_dir.is_dir():
+        if (
+            legacy_ground_truth.exists()
+            and legacy_supplement.exists()
+            and legacy_metadata.exists()
+            and (legacy_image_dir.is_dir() or not require_image_dir)
+        ):
             return Isic2024Paths(
                 dataset_root=candidate,
                 dataset_format="legacy",
@@ -93,7 +98,8 @@ def resolve_isic2024_dataset_root(dataset_root: str | Path) -> Isic2024Paths:
         "ISIC2024 dataset not found.\n"
         "Expected either a challenge-format dataset root containing:\n"
         f"- {CHALLENGE_METADATA_FILE}\n"
-        f"- {CHALLENGE_IMAGE_DIR}/\n"
+        f"- {CHALLENGE_IMAGE_DIR}/"
+        f"{' (required for image loading)' if require_image_dir else ' (optional for tabular-only loading)'}\n"
         "or a legacy-format dataset root containing:\n"
         f"- {LEGACY_GROUND_TRUTH_FILE}\n"
         f"- {LEGACY_SUPPLEMENT_FILE}\n"
@@ -113,7 +119,7 @@ def iter_merged_tabular_rows(paths: Isic2024Paths) -> Iterator[dict[str, str]]:
 def load_tabular_dataframe(dataset_root: str | Path, *, include_image_columns: bool = True):
     import pandas as pd
 
-    paths = resolve_isic2024_dataset_root(dataset_root)
+    paths = resolve_isic2024_dataset_root(dataset_root, require_image_dir=include_image_columns)
     if paths.dataset_format == "challenge":
         if paths.metadata_csv is None:
             raise RuntimeError("Challenge metadata CSV is not configured.")

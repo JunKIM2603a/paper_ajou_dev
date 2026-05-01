@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import atexit
 import os
 import subprocess
 import sys
@@ -29,6 +30,11 @@ class RunningJob:
     device: int
     config_path: Path
     process: subprocess.Popen
+    started_at: float
+
+
+def make_run_group_id(prefix: str = "image_all") -> str:
+    return f"{prefix}_{time.strftime('%Y%m%d_%H%M%S')}"
 
 
 def parse_args() -> argparse.Namespace:
@@ -41,6 +47,13 @@ def parse_args() -> argparse.Namespace:
         default=get_repo_default_mlflow_tracking_uri(),
     )
     parser.add_argument("--experiment-name", default="ISIC2024-Image-Baselines")
+    parser.add_argument("--run-group-id", default=None, help="Optional MLflow run group tag. Defaults to a timestamp.")
+    parser.add_argument("--dataset-id", default=None, help="Versioned dataset id for registry/report filtering.")
+    parser.add_argument("--dataset-spec", default=None, help="Dataset spec JSON path used for this run.")
+    parser.add_argument("--model-family", default="image_baselines", help="Experiment family tag.")
+    parser.add_argument("--holdout-split-csv", default="data/splits/isic2024_train_validation_test_split_seed42.csv")
+    parser.add_argument("--cv-split-csv", default="data/splits/isic2024_train_validation_5fold_seed42.csv")
+    parser.add_argument("--cv-fold", type=int, default=0)
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--max-trials", type=int, default=None)
     parser.add_argument("--epochs-override", type=int, default=None)
@@ -70,8 +83,21 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    command_start = time.time()
     load_project_env()
     args = parse_args()
+    args.run_group_id = args.run_group_id or make_run_group_id()
+    command_status = {"value": "failed"}
+
+    def log_command_end() -> None:
+        print(
+            f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] [run_all_image_models] "
+            f"End status={command_status['value']} run_group_id={args.run_group_id} "
+            f"duration={time.time() - command_start:.1f}s",
+            flush=True,
+        )
+
+    atexit.register(log_command_end)
     ensure_expected_conda_env()
     base_dir = resolve_repo_path(args.config_root)
     config_paths = sorted(base_dir.glob("*/config.json"))
@@ -97,6 +123,7 @@ def main() -> None:
         for failure in failures:
             print(f"  - {failure['model']} (returncode={failure['returncode']})")
         raise SystemExit(1)
+    command_status["value"] = "ok"
 
 
 def validate_gpu_request(devices: list[int]) -> None:
@@ -146,16 +173,20 @@ def run_parallel(config_paths: list[Path], args: argparse.Namespace) -> list[dic
             config_path = pending.popleft()
             command = build_command(config_path, args, device=device)
             env = build_subprocess_env(device=device)
+            started_at = time.time()
             print(f"[run_all_models] Launching {config_path.parent.name} on GPU {device}")
             process = subprocess.Popen(command, env=env, cwd=REPO_ROOT)
-            active[device] = RunningJob(device=device, config_path=config_path, process=process)
+            active[device] = RunningJob(device=device, config_path=config_path, process=process, started_at=started_at)
 
         completed_devices: list[int] = []
         for device, job in active.items():
             returncode = job.process.poll()
             if returncode is None:
                 continue
-            print(f"[run_all_models] Finished {job.config_path.parent.name} on GPU {device} (returncode={returncode})")
+            print(
+                f"[run_all_models] Finished {job.config_path.parent.name} on GPU {device} "
+                f"(returncode={returncode}, duration={time.time() - job.started_at:.1f}s)"
+            )
             if returncode != 0:
                 failures.append({"model": job.config_path.parent.name, "returncode": returncode})
             completed_devices.append(device)
@@ -200,6 +231,20 @@ def build_command(config_path: Path, args: argparse.Namespace, *, device: int | 
         args.tracking_uri,
         "--experiment-name",
         args.experiment_name,
+        "--run-group-id",
+        args.run_group_id,
+        "--dataset-id",
+        args.dataset_id or "",
+        "--dataset-spec",
+        args.dataset_spec or "",
+        "--model-family",
+        args.model_family,
+        "--holdout-split-csv",
+        str(resolve_repo_path(args.holdout_split_csv)),
+        "--cv-split-csv",
+        str(resolve_repo_path(args.cv_split_csv)),
+        "--cv-fold",
+        str(args.cv_fold),
         "--seed",
         str(args.seed),
     ]
@@ -237,6 +282,12 @@ def generate_reports(args: argparse.Namespace) -> list[dict[str, str | int]]:
                 args.tracking_uri,
                 "--experiment-name",
                 args.experiment_name,
+                "--run-group-id",
+                args.run_group_id,
+                "--dataset-id",
+                args.dataset_id or "",
+                "--model-family",
+                args.model_family,
                 "--sort-metric",
                 f"best_{PRIMARY_PAUC_METRIC}",
                 "--output",
@@ -254,6 +305,12 @@ def generate_reports(args: argparse.Namespace) -> list[dict[str, str | int]]:
                 args.tracking_uri,
                 "--experiment-name",
                 args.experiment_name,
+                "--run-group-id",
+                args.run_group_id,
+                "--dataset-id",
+                args.dataset_id or "",
+                "--model-family",
+                args.model_family,
                 "--parent-sort-metric",
                 f"best_{PRIMARY_PAUC_METRIC}",
                 "--child-sort-metric",

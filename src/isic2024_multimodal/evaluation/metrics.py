@@ -80,15 +80,44 @@ def select_threshold_by_f1(labels: list[int], probabilities: list[float]) -> flo
     if not candidate_thresholds:
         return 0.5
 
+    scores = _f1_scores_by_threshold(labels, probabilities)
     best_threshold = candidate_thresholds[0]
     best_score = -1.0
     for threshold in candidate_thresholds:
-        predictions = [int(float(probability) >= threshold) for probability in probabilities]
-        score = _f1_from_predictions(labels, predictions)
+        score = scores[threshold]
         if score > best_score or (score == best_score and abs(threshold - 0.5) < abs(best_threshold - 0.5)):
             best_score = score
             best_threshold = threshold
     return float(best_threshold)
+
+
+def _f1_scores_by_threshold(labels: list[int], probabilities: list[float]) -> dict[float, float]:
+    ranked = sorted(
+        ((float(probability), int(label)) for label, probability in zip(labels, probabilities, strict=True)),
+        key=lambda item: item[0],
+        reverse=True,
+    )
+    scores: dict[float, float] = {}
+    total_positives = sum(1 for label in labels if int(label) == 1)
+    tp = 0
+    fp = 0
+    index = 0
+    while index < len(ranked):
+        threshold = ranked[index][0]
+        next_index = index
+        while next_index < len(ranked) and ranked[next_index][0] == threshold:
+            if ranked[next_index][1] == 1:
+                tp += 1
+            else:
+                fp += 1
+            next_index += 1
+
+        fn = total_positives - tp
+        precision = _safe_div(tp, tp + fp)
+        recall = _safe_div(tp, tp + fn)
+        scores[threshold] = _safe_div(2 * precision * recall, precision + recall)
+        index = next_index
+    return scores
 
 
 def _f1_from_predictions(labels: list[int], predictions: list[int]) -> float:

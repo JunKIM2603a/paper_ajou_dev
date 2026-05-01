@@ -17,6 +17,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sort-metric", default=f"best_{PRIMARY_PAUC_METRIC}")
     parser.add_argument("--parent-sort-metric", default=f"best_{PRIMARY_PAUC_METRIC}")
     parser.add_argument("--child-sort-metric", default=f"val_{PRIMARY_PAUC_METRIC}")
+    parser.add_argument("--run-group-id", default=None)
+    parser.add_argument("--dataset-id", default=None)
+    parser.add_argument("--model-family", default=None)
     return parser.parse_args()
 
 
@@ -33,6 +36,12 @@ def main() -> None:
             args.tracking_uri,
             "--experiment-name",
             args.experiment_name,
+            "--run-group-id",
+            args.run_group_id or "",
+            "--dataset-id",
+            args.dataset_id or "",
+            "--model-family",
+            args.model_family or "",
             "--sort-metric",
             args.sort_metric,
             "--output",
@@ -46,6 +55,12 @@ def main() -> None:
             args.tracking_uri,
             "--experiment-name",
             args.experiment_name,
+            "--run-group-id",
+            args.run_group_id or "",
+            "--dataset-id",
+            args.dataset_id or "",
+            "--model-family",
+            args.model_family or "",
             "--parent-sort-metric",
             args.parent_sort_metric,
             "--child-sort-metric",

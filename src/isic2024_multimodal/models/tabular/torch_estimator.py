@@ -96,6 +96,7 @@ class TorchTabularEstimator:
     def fit(self, X, y):
         import torch
         import torch.nn as nn
+        from torch.utils.data import DataLoader, TensorDataset
 
         seed = int(self.hyperparameters["seed"])
         torch.manual_seed(seed)
@@ -108,8 +109,18 @@ class TorchTabularEstimator:
         input_dim = int(features.shape[1])
 
         torch_device = torch.device(self.device)
-        feature_tensor = torch.as_tensor(features, dtype=torch.float32, device=torch_device)
-        target_tensor = torch.as_tensor(targets, dtype=torch.float32, device=torch_device)
+        feature_tensor = torch.as_tensor(features, dtype=torch.float32)
+        target_tensor = torch.as_tensor(targets, dtype=torch.float32)
+        dataset = TensorDataset(feature_tensor, target_tensor)
+        generator = torch.Generator()
+        generator.manual_seed(seed)
+        dataloader = DataLoader(
+            dataset,
+            batch_size=self._train_batch_size(),
+            shuffle=True,
+            generator=generator,
+            pin_memory=torch_device.type == "cuda",
+        )
 
         self.model = self._build_model(input_dim).to(torch_device)
         optimizer = torch.optim.Adam(
@@ -127,18 +138,27 @@ class TorchTabularEstimator:
 
         for _epoch in range(self._max_epochs()):
             self.model.train()
-            optimizer.zero_grad(set_to_none=True)
-            logits = self.model(feature_tensor)
-            if self.model_name == "svm":
-                signed_targets = target_tensor.mul(2.0).sub(1.0)
-                hinge = torch.clamp(1.0 - signed_targets * logits, min=0.0)
-                loss = hinge.square().mean() * self._svm_c_scale()
-            else:
-                loss = bce_criterion(logits, target_tensor)
-            loss.backward()
-            optimizer.step()
+            epoch_loss = 0.0
+            seen_rows = 0
+            for batch_features, batch_targets in dataloader:
+                batch_features = batch_features.to(torch_device, non_blocking=True)
+                batch_targets = batch_targets.to(torch_device, non_blocking=True)
+                optimizer.zero_grad(set_to_none=True)
+                logits = self.model(batch_features)
+                if self.model_name == "svm":
+                    signed_targets = batch_targets.mul(2.0).sub(1.0)
+                    hinge = torch.clamp(1.0 - signed_targets * logits, min=0.0)
+                    loss = hinge.square().mean() * self._svm_c_scale()
+                else:
+                    loss = bce_criterion(logits, batch_targets)
+                loss.backward()
+                optimizer.step()
 
-            current_loss = float(loss.detach().cpu())
+                batch_size = int(batch_targets.shape[0])
+                epoch_loss += float(loss.detach().cpu()) * batch_size
+                seen_rows += batch_size
+
+            current_loss = epoch_loss / max(seen_rows, 1)
             if current_loss + 1e-6 < best_loss:
                 best_loss = current_loss
                 best_state = {
@@ -228,7 +248,19 @@ class TorchTabularEstimator:
         return min(50, max(10, self._max_epochs() // 10))
 
     def _predict_batch_size(self) -> int:
-        return 65536
+        default_batch_size = 2048 if self.model_name in {"ft_transformer", "ft_transformer_external"} else 65536
+        return max(1, int(self.hyperparameters.get("predict_batch_size", default_batch_size)))
+
+    def _train_batch_size(self) -> int:
+        default_batch_size = 2048 if self.model_name in {"ft_transformer", "ft_transformer_external"} else 65536
+        return max(1, int(self.hyperparameters.get("batch_size", default_batch_size)))
+
+    def runtime_params(self) -> dict[str, int | str]:
+        return {
+            "torch_model_name": self.model_name,
+            "train_batch_size": self._train_batch_size(),
+            "predict_batch_size": self._predict_batch_size(),
+        }
 
     def _learning_rate(self) -> float:
         if self.model_name in {"logistic_regression", "svm"}:

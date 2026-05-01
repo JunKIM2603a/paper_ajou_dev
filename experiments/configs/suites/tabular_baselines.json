@@ -1,0 +1,12 @@
+{
+  "family": "tabular_baselines",
+  "experiment_name": "ISIC2024-Tabular-Baselines",
+  "dataset_spec": "experiments/configs/dataset_specs/strict_main_input_v1.json",
+  "models": ["xgboost", "catboost", "lightgbm", "ft_transformer", "ft_transformer_external"],
+  "feature_sets": ["strict_main_input"],
+  "smoke": {
+    "max_train": 1000,
+    "max_val": 500,
+    "max_test": 500
+  }
+}

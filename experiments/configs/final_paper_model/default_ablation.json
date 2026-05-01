@@ -1,0 +1,9 @@
+{
+  "model_source": "registry_best_multimodal",
+  "ablation_axes": {
+    "fusion_method": ["baseline_best"],
+    "tabular_feature_set": ["strict_main_input"],
+    "loss": ["weighted_bce"],
+    "threshold_strategy": ["validation_f1"]
+  }
+}

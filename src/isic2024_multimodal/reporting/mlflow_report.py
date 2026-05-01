@@ -15,6 +15,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--experiment-name", default="ISIC2024-Tabular-Baselines")
     parser.add_argument("--output", default="experiments/tables/mlflow_leaderboard.csv")
     parser.add_argument("--sort-metric", default=f"best_{PRIMARY_PAUC_METRIC}")
+    parser.add_argument("--run-group-id", default=None, help="Optional MLflow run_group_id tag filter.")
+    parser.add_argument("--dataset-id", default=None, help="Optional dataset_id tag filter.")
+    parser.add_argument("--model-family", default=None, help="Optional model_family tag filter.")
     return parser.parse_args()
 
 
@@ -33,7 +36,12 @@ def main() -> None:
 
     runs = mlflow.search_runs(
         experiment_ids=[experiment.experiment_id],
-        filter_string="tags.role = 'model_parent'",
+        filter_string=build_filter_string(
+            "model_parent",
+            args.run_group_id,
+            dataset_id=args.dataset_id,
+            model_family=args.model_family,
+        ),
         order_by=[f"metrics.{args.sort_metric} DESC", "attributes.start_time DESC"],
     )
     rows = _select_best_parent_rows(runs, args.sort_metric)
@@ -94,6 +102,27 @@ def _is_missing_value(value: object) -> bool:
     if isinstance(value, float) and math.isnan(value):
         return True
     return False
+
+
+def build_filter_string(
+    role: str,
+    run_group_id: str | None = None,
+    *,
+    dataset_id: str | None = None,
+    model_family: str | None = None,
+) -> str:
+    filters = [f"tags.role = '{escape_mlflow_filter_value(role)}'"]
+    if run_group_id:
+        filters.append(f"tags.run_group_id = '{escape_mlflow_filter_value(run_group_id)}'")
+    if dataset_id:
+        filters.append(f"tags.dataset_id = '{escape_mlflow_filter_value(dataset_id)}'")
+    if model_family:
+        filters.append(f"tags.model_family = '{escape_mlflow_filter_value(model_family)}'")
+    return " and ".join(filters)
+
+
+def escape_mlflow_filter_value(value: str) -> str:
+    return str(value).replace("\\", "\\\\").replace("'", "\\'")
 
 
 def _select_best_parent_rows(runs, sort_metric: str) -> list:

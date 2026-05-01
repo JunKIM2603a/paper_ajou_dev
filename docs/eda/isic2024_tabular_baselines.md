@@ -56,7 +56,34 @@ CatBoost의 categorical 처리는 다른 모델과 의도적으로 다르다. Ca
 
 ## GPU Runtime Policy
 
-Tabular baseline은 기본적으로 CPU에서 실행한다. GPU를 사용하려면 단일 runner에는 `--device cuda`, all-model runner에는 `--devices`를 명시한다.
+Tabular baseline은 기본적으로 CPU에서 실행한다. GPU를 사용하려면 all-model runner의 `--devices`를 우선 사용한다. 단일 runner의 `--device cuda`는 단일 모델 디버깅용으로 둔다.
+
+논문 운영에서는 family runner를 우선 사용한다. 이 경로는 dataset spec, run group, output/table path, MLflow filter, selection registry를 한 번에 맞춘다.
+
+```bash
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_experiment_family \
+  --family tabular_baselines \
+  --config experiments/configs/suites/tabular_baselines.json \
+  --run-group-id tabular_strict_v1_gpu0 \
+  --devices 0
+```
+
+결과는 다음 위치에 저장된다.
+
+```text
+experiments/outputs/tabular_baselines/<run_group_id>/
+experiments/tables/tabular_baselines/<run_group_id>/
+experiments/registry/selections/best_tabular_by_run_group.json
+```
+
+Tabular family만 초기화하려면 다음처럼 실행한다. 이 명령은 image/multimodal/final output, raw data, split, registry를 삭제하지 않는다.
+
+```bash
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_experiment_family \
+  --family tabular_baselines \
+  --run-group-id tabular_strict_v1_gpu0 \
+  --reset-family-output
+```
 
 GPU 사용 전에는 `paper` 환경에서 PyTorch CUDA가 실제 GPU를 볼 수 있는지 확인한다.
 
@@ -84,26 +111,28 @@ catboost
   categorical input: native cat_features 유지
 
 lightgbm
-  GPU option: device_type="gpu"
+  WSL/CUDA default: CPU backend
+  note: LightGBM GPU uses OpenCL, not PyTorch/XGBoost CUDA
 
 ft_transformer, ft_transformer_external
   PyTorch tensor/model을 CUDA device에 올려 학습
+  default train/predict batch size: 2048
 
 logistic_regression, svm, mlp
   CPU 기본값: sklearn estimator
   --device cuda 사용 시: repo-native torch estimator
 ```
 
-따라서 paper-facing tabular baseline 비교에서 `logistic_regression`, `svm`, `mlp`의 CPU 결과와 GPU 결과는 같은 estimator 구현으로 해석하지 않는다. GPU 실행은 주로 `xgboost`, `catboost`, `lightgbm`, `ft_transformer`, `ft_transformer_external`에 사용한다.
+따라서 paper-facing tabular baseline 비교에서 `logistic_regression`, `svm`, `mlp`의 CPU 결과와 GPU 결과는 같은 estimator 구현으로 해석하지 않는다. GPU 실행은 주로 `xgboost`, `catboost`, `ft_transformer`, `ft_transformer_external`에 사용한다. `lightgbm`은 WSL/CUDA 환경에서 CPU baseline으로 기록한다.
 
-단일 GPU 실행:
+단일 GPU 권장 실행:
 
 ```bash
-conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_tabular_baseline \
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_all_tabular_models \
   --dataset-root data/raw \
   --models xgboost catboost lightgbm ft_transformer ft_transformer_external \
   --feature-sets strict_main_input \
-  --device cuda
+  --devices 0
 ```
 
 여러 GPU 병렬 실행:
@@ -116,7 +145,37 @@ conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python
   --devices 0 1
 ```
 
-`run_all_tabular_models --devices 0 1`은 모델별 subprocess에 `CUDA_VISIBLE_DEVICES`를 하나씩 배정하고, 각 subprocess에 `--device cuda`를 전달한다. GPU가 보이지 않거나 PyTorch CUDA 초기화가 실패하면 runner가 실행 전에 중단된다.
+`run_all_tabular_models --devices 0 1`은 모델별 subprocess에 `CUDA_VISIBLE_DEVICES`를 하나씩 배정하고, 각 subprocess에 `--device cuda`를 전달한다. GPU가 보이지 않거나 PyTorch CUDA 초기화가 실패하면 preflight 단계에서 중단된다.
+
+권장 초기화는 `run_experiment_family --reset-family-output`이다. 기존 직접 runner 결과와 local MLflow history까지 모두 비우는 전체 로그 초기화가 필요할 때만 아래 명령을 쓴다.
+
+```bash
+rm -rf experiments/outputs/tabular_baselines \
+       experiments/outputs/tabular_baselines_smoke \
+       experiments/logs/mlruns \
+       experiments/logs/mlflow.db
+```
+
+이 명령은 `data/raw`, `data/processed`, `data/splits`, `experiments/registry`를 삭제하지 않는다. locked split CSV는 paper-valid 결과의 protocol 입력이므로, split을 의도적으로 재생성하는 경우가 아니면 유지한다.
+
+실행 로그는 `[YYYY-MM-DD HH:MM:SS]` prefix로 preflight, 모델별 subprocess, report 생성의 시작/종료와 duration을 남긴다. 개별 `run_tabular_baseline` subprocess 내부에서는 data/protocol load, trial, final_test 시간이 출력되고, 각 `summary.json`의 `timing_seconds`에 `prepare_splits_seconds`, `build_estimator_seconds`, `fit_seconds`, `select_threshold_seconds`, `evaluate_train_seconds`, `evaluate_val_seconds`, `evaluate_test_seconds`가 저장된다.
+
+`run_all_tabular_models`는 기본적으로 timestamp 기반 `run_group_id`를 생성하고, 실행 후 report를 해당 run group으로 필터링한다. 이전 MLflow run과 섞지 않고 같은 묶음을 다시 조회하려면 `--run-group-id <id>`를 명시한다.
+
+빠른 smoke test는 paper-facing output과 섞이지 않도록 별도 output root에 쓴다.
+
+```bash
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_all_tabular_models \
+  --dataset-root data/raw \
+  --models xgboost catboost lightgbm ft_transformer ft_transformer_external \
+  --feature-sets strict_main_input \
+  --devices 0 \
+  --max-train-rows 1000 \
+  --max-val-rows 500 \
+  --max-test-rows 500 \
+  --output-root experiments/outputs/tabular_baselines_smoke \
+  --skip-reports
+```
 
 ## Split Protocol
 
@@ -150,18 +209,21 @@ AUC, pAUC, Average Precision은 threshold-independent metric으로 probabilities
 Smoke run:
 
 ```bash
-PYTHONPATH=./src python -m isic2024_multimodal.cli.run_tabular_baseline \
-  --models logistic_regression \
+PYTHONPATH=./src python -m isic2024_multimodal.cli.run_all_tabular_models \
+  --models xgboost \
   --feature-sets strict_main_input \
+  --devices 0 \
   --max-train-rows 2000 \
   --max-val-rows 1000 \
-  --max-test-rows 1000
+  --max-test-rows 1000 \
+  --output-root experiments/outputs/tabular_baselines_smoke \
+  --skip-reports
 ```
 
 Paper-facing run은 row cap을 사용하지 않는다.
 
 ```bash
-PYTHONPATH=./src python -m isic2024_multimodal.cli.run_tabular_baseline \
+PYTHONPATH=./src python -m isic2024_multimodal.cli.run_all_tabular_models \
   --models logistic_regression svm mlp xgboost catboost lightgbm ft_transformer \
   --feature-sets strict_main_input
 ```
@@ -169,10 +231,10 @@ PYTHONPATH=./src python -m isic2024_multimodal.cli.run_tabular_baseline \
 GPU paper-facing candidate run:
 
 ```bash
-PYTHONPATH=./src python -m isic2024_multimodal.cli.run_tabular_baseline \
+PYTHONPATH=./src python -m isic2024_multimodal.cli.run_all_tabular_models \
   --models xgboost catboost lightgbm ft_transformer ft_transformer_external \
   --feature-sets strict_main_input \
-  --device cuda
+  --devices 0
 ```
 
 All-model runner:

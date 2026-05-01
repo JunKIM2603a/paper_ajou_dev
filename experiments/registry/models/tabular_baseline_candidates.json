@@ -1,0 +1,4 @@
+{
+  "family": "tabular_baselines",
+  "candidate_source": "src/isic2024_multimodal/baselines/tabular/baselines.py"
+}

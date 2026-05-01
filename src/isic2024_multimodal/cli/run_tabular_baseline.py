@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import atexit
+import gc
 import json
 import time
 from pathlib import Path
@@ -19,6 +21,33 @@ DEFAULT_HOLDOUT_SPLIT_CSV = "data/splits/isic2024_train_validation_test_split_se
 DEFAULT_CV_SPLIT_CSV = "data/splits/isic2024_train_validation_5fold_seed42.csv"
 
 
+def make_run_group_id(prefix: str = "tabular") -> str:
+    return f"{prefix}_{time.strftime('%Y%m%d_%H%M%S')}"
+
+
+def current_timestamp() -> str:
+    return time.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def format_duration(seconds: float) -> str:
+    seconds = max(0.0, float(seconds))
+    if seconds < 60:
+        return f"{seconds:.1f}s"
+    minutes, remaining_seconds = divmod(seconds, 60)
+    if minutes < 60:
+        return f"{int(minutes)}m {remaining_seconds:.1f}s"
+    hours, remaining_minutes = divmod(minutes, 60)
+    return f"{int(hours)}h {int(remaining_minutes)}m {remaining_seconds:.1f}s"
+
+
+def log_event(message: str) -> None:
+    print(f"[{current_timestamp()}] [run_tabular_baseline] {message}", flush=True)
+
+
+def record_timing(timings: dict[str, float], name: str, started_at: float) -> None:
+    timings[name] = round(time.time() - started_at, 6)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run ISIC2024 tabular baseline models.")
     parser.add_argument("--dataset-root", default=str(DEFAULT_DATASET_ROOT))
@@ -27,6 +56,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--tracking-uri", default=get_default_mlflow_tracking_uri())
     parser.add_argument("--experiment-name", default="ISIC2024-Tabular-Baselines")
     parser.add_argument("--output-root", default="experiments/outputs/tabular_baselines")
+    parser.add_argument("--run-group-id", default=None, help="Optional run group tag used to scope MLflow reports.")
+    parser.add_argument("--dataset-id", default=None, help="Versioned dataset id for registry/report filtering.")
+    parser.add_argument("--dataset-spec", default=None, help="Dataset spec JSON path used for this run.")
+    parser.add_argument("--model-family", default="tabular_baselines", help="Experiment family tag.")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--split-seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--cv-fold", type=int, default=0)
@@ -35,6 +68,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-train-rows", type=int, default=None, help="Optional post-split row cap for smoke tests.")
     parser.add_argument("--max-val-rows", type=int, default=None, help="Optional post-split row cap for smoke tests.")
     parser.add_argument("--max-test-rows", type=int, default=None, help="Optional post-split row cap for smoke tests.")
+    parser.add_argument(
+        "--preflight-only",
+        action="store_true",
+        help="Validate dataset, locked splits, feature sets, devices, and output-root status without training.",
+    )
     parser.add_argument(
         "--device",
         default="cpu",
@@ -69,6 +107,22 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    args.run_group_id = args.run_group_id or make_run_group_id()
+    command_start = time.time()
+    command_status = {"value": "failed"}
+
+    def log_command_end() -> None:
+        log_event(
+            f"End status={command_status['value']} "
+            f"run_group_id={args.run_group_id} duration={format_duration(time.time() - command_start)}"
+        )
+
+    atexit.register(log_command_end)
+    log_event(
+        "Start "
+        f"run_group_id={args.run_group_id} models={','.join(args.models)} "
+        f"feature_sets={','.join(args.feature_sets)} requested_device={args.device}"
+    )
     ensure_expected_conda_env()
     global binary_classification_metrics
     global build_catboost_estimator
@@ -79,6 +133,7 @@ def main() -> None:
     global build_torch_estimator
     global build_xgboost_estimator
     global device_uses_cuda
+    global effective_tabular_device
     global expand_search_space
     global get_model_specs
     global is_final_inputs_feature_payload
@@ -100,6 +155,7 @@ def main() -> None:
         build_torch_estimator,
         build_xgboost_estimator,
         device_uses_cuda,
+        effective_tabular_device,
         get_model_specs,
         split_feature_types,
     )
@@ -124,26 +180,24 @@ def main() -> None:
             "pandas and mlflow are required to run tabular baselines. Activate the conda env and install dependencies."
         ) from exc
 
+    if args.preflight_only:
+        preflight_start = time.time()
+        log_event("Start preflight")
+        preflight_summary = run_preflight(args)
+        log_event(
+            f"Finished preflight status={preflight_summary['status']} "
+            f"duration={format_duration(time.time() - preflight_start)}"
+        )
+        print(json.dumps(preflight_summary, ensure_ascii=False, indent=2))
+        command_status["value"] = "ok"
+        return
+
+    load_start = time.time()
+    log_event("Start data_and_protocol_load")
     validate_runtime_device(args.device)
     ensure_feature_set_json(args.eda_dir, args.feature_set_json)
-    feature_payload = json.loads(Path(args.feature_set_json).read_text(encoding="utf-8"))
-    raw_feature_sets = feature_payload.get("feature_sets", {})
-    feature_payload["feature_sets"] = {
-        normalize_feature_set_name(name): columns for name, columns in raw_feature_sets.items()
-    }
-    all_feature_sets = set(feature_payload["feature_sets"].keys())
-    if not all_feature_sets:
-        raise RuntimeError(f"No feature sets were found in {args.feature_set_json}")
-    requested_feature_sets = normalize_feature_set_names(args.feature_sets)
-    if requested_feature_sets:
-        unknown_feature_sets = sorted(set(requested_feature_sets) - all_feature_sets)
-        if unknown_feature_sets:
-            raise RuntimeError(
-                f"Requested feature sets are not available in {args.feature_set_json}: {unknown_feature_sets}"
-            )
-        available_feature_sets = set(requested_feature_sets)
-    else:
-        available_feature_sets = set(all_feature_sets)
+    feature_payload = load_feature_payload(args.feature_set_json)
+    available_feature_sets = resolve_available_feature_sets(feature_payload, args.feature_sets, args.feature_set_json)
 
     set_global_seed(args.seed)
     frame = load_merged_dataframe(args.dataset_root)
@@ -162,12 +216,19 @@ def main() -> None:
         if use_final_inputs
         else {}
     )
+    log_event(
+        f"Finished data_and_protocol_load rows={len(frame)} "
+        f"feature_sets={','.join(sorted(available_feature_sets))} "
+        f"duration={format_duration(time.time() - load_start)}"
+    )
 
     mlflow.set_tracking_uri(args.tracking_uri)
     mlflow.set_experiment(args.experiment_name)
 
     for spec in get_model_specs(args.models):
+        model_start = time.time()
         parent_run_name = sanitize_run_name(spec.name)
+        model_effective_device = effective_tabular_device(spec.name, args.device)
         combinations = [
             combination
             for combination in expand_search_space(spec.search_space)
@@ -175,6 +236,10 @@ def main() -> None:
         ]
         best_result = None
         best_run_name = None
+        log_event(
+            f"Start model={spec.name} requested_device={args.device} "
+            f"effective_device={model_effective_device} trials={len(combinations)}"
+        )
 
         with mlflow.start_run(run_name=parent_run_name):
             mlflow.set_tags(
@@ -183,6 +248,9 @@ def main() -> None:
                     "model_name": spec.name,
                     "role": "model_parent",
                     "dataset_name": "ISIC2024-challenge",
+                    "run_group_id": args.run_group_id,
+                    "dataset_id": args.dataset_id or "",
+                    "model_family": args.model_family,
                 }
             )
             mlflow.log_params(
@@ -202,6 +270,12 @@ def main() -> None:
                     "threshold_source": "validation_f1",
                     "selected_feature_sets": ",".join(sorted(available_feature_sets)),
                     "runtime_device": args.device,
+                    "requested_device": args.device,
+                    "effective_device": model_effective_device,
+                    "run_group_id": args.run_group_id,
+                    "dataset_id": args.dataset_id,
+                    "dataset_spec_path": args.dataset_spec,
+                    "model_family": args.model_family,
                     **missing_value_policy_params(),
                 }
             )
@@ -234,6 +308,11 @@ def main() -> None:
                 trial_run_name = f"{parent_run_name}_trial_{index:03d}"
                 output_dir = Path(args.output_root) / parent_run_name / trial_run_name
                 output_dir.mkdir(parents=True, exist_ok=True)
+                trial_start = time.time()
+                log_event(
+                    f"Start trial model={spec.name} trial={index}/{len(combinations)} "
+                    f"feature_set={feature_set_name}"
+                )
                 summary = train_and_evaluate(
                     frame=split_frame,
                     sample_ids=sample_ids,
@@ -243,10 +322,20 @@ def main() -> None:
                     hyperparameters=hyperparameters,
                     output_dir=output_dir,
                     device=args.device,
+                    run_group_id=args.run_group_id,
+                    dataset_id=args.dataset_id,
+                    dataset_spec_path=args.dataset_spec,
+                    model_family=args.model_family,
                     include_test=False,
                     max_train_rows=args.max_train_rows,
                     max_val_rows=args.max_val_rows,
                     max_test_rows=args.max_test_rows,
+                )
+                log_event(
+                    f"Finished trial model={spec.name} trial={index}/{len(combinations)} "
+                    f"feature_set={feature_set_name} val_{PRIMARY_PAUC_METRIC}="
+                    f"{summary['metrics']['val'][PRIMARY_PAUC_METRIC]:.6f} "
+                    f"duration={format_duration(time.time() - trial_start)}"
                 )
 
                 with mlflow.start_run(run_name=trial_run_name, nested=True):
@@ -256,12 +345,27 @@ def main() -> None:
                             "model_name": spec.name,
                             "role": "hyperparameter_trial",
                             "feature_set": feature_set_name,
+                            "run_group_id": args.run_group_id,
+                            "dataset_id": args.dataset_id or "",
+                            "model_family": args.model_family,
                         }
                     )
                     mlflow.log_params({f"hp_{key}": normalize_param_value(value) for key, value in hyperparameters.items()})
                     mlflow.log_param("feature_count", len(features))
                     mlflow.log_param("feature_set", feature_set_name)
                     mlflow.log_param("runtime_device", args.device)
+                    mlflow.log_param("requested_device", args.device)
+                    mlflow.log_param("effective_device", summary["effective_device"])
+                    mlflow.log_param("run_group_id", args.run_group_id)
+                    mlflow.log_param("dataset_id", args.dataset_id)
+                    mlflow.log_param("dataset_spec_path", args.dataset_spec)
+                    mlflow.log_param("model_family", args.model_family)
+                    mlflow.log_params(
+                        {
+                            f"runtime_{key}": normalize_param_value(value)
+                            for key, value in summary["runtime_parameters"].items()
+                        }
+                    )
                     mlflow.log_params(missing_value_policy_params(summary["missing_value_policy"]))
                     mlflow.log_dict(summary["split_summary"], "split_summary.json")
                     mlflow.log_dict(summary["metrics"], "metrics.json")
@@ -270,6 +374,8 @@ def main() -> None:
                         for metric_name, metric_value in metrics.items():
                             mlflow.log_metric(f"{metric_group}_{metric_name}", float(metric_value))
                     mlflow.log_metric("duration_seconds", float(summary["duration_seconds"]))
+                    for timing_name, timing_value in summary["timing_seconds"].items():
+                        mlflow.log_metric(f"timing_{timing_name}", float(timing_value))
                     mlflow.log_artifact(str(output_dir / "summary.json"))
 
                 score = select_trial_score(summary)
@@ -294,6 +400,10 @@ def main() -> None:
             else:
                 best_split_frame = frame[best_features + [target_column]].copy()
             final_output_dir = Path(args.output_root) / parent_run_name / "best_final_test"
+            final_start = time.time()
+            log_event(
+                f"Start final_test model={spec.name} best_feature_set={best_feature_set_name}"
+            )
             best_final_summary = train_and_evaluate(
                 frame=best_split_frame,
                 sample_ids=sample_ids,
@@ -303,10 +413,19 @@ def main() -> None:
                 hyperparameters=best_result["hyperparameters"],
                 output_dir=final_output_dir,
                 device=args.device,
+                run_group_id=args.run_group_id,
+                dataset_id=args.dataset_id,
+                dataset_spec_path=args.dataset_spec,
+                model_family=args.model_family,
                 include_test=True,
                 max_train_rows=args.max_train_rows,
                 max_val_rows=args.max_val_rows,
                 max_test_rows=args.max_test_rows,
+            )
+            log_event(
+                f"Finished final_test model={spec.name} test_{PRIMARY_PAUC_METRIC}="
+                f"{best_final_summary['metrics']['test'][PRIMARY_PAUC_METRIC]:.6f} "
+                f"duration={format_duration(time.time() - final_start)}"
             )
 
             mlflow.log_dict(best_final_summary, "best_summary.json")
@@ -318,10 +437,30 @@ def main() -> None:
                 }
             )
             mlflow.log_param("best_feature_set", best_result["hyperparameters"]["feature_set"])
+            mlflow.log_param("run_group_id", args.run_group_id)
+            mlflow.log_param("dataset_id", args.dataset_id)
+            mlflow.log_param("dataset_spec_path", args.dataset_spec)
+            mlflow.log_param("model_family", args.model_family)
             mlflow.log_param("selected_threshold", best_final_summary["selected_threshold"])
             mlflow.log_param("threshold_source", best_final_summary["threshold_source"])
+            mlflow.log_param("best_effective_device", best_final_summary["effective_device"])
+            mlflow.log_params(
+                {
+                    f"best_runtime_{key}": normalize_param_value(value)
+                    for key, value in best_final_summary["runtime_parameters"].items()
+                }
+            )
             for metric_name, metric_value in best_final_summary["metrics"]["test"].items():
                 mlflow.log_metric(f"best_{metric_name}", float(metric_value))
+            mlflow.log_metric("best_duration_seconds", float(best_final_summary["duration_seconds"]))
+            for timing_name, timing_value in best_final_summary["timing_seconds"].items():
+                mlflow.log_metric(f"best_timing_{timing_name}", float(timing_value))
+        log_event(
+            f"Finished model={spec.name} best_feature_set={best_result['feature_set_name']} "
+            f"duration={format_duration(time.time() - model_start)}"
+        )
+
+    command_status["value"] = "ok"
 
 
 def ensure_feature_set_json(eda_dir: str, feature_set_json: str) -> None:
@@ -357,7 +496,123 @@ def ensure_feature_set_json(eda_dir: str, feature_set_json: str) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def load_feature_payload(feature_set_json: str) -> dict[str, Any]:
+    from isic2024_multimodal.features.tabular_terms import normalize_feature_set_name
+
+    path = Path(feature_set_json)
+    if not path.exists():
+        raise FileNotFoundError(f"Feature set JSON not found: {path}")
+    feature_payload = json.loads(path.read_text(encoding="utf-8"))
+    raw_feature_sets = feature_payload.get("feature_sets", {})
+    feature_payload["feature_sets"] = {
+        normalize_feature_set_name(name): columns for name, columns in raw_feature_sets.items()
+    }
+    return feature_payload
+
+
+def resolve_available_feature_sets(
+    feature_payload: dict[str, Any],
+    requested_feature_sets: list[str] | None,
+    feature_set_json: str,
+) -> set[str]:
+    from isic2024_multimodal.features.tabular_terms import normalize_feature_set_names
+
+    all_feature_sets = set(feature_payload["feature_sets"].keys())
+    if not all_feature_sets:
+        raise RuntimeError(f"No feature sets were found in {feature_set_json}")
+    normalized_requested = normalize_feature_set_names(requested_feature_sets)
+    if normalized_requested:
+        unknown_feature_sets = sorted(set(normalized_requested) - all_feature_sets)
+        if unknown_feature_sets:
+            raise RuntimeError(
+                f"Requested feature sets are not available in {feature_set_json}: {unknown_feature_sets}"
+            )
+        return set(normalized_requested)
+    return set(all_feature_sets)
+
+
+def run_preflight(args: argparse.Namespace) -> dict[str, Any]:
+    from isic2024_multimodal.baselines.tabular.baselines import effective_tabular_device, get_model_specs
+    from isic2024_multimodal.features.final_tabular_inputs import (
+        build_final_feature_frames,
+        is_final_inputs_feature_payload,
+    )
+
+    validate_runtime_device(args.device)
+    feature_payload = load_feature_payload(args.feature_set_json)
+    available_feature_sets = resolve_available_feature_sets(feature_payload, args.feature_sets, args.feature_set_json)
+    specs = get_model_specs(args.models)
+    frame = load_merged_dataframe(args.dataset_root)
+    split_definition = load_locked_split_definition(
+        holdout_split_csv=args.holdout_split_csv,
+        cv_split_csv=args.cv_split_csv,
+        cv_fold=args.cv_fold,
+    )
+    sample_ids = set(frame["isic_id"].astype(str))
+    split_ids = split_definition["train_ids"] | split_definition["val_ids"] | split_definition["test_ids"]
+    missing_split_ids = sorted(split_ids - sample_ids)
+    if missing_split_ids:
+        raise RuntimeError(
+            "Locked split IDs are missing from the dataset frame. "
+            f"Missing count={len(missing_split_ids)}, examples={missing_split_ids[:10]}"
+        )
+
+    feature_missing: dict[str, list[str]] = {}
+    if is_final_inputs_feature_payload(feature_payload):
+        final_feature_frames = build_final_feature_frames(frame, args.eda_dir, sorted(available_feature_sets))
+        for feature_set_name in sorted(available_feature_sets):
+            columns = set(final_feature_frames[feature_set_name].columns)
+            missing = [column for column in feature_payload["feature_sets"][feature_set_name] if column not in columns]
+            if missing:
+                feature_missing[feature_set_name] = missing[:10]
+    else:
+        frame_columns = set(frame.columns)
+        for feature_set_name in sorted(available_feature_sets):
+            missing = [column for column in feature_payload["feature_sets"][feature_set_name] if column not in frame_columns]
+            if missing:
+                feature_missing[feature_set_name] = missing[:10]
+    if feature_missing:
+        raise RuntimeError(f"Feature columns are missing from the preflight frame: {feature_missing}")
+
+    output_root = Path(args.output_root)
+    summary_count = len(list(output_root.glob("**/summary.json"))) if output_root.exists() else 0
+    output_warnings = []
+    if summary_count:
+        output_warnings.append(
+            f"Output root already contains {summary_count} summary.json files; use a separate smoke output root when row caps are set."
+        )
+
+    return {
+        "status": "ok",
+        "dataset_root": str(Path(args.dataset_root).resolve()),
+        "dataset_rows": int(len(frame)),
+        "positive_rows": int(frame[DEFAULT_TARGET_COLUMN].sum()),
+        "feature_set_json": str(Path(args.feature_set_json).resolve()),
+        "feature_sets": sorted(available_feature_sets),
+        "models": [spec.name for spec in specs],
+        "run_group_id": getattr(args, "run_group_id", None),
+        "dataset_id": getattr(args, "dataset_id", None),
+        "dataset_spec_path": getattr(args, "dataset_spec", None),
+        "model_family": getattr(args, "model_family", "tabular_baselines"),
+        "requested_device": args.device,
+        "effective_devices": {spec.name: effective_tabular_device(spec.name, args.device) for spec in specs},
+        "split_source": "locked_split_csv",
+        "split_rows": {
+            "train": int(split_definition["num_train_rows"]),
+            "val": int(split_definition["num_val_rows"]),
+            "test": int(split_definition["num_test_rows"]),
+        },
+        "overlap_checks": split_definition["overlap_checks"],
+        "output_root": str(output_root.resolve()),
+        "output_root_exists": output_root.exists(),
+        "output_summary_count": summary_count,
+        "output_warnings": output_warnings,
+    }
+
+
 def load_merged_dataframe(dataset_root: str):
+    from isic2024_multimodal.data.tabular_dataset import load_tabular_dataframe
+
     frame = load_tabular_dataframe(dataset_root, include_image_columns=False)
     if DEFAULT_TARGET_COLUMN not in frame.columns:
         raise RuntimeError(f"Target column '{DEFAULT_TARGET_COLUMN}' not found in {dataset_root}")
@@ -384,99 +639,150 @@ def train_and_evaluate(
     hyperparameters: dict[str, Any],
     output_dir: Path,
     device: str,
+    run_group_id: str,
+    dataset_id: str | None,
+    dataset_spec_path: str | None,
+    model_family: str,
     include_test: bool,
     max_train_rows: int | None = None,
     max_val_rows: int | None = None,
     max_test_rows: int | None = None,
 ) -> dict[str, Any]:
+    from isic2024_multimodal.baselines.tabular.baselines import effective_tabular_device
     from isic2024_multimodal.features.tabular_missing import missing_value_policy_summary
 
     start = time.time()
+    started_at = current_timestamp()
+    timings: dict[str, float] = {}
+    stage_start = time.time()
     output_dir.mkdir(parents=True, exist_ok=True)
     seed = int(hyperparameters["seed"])
     set_global_seed(seed)
+    effective_device = effective_tabular_device(model_name, device)
+    estimator_device = "cpu" if effective_device == "cpu" else device
+    estimator = None
+    record_timing(timings, "initialize_seconds", stage_start)
 
-    X = frame.drop(columns=[target_column]).copy()
-    y = frame[target_column].astype(float).astype(int)
+    try:
+        stage_start = time.time()
+        X = frame.drop(columns=[target_column]).copy()
+        y = frame[target_column].astype(float).astype(int)
 
-    for column in X.columns:
-        X[column] = X[column].where(X[column].notna(), None)
+        for column in X.columns:
+            X[column] = X[column].where(X[column].notna(), None)
 
-    sample_ids = sample_ids.astype(str)
-    train_mask = sample_ids.isin(split_definition["train_ids"])
-    val_mask = sample_ids.isin(split_definition["val_ids"])
-    test_mask = sample_ids.isin(split_definition["test_ids"])
-    X_train = X.loc[train_mask].copy()
-    X_val = X.loc[val_mask].copy()
-    y_train = y.loc[train_mask].copy()
-    y_val = y.loc[val_mask].copy()
-    if include_test:
-        X_test = X.loc[test_mask].copy()
-        y_test = y.loc[test_mask].copy()
+        sample_ids = sample_ids.astype(str)
+        train_mask = sample_ids.isin(split_definition["train_ids"])
+        val_mask = sample_ids.isin(split_definition["val_ids"])
+        test_mask = sample_ids.isin(split_definition["test_ids"])
+        X_train = X.loc[train_mask].copy()
+        X_val = X.loc[val_mask].copy()
+        y_train = y.loc[train_mask].copy()
+        y_val = y.loc[val_mask].copy()
+        if include_test:
+            X_test = X.loc[test_mask].copy()
+            y_test = y.loc[test_mask].copy()
 
-    X_train, y_train = limit_split_rows(X_train, y_train, max_train_rows, seed=seed)
-    X_val, y_val = limit_split_rows(X_val, y_val, max_val_rows, seed=seed + 1)
-    if include_test:
-        X_test, y_test = limit_split_rows(X_test, y_test, max_test_rows, seed=seed + 2)
+        X_train, y_train = limit_split_rows(X_train, y_train, max_train_rows, seed=seed)
+        X_val, y_val = limit_split_rows(X_val, y_val, max_val_rows, seed=seed + 1)
+        if include_test:
+            X_test, y_test = limit_split_rows(X_test, y_test, max_test_rows, seed=seed + 2)
 
-    numeric_columns, categorical_columns = split_feature_types(X_train)
-    estimator = build_estimator(
-        model_name=model_name,
-        hyperparameters=hyperparameters,
-        X_train=X_train,
-        y_train=y_train,
-        numeric_columns=numeric_columns,
-        categorical_columns=categorical_columns,
-        device=device,
-    )
-    estimator.fit(X_train, y_train)
+        numeric_columns, categorical_columns = split_feature_types(X_train)
+        record_timing(timings, "prepare_splits_seconds", stage_start)
 
-    val_labels, val_probabilities = predict_probabilities(estimator, X_val, y_val)
-    selected_threshold = select_threshold_by_f1(val_labels, val_probabilities)
-    metrics = {
-        "train": evaluate_predictions(estimator, X_train, y_train, threshold=selected_threshold),
-        "val": evaluate_predictions(estimator, X_val, y_val, threshold=selected_threshold),
-    }
-    if include_test:
-        metrics["test"] = evaluate_predictions(estimator, X_test, y_test, threshold=selected_threshold)
-    duration_seconds = time.time() - start
+        stage_start = time.time()
+        estimator = build_estimator(
+            model_name=model_name,
+            hyperparameters=hyperparameters,
+            X_train=X_train,
+            y_train=y_train,
+            numeric_columns=numeric_columns,
+            categorical_columns=categorical_columns,
+            device=estimator_device,
+        )
+        record_timing(timings, "build_estimator_seconds", stage_start)
 
-    summary = {
-        "model_name": model_name,
-        "hyperparameters": {key: normalize_param_value(value) for key, value in hyperparameters.items()},
-        "threshold_source": "validation_f1",
-        "selected_threshold": selected_threshold,
-        "split_source": "locked_split_csv",
-        "missing_value_policy": missing_value_policy_summary(),
-        "split_summary": {
-            "num_train_rows": int(len(X_train)),
-            "num_val_rows": int(len(X_val)),
-            "num_test_rows": int(len(X_test) if include_test else split_definition["num_test_rows"]),
-            "num_train_positive": int(y_train.sum()),
-            "num_val_positive": int(y_val.sum()),
-            "num_test_positive": int(y_test.sum() if include_test else y.loc[test_mask].sum()),
-            "num_train_groups": int(split_definition["num_train_patients"]),
-            "num_val_groups": int(split_definition["num_val_patients"]),
-            "num_test_groups": int(split_definition["num_test_patients"]),
-            "locked_num_train_rows": int(split_definition["num_train_rows"]),
-            "locked_num_val_rows": int(split_definition["num_val_rows"]),
-            "locked_num_test_rows": int(split_definition["num_test_rows"]),
-            "split_group_policy": "patient_id -> lesion_id -> isic_id",
-            "holdout_split_csv": split_definition["holdout_split_csv"],
-            "cv_split_csv": split_definition["cv_split_csv"],
-            "cv_fold": split_definition["cv_fold"],
-            "numeric_columns": numeric_columns,
-            "categorical_columns": categorical_columns,
-            "runtime_device": device,
-            "max_train_rows": max_train_rows,
-            "max_val_rows": max_val_rows,
-            "max_test_rows": max_test_rows,
-        },
-        "metrics": metrics,
-        "duration_seconds": duration_seconds,
-    }
-    (output_dir / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
-    return summary
+        stage_start = time.time()
+        estimator.fit(X_train, y_train)
+        record_timing(timings, "fit_seconds", stage_start)
+        runtime_parameters = estimator.runtime_params() if hasattr(estimator, "runtime_params") else {}
+
+        stage_start = time.time()
+        val_labels, val_probabilities = predict_probabilities(estimator, X_val, y_val)
+        selected_threshold = select_threshold_by_f1(val_labels, val_probabilities)
+        record_timing(timings, "select_threshold_seconds", stage_start)
+
+        stage_start = time.time()
+        train_metrics = evaluate_predictions(estimator, X_train, y_train, threshold=selected_threshold)
+        record_timing(timings, "evaluate_train_seconds", stage_start)
+
+        stage_start = time.time()
+        val_metrics = evaluate_predictions(estimator, X_val, y_val, threshold=selected_threshold)
+        record_timing(timings, "evaluate_val_seconds", stage_start)
+
+        metrics = {
+            "train": train_metrics,
+            "val": val_metrics,
+        }
+        if include_test:
+            stage_start = time.time()
+            metrics["test"] = evaluate_predictions(estimator, X_test, y_test, threshold=selected_threshold)
+            record_timing(timings, "evaluate_test_seconds", stage_start)
+        duration_seconds = time.time() - start
+        timings["total_seconds"] = round(duration_seconds, 6)
+
+        summary = {
+            "model_name": model_name,
+            "hyperparameters": {key: normalize_param_value(value) for key, value in hyperparameters.items()},
+            "run_group_id": run_group_id,
+            "dataset_id": dataset_id,
+            "dataset_spec_path": dataset_spec_path,
+            "model_family": model_family,
+            "started_at": started_at,
+            "ended_at": current_timestamp(),
+            "requested_device": device,
+            "effective_device": effective_device,
+            "runtime_parameters": runtime_parameters,
+            "threshold_source": "validation_f1",
+            "selected_threshold": selected_threshold,
+            "split_source": "locked_split_csv",
+            "missing_value_policy": missing_value_policy_summary(),
+            "split_summary": {
+                "num_train_rows": int(len(X_train)),
+                "num_val_rows": int(len(X_val)),
+                "num_test_rows": int(len(X_test) if include_test else split_definition["num_test_rows"]),
+                "num_train_positive": int(y_train.sum()),
+                "num_val_positive": int(y_val.sum()),
+                "num_test_positive": int(y_test.sum() if include_test else y.loc[test_mask].sum()),
+                "num_train_groups": int(split_definition["num_train_patients"]),
+                "num_val_groups": int(split_definition["num_val_patients"]),
+                "num_test_groups": int(split_definition["num_test_patients"]),
+                "locked_num_train_rows": int(split_definition["num_train_rows"]),
+                "locked_num_val_rows": int(split_definition["num_val_rows"]),
+                "locked_num_test_rows": int(split_definition["num_test_rows"]),
+                "split_group_policy": "patient_id -> lesion_id -> isic_id",
+                "holdout_split_csv": split_definition["holdout_split_csv"],
+                "cv_split_csv": split_definition["cv_split_csv"],
+                "cv_fold": split_definition["cv_fold"],
+                "numeric_columns": numeric_columns,
+                "categorical_columns": categorical_columns,
+                "runtime_device": device,
+                "requested_device": device,
+                "effective_device": effective_device,
+                "max_train_rows": max_train_rows,
+                "max_val_rows": max_val_rows,
+                "max_test_rows": max_test_rows,
+            },
+            "metrics": metrics,
+            "duration_seconds": duration_seconds,
+            "timing_seconds": timings,
+        }
+        (output_dir / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+        return summary
+    finally:
+        estimator = None
+        cleanup_runtime_resources(estimator_device)
 
 
 def limit_split_rows(X, y, max_rows: int | None, *, seed: int):
@@ -623,9 +929,7 @@ def build_estimator(
             numeric_columns=list(numeric_columns),
             categorical_columns=list(categorical_columns),
         )
-        train_frame = preprocessor.fit_transform(X_train)
         estimator = build_catboost_estimator(hyperparameters, device=device)
-        estimator.fit(train_frame, y_train, cat_features=categorical_columns)
         return CatBoostWrapper(estimator=estimator, preprocessor=preprocessor, categorical_columns=categorical_columns)
 
     raise ValueError(f"Unsupported tabular model: {model_name}")
@@ -638,6 +942,8 @@ class CatBoostWrapper:
         self.categorical_columns = categorical_columns
 
     def fit(self, X, y):
+        train_frame = self.preprocessor.fit_transform(X)
+        self.estimator.fit(train_frame, y, cat_features=self.categorical_columns)
         return self
 
     def _prepare(self, X):
@@ -687,8 +993,25 @@ def missing_value_policy_params(policy: dict[str, Any] | None = None) -> dict[st
     return params
 
 
+def cleanup_runtime_resources(device: str) -> None:
+    gc.collect()
+    if not str(device).startswith("cuda"):
+        return
+    try:
+        import torch
+    except ImportError:
+        return
+    if not torch.cuda.is_available():
+        return
+    torch.cuda.empty_cache()
+    try:
+        torch.cuda.ipc_collect()
+    except RuntimeError:
+        pass
+
+
 def validate_runtime_device(device: str) -> None:
-    if not device_uses_cuda(device):
+    if not str(device).startswith("cuda"):
         return
     import torch
 

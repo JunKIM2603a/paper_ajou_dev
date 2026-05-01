@@ -1,0 +1,9 @@
+{
+  "family": "multimodal_baselines",
+  "candidate_types": [
+    "best_tabular_plus_best_image",
+    "project_native_multimodal",
+    "open_source_multimodal"
+  ],
+  "candidates": []
+}

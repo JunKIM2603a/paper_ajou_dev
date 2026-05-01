@@ -1,0 +1,11 @@
+{
+  "family": "multimodal_baselines",
+  "experiment_name": "ISIC2024-Multimodal-Baselines",
+  "dataset_spec": "experiments/configs/dataset_specs/strict_main_input_plus_embeddings_v1.json",
+  "config": "experiments/configs/multimodal/default.json",
+  "candidate_sources": [
+    "experiments/registry/selections/best_tabular_by_run_group.json",
+    "experiments/registry/selections/best_image_by_run_group.json",
+    "experiments/registry/models/multimodal_candidates.json"
+  ]
+}
