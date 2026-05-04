@@ -109,6 +109,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Disable pretrained/model hub weights for smoke testing or offline runs.",
     )
+    parser.add_argument(
+        "--auto-download-checkpoints",
+        action="store_true",
+        help="Download registered missing local checkpoints before checkpoint preflight.",
+    )
     return parser.parse_args()
 
 
@@ -130,6 +135,8 @@ def main() -> None:
         create_splits_from_locked_csvs,
         resolve_dataset_root,
     )
+    from isic2024_multimodal.models.image.checkpoint_downloads import download_for_model_config
+    from isic2024_multimodal.models.image.checkpoint_preflight import preflight_image_model_config
     from isic2024_multimodal.models.image.factory import build_model
     from isic2024_multimodal.training.trainer import run_training
 
@@ -150,6 +157,12 @@ def main() -> None:
     config = load_json(args.config)
     if args.disable_pretrained:
         _disable_pretrained_weights(config)
+    checkpoint_download = None
+    if args.auto_download_checkpoints:
+        checkpoint_download = download_for_model_config(config["model"])
+        _log(f"checkpoint download={json.dumps(checkpoint_download, ensure_ascii=False)}")
+    checkpoint_preflight = preflight_image_model_config(config["model"])
+    _log(f"checkpoint preflight={json.dumps(checkpoint_preflight, ensure_ascii=False)}")
     if args.epochs_override is not None:
         config.setdefault("search_space", {})
         config["search_space"]["epochs"] = [int(args.epochs_override)]
@@ -159,6 +172,9 @@ def main() -> None:
     num_workers = int(config["dataset"].get("num_workers", 0))
     validation_ratio = float(config["dataset"].get("validation_ratio", 0.2))
     test_ratio = float(config["dataset"].get("test_ratio", 0.2))
+    preprocessing_contract = image_preprocessing_contract(config["model"], config["dataset"])
+    normalize_mean = preprocessing_contract["normalize_mean"]
+    normalize_std = preprocessing_contract["normalize_std"]
     seed = int(args.seed if args.seed is not None else config["dataset"].get("seed", DEFAULT_SEED))
     config.setdefault("dataset", {})
     config["dataset"]["seed"] = seed
@@ -167,6 +183,7 @@ def main() -> None:
         f"loaded config for model={model_name}, image_size={image_size}, batch_size={batch_size}, "
         f"num_workers={num_workers}, validation_ratio={validation_ratio}, test_ratio={test_ratio}, seed={seed}"
     )
+    _log(f"image preprocessing contract={json.dumps(preprocessing_contract, ensure_ascii=False)}")
 
     # CSV와 JPEG 매핑 정보를 한 번 정리한 뒤 캐시해 두면 반복 실행 시 로딩이 빨라진다.
     _log("building manifest")
@@ -203,6 +220,9 @@ def main() -> None:
                     "cv_split_csv": str(Path(args.cv_split_csv).resolve()),
                     "cv_fold": args.cv_fold,
                     "split_rows": {name: len(items) for name, items in splits.items()},
+                    "checkpoint_download": checkpoint_download,
+                    "checkpoint_preflight": checkpoint_preflight,
+                    "image_preprocessing_contract": preprocessing_contract,
                 },
                 ensure_ascii=False,
                 indent=2,
@@ -210,9 +230,27 @@ def main() -> None:
         )
         return
 
-    train_dataset = ImageClassificationDataset(splits["train"], image_size=image_size, augment=True)
-    val_dataset = ImageClassificationDataset(splits["val"], image_size=image_size, augment=False)
-    test_dataset = ImageClassificationDataset(splits["test"], image_size=image_size, augment=False)
+    train_dataset = ImageClassificationDataset(
+        splits["train"],
+        image_size=image_size,
+        augment=True,
+        normalize_mean=normalize_mean,
+        normalize_std=normalize_std,
+    )
+    val_dataset = ImageClassificationDataset(
+        splits["val"],
+        image_size=image_size,
+        augment=False,
+        normalize_mean=normalize_mean,
+        normalize_std=normalize_std,
+    )
+    test_dataset = ImageClassificationDataset(
+        splits["test"],
+        image_size=image_size,
+        augment=False,
+        normalize_mean=normalize_mean,
+        normalize_std=normalize_std,
+    )
 
     common_loader_kwargs = {
         "num_workers": num_workers,
@@ -295,6 +333,7 @@ def main() -> None:
                 "test_ratio": test_ratio,
                 "seed": seed,
                 "disable_pretrained": args.disable_pretrained,
+                "auto_download_checkpoints": args.auto_download_checkpoints,
                 "max_trials": args.max_trials,
                 "trial_indices": json.dumps(args.trial_indices) if args.trial_indices is not None else None,
                 "epochs_override": args.epochs_override,
@@ -313,8 +352,16 @@ def main() -> None:
                 "holdout_split_csv": str(Path(args.holdout_split_csv).resolve()),
                 "cv_split_csv": str(Path(args.cv_split_csv).resolve()),
                 "cv_fold": args.cv_fold,
+                "image_normalize_mean": json.dumps(normalize_mean),
+                "image_normalize_std": json.dumps(normalize_std),
+                "image_preprocessing_source": preprocessing_contract["source"],
+                "image_preprocessing_notes": preprocessing_contract["notes"],
             }
         )
+        if checkpoint_download is not None:
+            mlflow.log_dict(checkpoint_download, "checkpoint_download.json")
+        mlflow.log_dict(checkpoint_preflight, "checkpoint_preflight.json")
+        mlflow.log_dict(preprocessing_contract, "image_preprocessing_contract.json")
         mlflow.log_dict(config, "resolved_config.json")
 
         # search_space의 모든 조합을 순회하면서 자식 런을 생성한다.
@@ -322,12 +369,31 @@ def main() -> None:
             run_name = f"{parent_run_name}_trial_{trial_index + 1:03d}"
             output_dir = Path(args.output_root) / parent_run_name / run_name
             trial_seed = seed + trial_index
+            trial_started_at = current_timestamp()
             _log(
                 f"trial {execution_order}/{len(planned_trials)} start: {run_name} "
                 f"(search_space_index={trial_index})"
             )
             _log(f"trial seed={trial_seed}")
             _log(f"trial hyperparameters={json.dumps(hyperparameters, ensure_ascii=False)}")
+            write_run_status(
+                output_dir,
+                {
+                    "status": "running",
+                    "model_name": model_name,
+                    "config_path": str(Path(args.config).resolve()),
+                    "run_name": run_name,
+                    "trial_index": trial_index,
+                    "trial_seed": trial_seed,
+                    "started_at": trial_started_at,
+                    "ended_at": None,
+                    "duration_seconds": None,
+                    "split_rows": {name: len(items) for name, items in splits.items()},
+                    "checkpoint_download": checkpoint_download,
+                    "checkpoint_preflight": checkpoint_preflight,
+                    "hyperparameters": hyperparameters,
+                },
+            )
             with mlflow.start_run(run_name=run_name, nested=True):
                 mlflow.set_tags(
                     {
@@ -387,6 +453,25 @@ def main() -> None:
                         json.dumps(summary, ensure_ascii=False, indent=2),
                         encoding="utf-8",
                     )
+                    write_run_status(
+                        output_dir,
+                        {
+                            "status": "completed",
+                            "model_name": model_name,
+                            "config_path": str(Path(args.config).resolve()),
+                            "run_name": run_name,
+                            "trial_index": trial_index,
+                            "trial_seed": trial_seed,
+                            "started_at": trial_started_at,
+                            "ended_at": current_timestamp(),
+                            "duration_seconds": summary.get("duration_seconds"),
+                            "split_rows": {name: len(items) for name, items in splits.items()},
+                            "checkpoint_download": checkpoint_download,
+                            "checkpoint_preflight": checkpoint_preflight,
+                            "hyperparameters": hyperparameters,
+                            "summary_path": str(output_dir / "summary.json"),
+                        },
+                    )
                     _log(f"trial complete: {run_name}")
 
                     for metric_name, metric_value in summary["test_metrics"].items():
@@ -400,13 +485,7 @@ def main() -> None:
                     mlflow.log_artifact(str(output_dir / "best_model.pt"))
                     mlflow.set_tag("trial_status", "completed")
 
-                    score = summary["best_validation_metrics"].get(PRIMARY_PAUC_METRIC, float("nan"))
-                    if score != score:
-                        score = summary["best_validation_metrics"].get("auc_roc", float("nan"))
-                    if score != score:
-                        score = summary["test_metrics"]["auc_roc"]
-                    if score != score:
-                        score = summary["test_metrics"]["f1_score"]
+                    score = select_trial_score(summary)
                     # 부모 런에는 자식 런 중 최고 성능 조합만 요약해 남긴다.
                     if best_result is None or score > best_result["score"]:
                         best_result = {
@@ -420,6 +499,27 @@ def main() -> None:
                     output_dir.mkdir(parents=True, exist_ok=True)
                     error_path = output_dir / "error.txt"
                     error_path.write_text(traceback.format_exc(), encoding="utf-8")
+                    write_run_status(
+                        output_dir,
+                        {
+                            "status": "failed",
+                            "model_name": model_name,
+                            "config_path": str(Path(args.config).resolve()),
+                            "run_name": run_name,
+                            "trial_index": trial_index,
+                            "trial_seed": trial_seed,
+                            "started_at": trial_started_at,
+                            "ended_at": current_timestamp(),
+                            "duration_seconds": None,
+                            "split_rows": {name: len(items) for name, items in splits.items()},
+                            "checkpoint_download": checkpoint_download,
+                            "checkpoint_preflight": checkpoint_preflight,
+                            "hyperparameters": hyperparameters,
+                            "failure_type": type(exc).__name__,
+                            "failure_message": str(exc),
+                            "traceback_path": str(error_path),
+                        },
+                    )
                     mlflow.set_tag("trial_status", "failed")
                     mlflow.set_tag("failure_type", type(exc).__name__)
                     mlflow.log_artifact(str(error_path))
@@ -458,6 +558,18 @@ def main() -> None:
     print(json.dumps({"parent_run_id": parent_run.info.run_id, "best_child_run_name": best_run_name}, indent=2))
 
 
+def current_timestamp() -> str:
+    return time.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def write_run_status(output_dir: Path, payload: dict[str, Any]) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "run_status.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
 def flatten_params(values: dict[str, Any], prefix: str) -> dict[str, Any]:
     flattened: dict[str, Any] = {}
     for key, value in values.items():
@@ -467,6 +579,63 @@ def flatten_params(values: dict[str, Any], prefix: str) -> dict[str, Any]:
         else:
             flattened[name] = value
     return flattened
+
+
+def select_trial_score(summary: dict[str, Any]) -> float:
+    metrics = summary.get("best_validation_metrics", {})
+    for metric_name in [
+        PRIMARY_PAUC_METRIC,
+        "auc_roc",
+        "average_precision",
+        "f1_score",
+        "balanced_accuracy",
+    ]:
+        score = float(metrics.get(metric_name, float("nan")))
+        if score == score:
+            return score
+    return float("-inf")
+
+
+def image_preprocessing_contract(
+    model_config: dict[str, Any],
+    dataset_config: dict[str, Any],
+) -> dict[str, Any]:
+    configured_mean = dataset_config.get("normalize_mean")
+    configured_std = dataset_config.get("normalize_std")
+    backend = str(model_config.get("backend", ""))
+    display_name = str(model_config.get("display_name", "image_model"))
+
+    if configured_mean is not None or configured_std is not None:
+        if configured_mean is None or configured_std is None:
+            raise ValueError("Both dataset.normalize_mean and dataset.normalize_std must be set together.")
+        mean = [float(value) for value in configured_mean]
+        std = [float(value) for value in configured_std]
+        source = "config"
+        notes = "dataset config normalization override"
+    elif backend == "open_clip":
+        mean = [0.48145466, 0.4578275, 0.40821073]
+        std = [0.26862954, 0.26130258, 0.27577711]
+        source = "open_clip_default"
+        notes = "CLIP/OpenCLIP RGB normalization for BioMedCLIP and CheXzero-style encoders"
+    else:
+        mean = [0.485, 0.456, 0.406]
+        std = [0.229, 0.224, 0.225]
+        source = "imagenet_default"
+        notes = "ImageNet RGB normalization"
+
+    if backend == "torchxrayvision":
+        notes += "; TorchXRayVision wrapper converts ImageNet-normalized RGB to single-channel xrv scale"
+    if backend == "medclip":
+        notes += "; MedCLIP wrapper converts ImageNet-normalized RGB to official grayscale MedCLIP scale"
+
+    return {
+        "model_name": display_name,
+        "backend": backend,
+        "normalize_mean": mean,
+        "normalize_std": std,
+        "source": source,
+        "notes": notes,
+    }
 
 
 def _select_trial_plan(
@@ -507,6 +676,8 @@ def _disable_pretrained_weights(config: dict[str, Any]) -> None:
             model_config["pretrained"] = None
         else:
             model_config["pretrained"] = False
+    if "checkpoint_path" in model_config:
+        model_config["checkpoint_path"] = None
 
 
 def _limit_samples(samples: list[Any], max_samples: int | None, seed: int) -> list[Any]:

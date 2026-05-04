@@ -31,7 +31,16 @@ class ImageSample:
 
 
 class ImageClassificationDataset(Dataset):
-    def __init__(self, samples: list[ImageSample], image_size: int, augment: bool) -> None:
+    def __init__(
+        self,
+        samples: list[ImageSample],
+        image_size: int,
+        augment: bool,
+        normalize_mean: list[float] | None = None,
+        normalize_std: list[float] | None = None,
+    ) -> None:
+        normalize_mean = normalize_mean or [0.485, 0.456, 0.406]
+        normalize_std = normalize_std or [0.229, 0.224, 0.225]
         if augment:
             self.transform = transforms.Compose(
                 [
@@ -40,7 +49,7 @@ class ImageClassificationDataset(Dataset):
                     transforms.RandomRotation(degrees=10),
                     transforms.ColorJitter(brightness=0.1, contrast=0.1),
                     transforms.ToTensor(),
-                    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                    transforms.Normalize(mean=normalize_mean, std=normalize_std),
                 ]
             )
         else:
@@ -48,7 +57,7 @@ class ImageClassificationDataset(Dataset):
                 [
                     transforms.Resize((image_size, image_size)),
                     transforms.ToTensor(),
-                    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                    transforms.Normalize(mean=normalize_mean, std=normalize_std),
                 ]
             )
         self.samples = samples

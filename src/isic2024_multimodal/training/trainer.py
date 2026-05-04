@@ -10,7 +10,11 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 
-from isic2024_multimodal.evaluation.metrics import PRIMARY_PAUC_METRIC, binary_classification_metrics
+from isic2024_multimodal.evaluation.metrics import (
+    PRIMARY_PAUC_METRIC,
+    select_threshold_by_f1,
+    thresholded_binary_classification_metrics,
+)
 
 
 def run_training(
@@ -63,28 +67,46 @@ def run_training(
     best_metric = float("-inf")
     best_epoch = -1
     best_validation_metrics: dict[str, float] | None = None
+    best_validation_threshold = 0.5
     started = time.time()
 
     # 매 epoch마다 train loss와 val metric을 기록하고 최고 성능 가중치를 따로 보관한다.
     for epoch in range(1, epochs + 1):
+        epoch_started = time.time()
         _log(f"epoch {epoch}/{epochs}: train start")
         train_loss = _train_one_epoch(model, dataloaders["train"], criterion, optimizer, device)
         _log(f"epoch {epoch}/{epochs}: train done, loss={train_loss:.6f}")
         scheduler.step()
         _log(f"epoch {epoch}/{epochs}: validation start")
-        val_metrics = evaluate_model(model, dataloaders["val"], device)
+        val_labels, val_probabilities = collect_model_outputs(model, dataloaders["val"], device)
+        val_threshold = select_threshold_by_f1(val_labels, val_probabilities)
+        val_metrics = evaluate_outputs(
+            val_labels,
+            val_probabilities,
+            threshold=val_threshold,
+        )
         _log(
             "epoch "
             f"{epoch}/{epochs}: validation done, "
             f"acc={val_metrics['accuracy']:.4f}, f1={val_metrics['f1_score']:.4f}, "
-            f"auc={val_metrics['auc_roc']:.4f}, {PRIMARY_PAUC_METRIC}={val_metrics[PRIMARY_PAUC_METRIC]:.4f}"
+            f"auc={val_metrics['auc_roc']:.4f}, {PRIMARY_PAUC_METRIC}={val_metrics[PRIMARY_PAUC_METRIC]:.4f}, "
+            f"threshold={val_threshold:.6f}"
+        )
+        epoch_duration_seconds = time.time() - epoch_started
+        estimated_remaining_seconds = epoch_duration_seconds * max(epochs - epoch, 0)
+        _log(
+            f"epoch {epoch}/{epochs}: duration={epoch_duration_seconds:.1f}s, "
+            f"estimated_remaining={format_duration(estimated_remaining_seconds)}"
         )
 
         row = {
             "epoch": epoch,
             "train_loss": train_loss,
             **{f"val_{key}": value for key, value in val_metrics.items()},
+            "val_selected_threshold": val_threshold,
             "learning_rate": optimizer.param_groups[0]["lr"],
+            "epoch_duration_seconds": epoch_duration_seconds,
+            "estimated_remaining_seconds": estimated_remaining_seconds,
         }
         history.append(row)
 
@@ -103,6 +125,7 @@ def run_training(
             best_metric = score
             best_epoch = epoch
             best_validation_metrics = dict(val_metrics)
+            best_validation_threshold = val_threshold
             best_state = {
                 key: value.detach().cpu().clone()
                 for key, value in model.state_dict().items()
@@ -113,12 +136,29 @@ def run_training(
     if best_state is not None:
         model.load_state_dict(best_state)
 
+    _log("best validation evaluation start")
+    best_val_labels, best_val_probabilities = collect_model_outputs(model, dataloaders["val"], device)
+    selected_threshold = select_threshold_by_f1(best_val_labels, best_val_probabilities)
+    best_validation_metrics = evaluate_outputs(
+        best_val_labels,
+        best_val_probabilities,
+        threshold=selected_threshold,
+    )
+    best_validation_threshold = selected_threshold
+    _log(f"selected threshold from validation_f1: {selected_threshold:.6f}")
+
     _log("test evaluation start")
-    test_metrics = evaluate_model(model, dataloaders["test"], device)
+    test_labels, test_probabilities = collect_model_outputs(model, dataloaders["test"], device)
+    test_metrics = evaluate_outputs(
+        test_labels,
+        test_probabilities,
+        threshold=selected_threshold,
+    )
     _log(
         "test evaluation done, "
         f"acc={test_metrics['accuracy']:.4f}, f1={test_metrics['f1_score']:.4f}, "
-        f"auc={test_metrics['auc_roc']:.4f}, {PRIMARY_PAUC_METRIC}={test_metrics[PRIMARY_PAUC_METRIC]:.4f}"
+        f"auc={test_metrics['auc_roc']:.4f}, {PRIMARY_PAUC_METRIC}={test_metrics[PRIMARY_PAUC_METRIC]:.4f}, "
+        f"threshold={selected_threshold:.6f}"
     )
     model_path = output_dir / "best_model.pt"
     torch.save(model.state_dict(), model_path)
@@ -130,8 +170,12 @@ def run_training(
         "primary_validation_metric_name": PRIMARY_PAUC_METRIC,
         "best_validation_metric": best_metric,
         "best_validation_metrics": best_validation_metrics or {},
+        "threshold_source": "validation_f1",
+        "selected_threshold": best_validation_threshold,
         "test_metrics": test_metrics,
         "duration_seconds": time.time() - started,
+        "last_epoch_duration_seconds": history[-1].get("epoch_duration_seconds") if history else None,
+        "last_estimated_remaining_seconds": history[-1].get("estimated_remaining_seconds") if history else None,
         "model_path": str(model_path),
         "history_path": str(history_path),
     }
@@ -141,11 +185,10 @@ def run_training(
     return summary
 
 
-# malignant 확률과 예측 라벨을 함께 모아 Accuracy, Precision, Recall, F1, AUC를 계산한다.
-def evaluate_model(model: nn.Module, dataloader: DataLoader, device: str) -> dict[str, float]:
+# malignant 확률을 모은 뒤 validation에서 선택한 threshold로 threshold-dependent metric을 계산한다.
+def collect_model_outputs(model: nn.Module, dataloader: DataLoader, device: str) -> tuple[list[int], list[float]]:
     model.eval()
     labels: list[int] = []
-    predictions: list[int] = []
     probabilities: list[float] = []
     logged_first_batch = False
 
@@ -161,13 +204,27 @@ def evaluate_model(model: nn.Module, dataloader: DataLoader, device: str) -> dic
             targets = targets.to(device)
             logits = model(inputs)
             probs = torch.softmax(logits, dim=1)[:, 1]
-            preds = torch.argmax(logits, dim=1)
 
             labels.extend(targets.cpu().tolist())
-            predictions.extend(preds.cpu().tolist())
             probabilities.extend(probs.cpu().tolist())
 
-    return binary_classification_metrics(labels, predictions, probabilities)
+    return labels, probabilities
+
+
+def evaluate_outputs(labels: list[int], probabilities: list[float], *, threshold: float) -> dict[str, float]:
+    return thresholded_binary_classification_metrics(labels, probabilities, threshold=threshold)
+
+
+def evaluate_model(
+    model: nn.Module,
+    dataloader: DataLoader,
+    device: str,
+    *,
+    threshold: float | None = None,
+) -> dict[str, float]:
+    labels, probabilities = collect_model_outputs(model, dataloader, device)
+    selected_threshold = select_threshold_by_f1(labels, probabilities) if threshold is None else threshold
+    return evaluate_outputs(labels, probabilities, threshold=selected_threshold)
 
 
 def _train_one_epoch(
@@ -214,11 +271,22 @@ def _write_history_csv(history: list[dict[str, Any]], path: Path) -> None:
         writer.writerows(history)
 
 
+def format_duration(seconds: float | int | None) -> str:
+    if seconds is None:
+        return "unknown"
+    seconds = max(0, int(round(float(seconds))))
+    hours, remainder = divmod(seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if hours:
+        return f"{hours}h {minutes}m {secs}s"
+    if minutes:
+        return f"{minutes}m {secs}s"
+    return f"{secs}s"
+
+
 def _log(message: str) -> None:
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
     print(f"[trainer {timestamp}] {message}", flush=True)
-
-
 
 
 

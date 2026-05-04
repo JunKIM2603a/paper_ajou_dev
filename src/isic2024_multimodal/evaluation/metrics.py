@@ -46,6 +46,10 @@ def binary_classification_metrics(
     pauc = partial_auc_above_min_tpr(labels, probabilities, min_tpr=min_tpr)
 
     return {
+        "true_positive_count": float(tp),
+        "false_positive_count": float(fp),
+        "true_negative_count": float(tn),
+        "false_negative_count": float(fn),
         "accuracy": accuracy,
         "precision": precision,
         "recall": recall,

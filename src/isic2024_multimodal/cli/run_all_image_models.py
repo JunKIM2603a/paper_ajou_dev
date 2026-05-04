@@ -61,6 +61,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-val-samples", type=int, default=None)
     parser.add_argument("--max-test-samples", type=int, default=None)
     parser.add_argument("--disable-pretrained", action="store_true")
+    parser.add_argument("--auto-download-checkpoints", action="store_true")
     parser.add_argument("--devices", nargs="*", type=int, default=None, help="Visible GPU indices to run in parallel.")
     parser.add_argument("--models", nargs="*", default=None, help="Optional model directory names to include.")
     parser.add_argument("--exclude-models", nargs="*", default=None, help="Optional model directory names to exclude.")
@@ -262,6 +263,8 @@ def build_command(config_path: Path, args: argparse.Namespace, *, device: int | 
         command.extend(["--max-test-samples", str(args.max_test_samples)])
     if args.disable_pretrained:
         command.append("--disable-pretrained")
+    if args.auto_download_checkpoints:
+        command.append("--auto-download-checkpoints")
     return command
 
 
