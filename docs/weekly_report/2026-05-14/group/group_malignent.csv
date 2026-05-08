@@ -1,0 +1,3 @@
+target_value,malignancy_group,description
+0,benign_or_non_malignant,ISIC2024 target 값 0에 해당하는 비악성 또는 악성 아님 레이블
+1,malignant,ISIC2024 target 값 1에 해당하는 악성 병변 레이블
