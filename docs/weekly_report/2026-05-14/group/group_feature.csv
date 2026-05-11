@@ -1,0 +1,56 @@
+index,column,category,description
+0,tbp_lv_A,색채·광학 특징,병변 내부 A* 색상 값
+1,tbp_lv_Aext,색채·광학 특징,병변 외부 A* 색상 값
+2,tbp_lv_B,색채·광학 특징,병변 내부 B* 색상 값
+3,tbp_lv_Bext,색채·광학 특징,병변 외부 B* 색상 값
+4,tbp_lv_C,색채·광학 특징,병변 내부 채도(Chroma)
+5,tbp_lv_Cext,색채·광학 특징,병변 외부 채도(Chroma)
+6,tbp_lv_H,색채·광학 특징,병변 내부 색상각(Hue)
+7,tbp_lv_Hext,색채·광학 특징,병변 외부 색상각(Hue)
+8,tbp_lv_L,색채·광학 특징,병변 내부 명도(L*)
+9,tbp_lv_Lext,색채·광학 특징,병변 외부 명도(L*)
+10,tbp_lv_color_std_mean,색채·광학 특징,병변 내부 색 분산 기반 불균질성
+11,tbp_lv_deltaA,색채·광학 특징,병변 내부와 외부의 평균 A* 대비
+12,tbp_lv_deltaB,색채·광학 특징,병변 내부와 외부의 평균 B* 대비
+13,tbp_lv_deltaL,색채·광학 특징,병변 내부와 외부의 평균 L* 대비
+14,tbp_lv_deltaLB,색채·광학 특징,병변 내부와 외부의 밝기/색 대비를 합친 지표
+15,tbp_lv_deltaLBnorm,색채·광학 특징,주변 피부 대비 병변의 정규화된 LAB 대비
+16,tbp_lv_stdL,색채·광학 특징,병변 내부 L* 표준편차
+17,tbp_lv_stdLExt,색채·광학 특징,병변 외부 L* 표준편차
+18,attribution,식별자 및 출처,이미지 출처/기관 정보
+19,copyright_license,식별자 및 출처,저작권 라이선스 정보
+20,isic_id,식별자 및 출처,각 이미지/사례를 구분하는 고유 식별자
+21,lesion_id,식별자 및 출처,수동으로 관심 병변으로 태깅된 lesion 고유 ID
+22,patient_id,식별자 및 출처,환자를 구분하는 고유 식별자
+23,target,예측 타깃,악성 여부를 나타내는 이진 예측 타깃
+24,anatom_site_general,위치·공간 좌표,병변이 위치한 큰 신체 부위
+25,tbp_lv_location,위치·공간 좌표,상세한 해부학적 위치 분류
+26,tbp_lv_location_simple,위치·공간 좌표,단순화한 해부학적 위치 분류
+27,tbp_lv_x,위치·공간 좌표,3D TBP 좌표계의 X 좌표
+28,tbp_lv_y,위치·공간 좌표,3D TBP 좌표계의 Y 좌표
+29,tbp_lv_z,위치·공간 좌표,3D TBP 좌표계의 Z 좌표
+30,iddx_1,임상·병리 정보,1단계 병변 진단 분류
+31,iddx_2,임상·병리 정보,2단계 병변 진단 분류
+32,iddx_3,임상·병리 정보,3단계 병변 진단 분류
+33,iddx_4,임상·병리 정보,4단계 병변 진단 분류
+34,iddx_5,임상·병리 정보,5단계 병변 진단 분류
+35,iddx_full,임상·병리 정보,가장 상세한 병변 진단명
+36,mel_mitotic_index,임상·병리 정보,침윤성 악성 흑색종의 mitotic index
+37,mel_thick_mm,임상·병리 정보,흑색종 침윤 깊이(mm)
+38,tbp_lv_dnn_lesion_confidence,임상·병리 정보,병변 탐지 신뢰도 점수(0-100)
+39,image_type,촬영 조건 메타데이터,ISIC Archive에서 정의한 이미지 유형
+40,tbp_tile_type,촬영 조건 메타데이터,3D TBP 원본 이미지의 조명/촬영 모드
+41,clin_size_long_diam_mm,형태·기하 특징,임상적으로 측정한 병변의 최대 직경(mm)
+42,tbp_lv_areaMM2,형태·기하 특징,병변 면적(mm^2)
+43,tbp_lv_area_perim_ratio,형태·기하 특징,둘레와 면적 비율 기반의 경계 불규칙성
+44,tbp_lv_eccentricity,형태·기하 특징,병변 형태의 이심률
+45,tbp_lv_minorAxisMM,형태·기하 특징,병변의 최소 직경(mm)
+46,tbp_lv_nevi_confidence,형태·기하 특징,모반(nevus)일 확률에 대한 CNN 점수(0-100)
+47,tbp_lv_norm_border,형태·기하 특징,정규화된 경계 불규칙성 점수(0-10)
+48,tbp_lv_norm_color,형태·기하 특징,정규화된 색 변화 점수(0-10)
+49,tbp_lv_perimeterMM,형태·기하 특징,병변 둘레(mm)
+50,tbp_lv_radial_color_std_max,형태·기하 특징,동심원 기준 색 비대칭성 점수
+51,tbp_lv_symm_2axis,형태·기하 특징,두 번째 대칭축 기준 경계 비대칭성 점수
+52,tbp_lv_symm_2axis_angle,형태·기하 특징,경계 비대칭성 각도
+53,age_approx,환자 인구통계,촬영 시점의 환자 대략 나이
+54,sex,환자 인구통계,환자 성별
