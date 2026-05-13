@@ -1,46 +1,24 @@
-# IDE and local environments
-.venv/
+# Dataset / large files
+dataset/
+dataset.zip
+archive.zip
 
-# Python caches
+# Model checkpoints
+checkpoints/
+
+# MLflow logs
+mlruns/
+
+# Generated outputs
+artifacts/
+ppt_20260411/
+ppt_chatgpt/
+ppt_gemini/
+
+# Secrets / tokens
+token/
+
+# Python cache
 __pycache__/
-*.py[cod]
-.pytest_cache/
-
-# Raw ISIC data and local challenge dumps
-data/raw/**
-data/processed/**
-data/splits/**
-train-image/
-test-image/
-train-image.hdf5
-test-image.hdf5
-train-metadata.csv
-test-metadata.csv
-sample_submission.csv
-Miniconda3-*.sh
-!data/raw/
-!data/processed/
-!data/splits/
-!data/raw/.gitkeep
-!data/processed/.gitkeep
-!data/splits/.gitkeep
-
-# Experiment outputs and logs
-experiments/outputs/**
-experiments/logs/**
-!experiments/outputs/
-!experiments/logs/
-!experiments/outputs/.gitkeep
-!experiments/logs/.gitkeep
-
-# Model artifacts and local tracking stores
-*.pt
-*.pth
-*.ckpt
-mlartifacts/
-mlflow.db
-experiments/logs/mlflow.db
-
-# OS files
-.DS_Store
-Thumbs.db
+*.pyc
+.venv
