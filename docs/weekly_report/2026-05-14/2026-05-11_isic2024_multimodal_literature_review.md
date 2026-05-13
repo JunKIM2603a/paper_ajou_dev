@@ -174,13 +174,17 @@ strong label, weak label, tile sub-selection, QA 과정을 설명한다. train-o
 출처: npj Digital Medicine, 2025  
 링크: https://www.nature.com/articles/s41746-025-02070-7
 
+#### 논문 요약
+
+이 논문은 ISIC 2024 Kaggle Challenge의 공식 결과와 private leaderboard set 기반 분석을 정리한 논문이다. 3D-TBP lesion tile, basic metadata, WB360 appearance metadata, patient-context feature가 skin cancer triage 성능에 어떻게 기여하는지 winning solution과 ablation study로 보여준다. 우리 연구에서는 Kaggle public/private leaderboard 자체를 paper-valid 실험 근거로 쓰기보다, `pAUC > 80% TPR` metric, image + tabular late fusion 구조, patient-context feature의 효과를 이해하는 reference로 사용한다.
+
 #### 주요 Figure
 
 원문 라이선스: CC BY 4.0
 
 **Figure 1. Public/private leaderboard score distribution**
 
-ISIC 2024가 positive가 매우 적고 leaderboard shake-up이 큰 문제였음을 보여준다. 데이터 불균형과 validation instability를 설명할 때 좋다.
+Figure 1은 submission별 public/private leaderboard score 분포와 public-private score gap을 보여준다. 이 그림만으로 positive가 적다는 사실을 알 수는 없다. malignant 희소성은 Table 2의 train 393/401,059, public LB 138/140,770, private LB 342/370,704 수치로 확인해야 한다. 따라서 Figure 1은 Table 2와 함께 public leaderboard overfitting, leaderboard shake-up, rare-positive setting에서의 평가 불안정성을 설명하는 보조 근거로 쓰는 것이 정확하다.
 
 ![ISIC 2024 Automated Triage Fig 1](https://media.springernature.com/full/springer-static/image/art%3A10.1038%2Fs41746-025-02070-7/MediaObjects/41746_2025_2070_Fig1_HTML.png)
 
@@ -268,11 +272,16 @@ image-only model output과 metadata/patient-context feature를 boosting model로
    - 보조 지표: full AUC `0.9668`
    - clinical utility: `NNT80 51.57`, `NNT90 98.20`
    - ablation: patient-context 제외 시 AUC가 0.967에서 0.956으로 감소
-   - 추가 결과: WB360 metadata-only model이 tile-only model보다 좋은 성능을 보임
+   - 추가 결과: WB360 appearance metadata-only 변형이 tile-only 변형보다 높은 AUC 기록: `0.939` vs `0.922`, `p=0.016`
 
-10. 최종결과
+10. ISIC2024 multimodal 연구에 주는 시사점
 
-   ISIC 2024에서는 image-only보다 metadata와 patient-context를 결합한 multimodal late fusion이 핵심적이다. train-only 논문에서도 image-only, tabular-only, late fusion, patient-context ablation을 반드시 포함하는 것이 좋다.
+   - 핵심 해석: ISIC 2024 winning solution의 ablation에서 tile-only 변형보다 WB360 appearance metadata-only 변형의 성능이 높았음.
+   - 의미: 현재 사용된 vision branch가 표준화된 lesion tile에서 크기, 색, 경계, 대비 같은 외형 정보를 WB360 측정치만큼 효율적으로 추출하지 못했을 가능성.
+   - 주의: vision model 자체가 낮거나 무의미하다는 결론은 아님. image-only 변형도 WB360/patient-context를 사용할 수 없는 smartphone 또는 close-up clinical photo 설정에서는 강한 baseline 후보.
+   - 연구 설계: image-only, tabular-only, image + tabular late fusion, WB360 포함/제외, patient-context 포함/제외 ablation의 분리 보고 필요.
+   - strict train-only 연구 적용: Kaggle 제공 metadata를 쓰는 실험과 단일 병변 배포 가능성을 보는 실험의 구분 필요.
+   - 누수 관리: patient-context feature 사용 시 patient-level split, fold-local feature 계산, train-only preprocessing audit 필수.
 
 11. 추가 논의/생각해볼 점
 
@@ -1077,7 +1086,7 @@ ISIC 2024에서 특히 중요한 방법이다.
 - WB360 feature interaction
 - explainable feature importance: SHAP으로 확인한 `visual_classifier`, `tbp_lv_symm_2axis`, `tbp_lv_color_std_mean` 등
 
-선행연구상 ISIC 2024에서는 image tile보다 WB360 metadata와 patient-context feature가 더 강한 정보를 제공할 수 있다.
+ISIC 2024 Automated Triage ablation에서는 tile-only 변형보다 WB360 appearance metadata-only 변형의 AUC가 높았음. 해석 범위는 해당 winning-solution 구성과 private leaderboard set에 한정 필요.
 
 ### 4.4 Synthetic augmentation
 

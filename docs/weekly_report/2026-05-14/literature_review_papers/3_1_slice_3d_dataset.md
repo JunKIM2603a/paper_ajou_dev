@@ -16,7 +16,7 @@ ISIC 2024 train dataset의 공식 데이터셋 근거이며, ultra-rare malignan
 
 **Figure 1. Examples of image types**
 
-ISIC 2024의 tile image가 dermoscopic image보다 morphologic detail이 적고, 3D-TBP에서 추출된 low-resolution clinical crop이라는 점을 보여준다. 논문 dataset section에서 가장 유용하다.
+ISIC 2024의 tile image가 dermoscopic image보다 morphologic detail이 적고, 3D-TBP에서 추출된 low-resolution clinical crop이라는 점을 보여준다. 
 
 ![SLICE-3D Fig 1](https://media.springernature.com/full/springer-static/image/art%3A10.1038%2Fs41597-024-03743-w/MediaObjects/41597_2024_3743_Fig1_HTML.png)
 
@@ -72,7 +72,7 @@ $$
 - 모델 성능 결과: 해당 없음
 - 주요 정량값: benign 400,666개, malignant 393개
 
-## ISIC2024 strict multimodal 연구에 주는 시사점
+## ISIC2024 multimodal 연구에 주는 시사점
 ISIC 2024 train-only 연구의 dataset section에서 반드시 인용해야 할 1차 자료이다.
 
 ## 추가 논의/생각해볼 점

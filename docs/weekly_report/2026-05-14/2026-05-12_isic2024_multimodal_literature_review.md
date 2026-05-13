@@ -27,24 +27,84 @@ ISIC 2024 train dataset의 modality는 크게 두 가지이다.
 
 ---
 
-## 2. 논문 분석 요약표
+## 2. 논문 분석 요약
 
-| 논문/자료 | 목표 & 핵심 기여 | Dataset 정보 | Imbalanced data 극복방법 | Tabular model | Image model | Fusion 방식 | 평가 지표 | 평가(성능) | 최종결과 |
-|---|---|---|---|---|---|---|---|---|---|
-| SLICE-3D Dataset, Scientific Data 2024 | ISIC 2024 공식 train dataset 기술 및 공개 | ISIC 2024 train; 401,059 lesion tiles; binary malignant/benign; 3D-TBP image + metadata | benign 400,666 vs malignant 393; 모델 학습 없음, 데이터/학습 조작 없음 | metadata 제공: demographics, anatomical site, WB360 measurements, patient_id | 3D-TBP lesion crop image | 해당 없음 | 해당 없음 | dataset descriptor | ISIC 2024 train-only 연구의 1차 dataset 인용 자료 |
-| ISIC 2024 Automated Triage, npj Digital Medicine 2025 | Kaggle ISIC 2024 상위 모델과 ablation 분석 | ISIC 2024 Challenge dataset; binary malignant/benign; 3D-TBP tile + metadata + patient-context | class 축소 없음; pAUC metric, patient-context, 3개 GBT late fusion 중심 | 3개 Gradient Boosting Tree, metadata + engineered feature + patient-context feature | EVA 2개 + EdgeNeXt ensemble, 각 모델 5-fold aggregation | neural network output vector + metadata를 3개 GBT에 입력 후 output aggregation | 우선: pAUC>80% TPR; 보조: AUC, SE top-15, NNT@80/90% sensitivity | pAUC 0.1726/0.2, AUC 0.9668, NNT80 51.57, NNT90 98.20 | metadata와 patient-context가 image-only보다 강한 성능 기여 |
-| Wang et al., Scientific Reports 2025 | explainable multimodal AI: ISIC 2024 3D TBP image + clinical data 결합 | ISIC 2024; 1,075 patients; 6-class lesion risk prediction; 41 clinical/lesion-specific features + 3D TBP images | 6-class 유지; non-nevus class targeted augmentation; 5-fold CV; ISIC binary benchmark로 pFPR 비교 | clinical-only ML 비교, XGBoost fusion, multinomial logistic regression scoring + VIF/nomogram | HAM10000 transfer learning CNN, 3 conv blocks + 2 Conv2D fine-tuning | CNN six-class probability vector + clinical feature vector concat/standardize -> XGBoost late fusion; SHAP/CAM/nomogram | 우선: AUC, recall/F1, pFPR; 보조: accuracy/confusion matrix | multimodal AUC > 0.95, recall/F1 > 95%, pFPR 0.17343; clinical XGBoost Acc 0.6837, image-only nevus Acc 87.10% | ISIC 2024에서 late fusion + XAI 설명 가능성의 직접 근거 |
-| MetaBlock, JBHI 2021 | metadata로 CNN feature map을 scale/shift/gating하는 MetaBlock 제안 | PAD-UFES-20 6-class clinical image+metadata; ISIC 2019 8-class dermoscopy+metadata | class 수 조절 없음; weighted cross-entropy와 stratified 5-fold CV 사용 | metadata feature에서 `f_b`, `g_b` modifier 생성 | CNN backbone의 last feature maps | Eq. (3)의 metadata-conditioned feature map modulation | 우선: BACC; 보조: ACC, AUC | MetaBlock이 10개 실험 중 6개에서 최고 BACC, ISIC/PAD 각각 3개 CNN에서 최고 | ISIC 2024 중간 fusion baseline으로 적합 |
-| MMF-Net, Frontiers in Surgery 2022 | smartphone clinical image + metadata fusion | PAD-UFES-20; 6-class smartphone clinical image + metadata | class 수 유지; stratified 5-fold CV + on-the-fly augmentation; 명시적 over/under sampling 없음 | numeric/Boolean/categorical metadata 전처리 + MLP encoder | ResNet-50 | intra-modality self-attention + 양방향 inter-modality cross-attention | 우선: BACC, aggregated AUC; 보조: ACC | BACC 0.775±0.022, AUC 0.947±0.007, ACC 0.768±0.022 | cross-attention fusion 근거로 적합 |
-| Yap et al., Experimental Dermatology 2018 | dermoscopy + clinical image + patient metadata 결합 | 2917 cases; dermoscopic + macroscopic image + patient metadata; binary melanoma 및 5-class task | task 목적상 binary와 5-class를 별도 평가; imbalance-specific sampling/loss는 핵심 아님 | patient metadata 사용 | CNN 기반 dermoscopic/clinical image model | multimodal classifier | 우선: binary AUC, multiclass mAP | AUC 0.866 vs 0.784, mAP 0.729 vs 0.598 | image-only보다 multimodal이 우수 |
-| Islam et al., Scientific Reports 2026 | patient metadata + DER/DSLR image fusion으로 suspicious lesion triage | 79,246 images; 39,623 lesions; 19,295 patients; suspicious/non-suspicious; DER/DSLR image + collected 22 meta-features | binary triage label 정의; patient-separated split, augmentation, decision-level majority voting | 22개 중 7 C4C risk factors + C4C risk score 중심 metadata model | EfficientNet-B2 계열 | image vector + 8개 metadata feature concat, 최종 decision-level majority voting | 우선: sensitivity, specificity; ACC는 (SEN+SPC)/2 | fused SEN 99.66±0.28%, SPC 74.45±0.80%; voting SEN 99.50±1.18%, SPC 82.72±1.64% | metadata fusion과 decision fusion이 specificity 개선 |
-| Nguyen et al., Sensors 2022 | imbalanced skin lesion classification에서 soft-attention + weighted loss + metadata 사용 | HAM10000; 10,015 images; 7 classes; dermoscopy image + age/gender/localization metadata | class 수 유지; augmentation to 53,573 images; categorical cross-entropy에 class weight 적용 | age, gender, localization metadata dense branch | InceptionResNetV2, MobileNetV3Large 등 + Soft-Attention | Soft-Attention output + metadata dense feature concat | 우선: AUC, recall/F1; 보조: accuracy, precision | abstract: ACC 0.90, Precision/F1/Recall/AUC 0.81/0.81/0.82/0.99; conclusion: F1/Recall/AUC 0.86/0.81/0.975 | imbalance-aware loss와 attention의 결합 근거 |
-| Focal Loss 2017 / Class-Balanced Loss 2019 | 일반 long-tail/class imbalance 학습의 대표 loss | 특정 dataset 고정 없음; long-tail classification 일반 loss | easy negative down-weighting, effective number 기반 class weight | 해당 없음 | 모든 CNN/ViT에 적용 가능 | 해당 없음 | task별 metric | long-tailed dataset에서 성능 개선 | ISIC 2024 image branch의 BCE 대체 loss 근거 |
-| GAN/Diffusion augmentation 관련 연구 | minority skin lesion image 합성으로 imbalance 완화 | 연구별 skin lesion dataset; minority synthetic image 생성 | GAN/diffusion synthetic augmentation | 보통 없음 | CNN classifier | 해당 없음 | accuracy, AUC 등 | dataset별 개선 보고 | train-only 조건에서는 train positive만으로 생성해야 함 |
+기존 단일 요약표는 논문 역할, 데이터셋, 모델 구조, 평가 결과가 한 번에 섞여 있어 가독성이 낮음. 아래 표들은 비교 목적별로 분할한 요약임. 긴 설명은 3장의 논문별 상세 분석 파일 참고.
+
+### 2.1 한눈에 보는 논문 역할 요약
+
+| 논문/자료 | 우리 연구에서의 역할 | 핵심 키워드 | 상세 분석 |
+|---|---|---|---|
+| SLICE-3D Dataset, Scientific Data 2024 | ISIC 2024 train dataset의 1차 근거 | 3D-TBP, ultra-rare malignant, weak label | [3.1](literature_review_papers/3_1_slice_3d_dataset.md) |
+| ISIC 2024 Automated Triage, npj Digital Medicine 2025 | Kaggle challenge 결과와 ablation reference | pAUC, WB360, patient-context, GBT late fusion | [3.2](literature_review_papers/3_2_automated_triage_3d_tbp.md) |
+| Wang et al., Scientific Reports 2025 | 3D-TBP image + clinical feature late fusion 및 XAI 근거 | XGBoost, SHAP, CAM, nomogram | [3.3](literature_review_papers/3_3_wang_explainable_multimodal_ai.md) |
+| MetaBlock, JBHI 2021 | metadata modulation baseline 근거 | scale, shift, gating | [3.4](literature_review_papers/3_4_metablock_metadata_modulation.md) |
+| MMF-Net, Frontiers in Surgery 2022 | attention-based fusion baseline 근거 | self-attention, cross-attention | [3.5](literature_review_papers/3_5_mmf_net_cross_attention_fusion.md) |
+| Yap et al., Experimental Dermatology 2018 | 초기 multimodal skin lesion classification 근거 | dermoscopy, clinical image, metadata | [3.6](literature_review_papers/3_6_yap_multimodal_skin_lesion_classification.md) |
+| Islam et al., Scientific Reports 2026 | patient metadata fusion 및 triage 근거 | patient-separated split, voting, specificity | [3.7](literature_review_papers/3_7_islam_patient_metadata_fusion.md) |
+| Nguyen et al., Sensors 2022 | imbalance-aware image + metadata baseline 근거 | class weight, soft-attention, metadata branch | [3.8](literature_review_papers/3_8_nguyen_soft_attention_imbalance.md) |
+| Focal Loss 2017 / Class-Balanced Loss 2019 | loss ablation 근거 | focal loss, effective number | [4.2](#42-loss-기반) |
+| GAN/Diffusion augmentation 관련 연구 | minority augmentation 후보 | synthetic positive, train-only generation | [4.4](#44-synthetic-augmentation) |
+
+### 2.2 Dataset 및 imbalance 비교
+
+| 논문/자료 | Dataset / task | Imbalance 및 protocol 포인트 |
+|---|---|---|
+| SLICE-3D Dataset | ISIC 2024 train, 401,059 lesion tiles, binary malignant/benign | malignant 393개, 약 0.098%. 모델 학습 없음 |
+| ISIC 2024 Automated Triage | ISIC 2024 Challenge set, binary malignant/benign | class 축소 없음. public/private leaderboard 및 pAUC > 80% TPR 중심 |
+| Wang et al. 2025 | ISIC 2024 subset, 1,075 patients, 6-class lesion risk prediction | non-nevus class targeted augmentation. ISIC binary benchmark로 별도 비교 |
+| MetaBlock | PAD-UFES-20, ISIC 2019 | weighted cross-entropy 및 stratified 5-fold CV |
+| MMF-Net | PAD-UFES-20, 6-class smartphone clinical image + metadata | stratified 5-fold CV 및 on-the-fly augmentation |
+| Yap et al. 2018 | 2,917 cases, dermoscopy + macroscopic image + metadata | binary melanoma와 5-class task 별도 평가 |
+| Islam et al. 2026 | 39,623 lesions, 19,295 patients, DER/DSLR image + metadata | patient-separated split, augmentation, decision-level voting |
+| Nguyen et al. 2022 | HAM10000, 10,015 images, 7 classes | augmentation to 53,573 images 및 class-weighted loss |
+| Focal/Class-Balanced Loss | 특정 dataset 고정 없음 | long-tail classification 일반 loss |
+| GAN/Diffusion augmentation | 연구별 skin lesion dataset | minority synthetic image 생성. train-only 조건 확인 필요 |
+
+### 2.3 Model 및 fusion 방식 비교
+
+| 논문/자료 | Image branch | Tabular / metadata branch | Fusion 또는 학습 방식 |
+|---|---|---|---|
+| ISIC 2024 Automated Triage | EVA 2개 + EdgeNeXt ensemble | GBT, WB360, engineered feature, patient-context | NN output vector + metadata를 3개 GBT에 입력 |
+| Wang et al. 2025 | HAM10000 transfer learning CNN | clinical feature + XGBoost | CNN probability vector + clinical feature late fusion |
+| MetaBlock | CNN backbone의 last feature map | metadata modifier 생성 | feature map scale/shift/gating |
+| MMF-Net | ResNet-50 | MLP metadata encoder | intra-modality self-attention + bidirectional cross-attention |
+| Yap et al. 2018 | dermoscopic/clinical image CNN | patient metadata | multimodal classifier |
+| Islam et al. 2026 | EfficientNet-B2 계열 | 7개 C4C risk factor + C4C risk score | feature concat 후 decision-level majority voting |
+| Nguyen et al. 2022 | InceptionResNetV2, MobileNetV3Large + soft-attention | age, gender, localization dense branch | soft-attention output + metadata feature concat |
+| Focal/Class-Balanced Loss | 모든 CNN/ViT에 적용 가능 | 해당 없음 | BCE 대체 loss 후보 |
+| GAN/Diffusion augmentation | CNN classifier와 결합 가능 | 보통 없음 | train positive 기반 synthetic augmentation 후보 |
+
+### 2.4 평가 지표 및 대표 결과 비교
+
+| 논문/자료 | 주요 metric | 대표 결과 | 해석 |
+|---|---|---|---|
+| ISIC 2024 Automated Triage | pAUC > 80% TPR, AUC, NNT | pAUC 0.1726/0.2, AUC 0.9668 | private leaderboard 기준 강한 challenge reference |
+| Wang et al. 2025 | AUC, recall/F1, pFPR | multimodal AUC > 0.95, pFPR 0.17343 | late fusion + XAI 가능성 제시 |
+| MetaBlock | BACC, ACC, AUC | 10개 실험 중 6개에서 최고 BACC | metadata modulation baseline 근거 |
+| MMF-Net | BACC, aggregated AUC | BACC 0.775±0.022, AUC 0.947±0.007 | cross-attention fusion 근거 |
+| Yap et al. 2018 | binary AUC, multiclass mAP | AUC 0.866 vs 0.784, mAP 0.729 vs 0.598 | early multimodal superiority 근거 |
+| Islam et al. 2026 | sensitivity, specificity | voting SEN 99.50±1.18%, SPC 82.72±1.64% | high-sensitivity triage에서 specificity 개선 |
+| Nguyen et al. 2022 | AUC, recall/F1, accuracy | abstract 기준 AUC 0.99, F1 0.81 | imbalance-aware loss + attention 근거 |
+| Focal/Class-Balanced Loss | task별 metric | long-tailed dataset 성능 개선 보고 | ISIC 2024 loss ablation 후보 |
+| GAN/Diffusion augmentation | accuracy, AUC 등 | dataset별 개선 보고 | 보조 실험 또는 ablation 후보 |
+
+### 2.5 우리 연구 적용 시 주의점
+
+| 항목 | 적용 가능성 | 주의점 |
+|---|---|---|
+| pAUC > 80% TPR | primary metric으로 직접 적용 가능 | 구현 정의, fold-wise reporting, AUC/F1/recall 병행 필요 |
+| WB360 appearance metadata | tabular baseline 및 fusion 실험에 중요 | tile-only보다 항상 우수하다는 일반화 금지 |
+| patient-context feature | ugly duckling feature 실험 가능 | patient-level split 및 fold-local 계산 필수 |
+| image-only baseline | strict single-lesion setting의 핵심 비교군 | external dermoscopy data 사용 여부 분리 필요 |
+| late fusion | ISIC 2024 winning solution과 가장 가까운 baseline | image score 생성 과정의 OOF/fold protocol 명시 필요 |
+| metadata modulation / cross-attention | proposed multimodal model 후보 | late fusion 대비 ablation 필요 |
+| imbalance-aware loss | image branch ablation 후보 | class weight는 train fold에서만 계산 필요 |
+| synthetic augmentation | minority positive 보조 실험 후보 | train positive만 사용, artifact 및 overfitting 점검 필요 |
 
 ---
 
-## 2.1 모델 구조 수식 공통 notation
+### 2.6 모델 구조 수식 공통 notation
 
 이 문서의 모델 구조 수식은 원문 equation을 그대로 옮긴 것이 아니라, 각 논문의 figure, method 설명, 공개 코드 구조를 바탕으로 이해를 돕기 위해 정리한 구조적 표현이다. 원문에 명시된 수식이 아닌 경우에는 논문별로 별도 표시했다.
 
@@ -160,7 +220,7 @@ ISIC 2024에서 특히 중요한 방법이다.
 - WB360 feature interaction
 - explainable feature importance: SHAP으로 확인한 `visual_classifier`, `tbp_lv_symm_2axis`, `tbp_lv_color_std_mean` 등
 
-선행연구상 ISIC 2024에서는 image tile보다 WB360 metadata와 patient-context feature가 더 강한 정보를 제공할 수 있다.
+ISIC 2024 Automated Triage ablation에서는 tile-only 변형보다 WB360 appearance metadata-only 변형의 AUC가 높았음. 해석 범위는 해당 winning-solution 구성과 private leaderboard set에 한정 필요.
 
 ### 4.4 Synthetic augmentation
 
