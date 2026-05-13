@@ -4,6 +4,7 @@
 
 출처: Scientific Data, 2024  
 링크: https://www.nature.com/articles/s41597-024-03743-w
+PDF: [s41597-024-03743-w.pdf](../paper/s41597-024-03743-w.pdf)
 
 ## 우리 연구에서의 위치
 

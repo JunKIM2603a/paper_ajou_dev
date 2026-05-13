@@ -4,15 +4,37 @@
 
 출처: Experimental Dermatology, 2018  
 링크: https://doi.org/10.1111/exd.13777
+PDF: [`Experimental Dermatology - 2018 - Yap - Multimodal skin lesion classification using deep learning.pdf`](../paper/Experimental%20Dermatology%20-%202018%20-%20Yap%20-%20Multimodal%20skin%20lesion%20classification%20using%20deep%20learning.pdf)
 
 ## 우리 연구에서의 위치
 
-dermoscopy, clinical image, patient metadata 결합이 image-only보다 나은 성능을 보인 초기 multimodal skin lesion classification 근거이다.
+dermoscopy, clinical image, patient metadata 결합이 image-only보다 나은 성능을 보인 초기 multimodal skin lesion classification 근거
+> source 여러 개로 성능향상? stable diffusion 생성이미지 source 로 함께 사용?
 
 ---
 
 ## 주요 Figure
-주의: Wiley 원문 figure는 직접 삽입하지 않고, multimodal concept schematic으로 대체한다.
+
+**Figure 1. Diagram of network architecture for multimodal
+classification**
+
+dermoscopy 이미지, 일반 임상 이미지, metadata를 각각 feature로 추출한 뒤 concatenate하여 FC layer와 softmax로 5개 피부 병변을 분류하는 late-fusion 멀티모달 모델 구조임.
+
+![figure_01_network_architecture](../paper/assets/experimental_dermatology_2018_yap_multimodal_skin_lesion_classification/figure_01_network_architecture.png)
+
+**Figure 2. melanoma vs non-melanoma 구분 ROC curve**
+
+흑색종 탐지에서 일반 임상 이미지보다 dermoscopy가 더 강력하고, dermoscopy와 macro image를 함께 쓰는 조합이 가장 좋은 melanoma ROC 성능을 보였다는 것을 보여줌.
+
+![figure_02_roc_melanoma](../paper/assets/experimental_dermatology_2018_yap_multimodal_skin_lesion_classification/figure_02_roc_melanoma.png)
+
+**Figure 3. melanoma vs non-melanoma 구분 ROC curve**
+
+흑색종 탐지에서 일반 임상 이미지보다 dermoscopy가 더 강력하고, dermoscopy와 macro image를 함께 쓰는 조합이 가장 좋은 melanoma ROC 성능을 보였다는 것을 보여줌.
+
+![figure_03_map_modality_combinations](../paper/assets/experimental_dermatology_2018_yap_multimodal_skin_lesion_classification/figure_03_map_modality_combinations.png)
+
+
 
 **자체 Figure. Multiple image modalities + metadata fusion**
 

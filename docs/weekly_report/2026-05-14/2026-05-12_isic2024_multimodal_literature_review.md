@@ -104,41 +104,6 @@ ISIC 2024 train dataset의 modality는 크게 두 가지이다.
 
 ---
 
-### 2.6 모델 구조 수식 공통 notation
-
-이 문서의 모델 구조 수식은 원문 equation을 그대로 옮긴 것이 아니라, 각 논문의 figure, method 설명, 공개 코드 구조를 바탕으로 이해를 돕기 위해 정리한 구조적 표현이다. 원문에 명시된 수식이 아닌 경우에는 논문별로 별도 표시했다.
-
-| 기호 | 의미 |
-|---|---|
-| `I` | lesion image input |
-| `m` | patient 또는 lesion-level metadata vector |
-| `z_p` | patient-context feature |
-| `h_img` | image encoder가 만든 image embedding |
-| `h_meta` | metadata encoder가 만든 metadata embedding |
-| `y_hat` | predicted probability 또는 class score |
-
-공통적으로 multimodal skin lesion classifier는 다음처럼 요약할 수 있다.
-
-$$
-\begin{aligned}
-h_{\text{img}} &= f_{\theta}(I), \\
-h_{\text{meta}} &= g_{\phi}(m), \\
-h_{\text{fuse}} &= \mathcal{F}(h_{\text{img}}, h_{\text{meta}}, z_p), \\
-\hat{y} &= c_{\psi}(h_{\text{fuse}})
-\end{aligned}
-$$
-
-여기서 식의 각 구성요소는 다음과 같다.
-
-| 구성요소 | 의미 |
-|---|---|
-| `f_theta` | CNN/ViT 계열 image encoder |
-| `g_phi` | MLP/GBDT/tabular encoder |
-| `F` | concat, late fusion, metadata modulation, cross-attention 같은 fusion 연산 |
-| `c_psi` | 최종 classifier |
-
----
-
 ## 3. 주요 논문별 상세 분석
 
 논문별 상세 분석은 문서 길이를 줄이고 읽기 속도를 개선하기 위해 별도 Markdown 파일로 분리했다. 이 장은 전체 흐름을 빠르게 파악하기 위한 링크 인덱스 역할을 한다.
@@ -306,7 +271,7 @@ ISIC 2024 Automated Triage ablation에서는 tile-only 변형보다 WB360 appear
 
 ---
 
-## 6. ISIC 2024 Train-Only 논문 실험 설계 제안
+## 6. ISIC 2024 Train-Only 논문 실험 설계 예시 방안
 
 ### 6.1 권장 모델 구성
 
@@ -388,17 +353,6 @@ flowchart TD
     I --> F
     H --> J["LaTeX 렌더링 및 번호 흐름 검토"]
 ```
-
----
-
-## 6.6 원문 대조 검토 메모
-
-- ISIC 2024 Automated Triage: 원문 Methods는 neural network outputs와 metadata features를 3개 GBT model에 넣고 output을 aggregate한다고 설명하므로, 단일 평균 image score 수식을 GBT ensemble 수식으로 수정했다.
-- Wang et al. 2025: 원문 Eq. (1)~(2)의 CNN six-class probability vector + clinical feature vector + XGBoost late fusion 수식을 반영했고, VIF/nomogram logistic scoring은 해석 가능 scoring layer로 구분했다.
-- MetaBlock: 원문 Eq. (1)~(7)의 `x_img`, `x_meta`, `x_img_tilde`, `x_meta_tilde`, `T_gate`, `S_gate` 표기로 수정했다.
-- MMF-Net: 원문 cross-attention 설명에 맞춰 image-guided/meta-guided 양방향 path의 Query, Key, Value 출처를 수정했고, BACC 설명을 sensitivity-specificity 평균으로 정리했다.
-- Islam et al.: 전체 수집 metadata는 22개지만 multimodal fusion 설명은 7개 C4C risk factor와 C4C risk score, 총 8개 feature 중심이므로 본문과 요약표를 구분해 수정했다.
-- Nguyen et al.: Soft-Attention은 단순 feature multiplication이 아니라 original feature tensor와 scaled attention feature의 concatenation 구조로 수정했고, abstract 수치와 본문/appendix 수치를 구분했다.
 
 ---
 
