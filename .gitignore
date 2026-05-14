@@ -1,24 +1,51 @@
-# Dataset / large files
+# Data / local datasets
 dataset/
 dataset.zip
 archive.zip
+cbis_ddsm_benchmark/
 
-# Model checkpoints
-checkpoints/
+# ISIC2024 data artifacts
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+data/splits/*
+!data/splits/.gitkeep
 
-# MLflow logs
+# Experiment logs and generated outputs
+experiments/logs/*
+!experiments/logs/.gitkeep
+experiments/outputs/*
+!experiments/outputs/.gitkeep
 mlruns/
-
-# Generated outputs
 artifacts/
+
+# Model checkpoints and large model artifacts
+checkpoints/
+*.ckpt
+*.pt
+*.pth
+*.safetensors
+*.onnx
+
+# Generated presentation/output scratch dirs
 ppt_20260411/
 ppt_chatgpt/
 ppt_gemini/
 
 # Secrets / tokens
 token/
+.env
+.env.*
+!.env.example
 
-# Python cache
+# Python / notebook / tool caches
 __pycache__/
-*.pyc
-.venv
+*.py[cod]
+*$py.class
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+.ipynb_checkpoints/
