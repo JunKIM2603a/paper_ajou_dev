@@ -77,9 +77,9 @@ $$
 ISIC 2024 train-only 연구의 dataset section에서 반드시 인용해야 할 1차 자료이다.
 
 ## 추가 논의/생각해볼 점
-- benign label에 weak label이 포함되므로 label noise를 고려해야 한다.
-- patient-level clustering이 존재하므로 train-only 실험에서는 patient-level split과 leakage 방지가 중요하다.
-- image crop만으로는 정보가 제한적이어서 metadata와 patient-context feature의 필요성이 크다.
+- **benign label에 weak label이 포함되므로 label noise를 고려해야 한다.**
+- **patient-level clustering이 존재하므로 train-only 실험에서는 patient-level split과 leakage 방지가 중요하다.**
+- **image crop만으로는 정보가 제한적이어서 metadata와 patient-context feature의 필요성이 크다.**
 
 ---
 

@@ -1,8 +1,8 @@
-# ISIC 2024 Train-Only Multimodal Literature Review
+﻿# ISIC 2024 Train-Only Multimodal Literature Review
 
-조사일: 2026-05-04  
+조사일: 2026-05-14  
 주제: ISIC 2024 Kaggle train dataset만 사용한 skin cancer detection 멀티모달 모델 연구를 위한 선행논문 조사  
-핵심 조사 대상: dataset 불균형 극복 방법, image-tabular multimodal fusion 방법
+핵심 조사 대상: image-tabular multimodal fusion 방법
 
 ---
 
@@ -28,8 +28,6 @@ ISIC 2024 train dataset의 modality는 크게 두 가지이다.
 ---
 
 ## 2. 논문 분석 요약
-
-기존 단일 요약표는 논문 역할, 데이터셋, 모델 구조, 평가 결과가 한 번에 섞여 있어 가독성이 낮음. 아래 표들은 비교 목적별로 분할한 요약임. 긴 설명은 3장의 논문별 상세 분석 파일 참고.
 
 ### 2.1 한눈에 보는 논문 역할 요약
 
@@ -93,12 +91,12 @@ ISIC 2024 train dataset의 modality는 크게 두 가지이다.
 
 | 항목 | 적용 가능성 | 주의점 |
 |---|---|---|
-| pAUC > 80% TPR | primary metric으로 직접 적용 가능 | 구현 정의, fold-wise reporting, AUC/F1/recall 병행 필요 |
-| WB360 appearance metadata | tabular baseline 및 fusion 실험에 중요 | tile-only보다 항상 우수하다는 일반화 금지 |
-| patient-context feature | ugly duckling feature 실험 가능 | patient-level split 및 fold-local 계산 필수 |
-| image-only baseline | strict single-lesion setting의 핵심 비교군 | external dermoscopy data 사용 여부 분리 필요 |
-| late fusion | ISIC 2024 winning solution과 가장 가까운 baseline | image score 생성 과정의 OOF/fold protocol 명시 필요 |
-| metadata modulation / cross-attention | proposed multimodal model 후보 | late fusion 대비 ablation 필요 |
+| pAUC > 80% TPR | primary metric으로 직접 적용 가능 | 구현 정의, fold-wise reporting, AUC/F1/recall 병행 필요 | 
+| WB360 appearance metadata | tabular baseline 및 fusion 실험에 중요 | tile-only보다 항상 우수하다는 일반화 금지 | 
+| patient-context feature | ugly duckling feature 실험 가능 | patient-level split 및 fold-local 계산 필수 | 
+| image-only baseline | strict single-lesion setting의 핵심 비교군 | external dermoscopy data 사용 여부 분리 필요 | 
+| late fusion | ISIC 2024 winning solution과 가장 가까운 baseline | image score 생성 과정의 OOF/fold protocol 명시 필요 | 
+| metadata modulation / cross-attention | proposed multimodal model 후보 | late fusion 대비 ablation 필요 | 
 | imbalance-aware loss | image branch ablation 후보 | class weight는 train fold에서만 계산 필요 |
 | synthetic augmentation | minority positive 보조 실험 후보 | train positive만 사용, artifact 및 overfitting 점검 필요 |
 
@@ -108,13 +106,13 @@ ISIC 2024 train dataset의 modality는 크게 두 가지이다.
 
 논문별 상세 분석은 문서 길이를 줄이고 읽기 속도를 개선하기 위해 별도 Markdown 파일로 분리했다. 이 장은 전체 흐름을 빠르게 파악하기 위한 링크 인덱스 역할을 한다.
 
-| 번호 | 논문명 | 핵심 역할 | 상세 분석 링크 |
-|---|---|---|---|
-| 3.1 | SLICE-3D Dataset | ISIC 2024 train dataset의 공식 데이터셋 근거이며, ultra-rare malignant target, weak benign label, patient-level split 필요성을 정당화하는 1차 자료 | [상세 분석](literature_review_papers/3_1_slice_3d_dataset.md) |
-| 3.2 | Automated Triage with 3D-TBP | ISIC 2024 challenge metric, metadata/patient-context ablation, image score와 tabular feature late fusion을 직접 뒷받침하는 핵심 baseline reference | [상세 분석](literature_review_papers/3_2_automated_triage_3d_tbp.md) |
-| 3.3 | Wang et al. Explainable Multimodal AI | 3D-TBP image-derived prediction vector와 clinical feature를 XGBoost로 결합하는 late fusion 및 SHAP/CAM 기반 설명 가능성 설계의 근거이다. | [상세 분석](literature_review_papers/3_3_wang_explainable_multimodal_ai.md) |
-| 3.4 | MetaBlock | metadata가 image feature map을 modulation하는 중간 fusion 구조의 대표 논문으로, 단순 concatenation을 넘어선 fusion baseline 후보이다. | [상세 분석](literature_review_papers/3_4_metablock_metadata_modulation.md) |
-| 3.5 | MMF-Net | image branch와 metadata branch 사이의 self-attention 및 cross-attention fusion을 비교 대상으로 설계할 때 사용할 수 있는 선행 연구이다. | [상세 분석](literature_review_papers/3_5_mmf_net_cross_attention_fusion.md) |
-| 3.6 | Yap et al. Multimodal Classification | dermoscopy, clinical image, patient metadata 결합이 image-only보다 나은 성능을 보인 초기 multimodal skin lesion classification 근거이다. | [상세 분석](literature_review_papers/3_6_yap_multimodal_skin_lesion_classification.md) |
-| 3.7 | Islam et al. Patient Metadata Fusion | patient-separated split, metadata fusion, decision-level voting으로 high-sensitivity triage 성능을 개선한 최근 multimodal triage reference이다. | [상세 분석](literature_review_papers/3_7_islam_patient_metadata_fusion.md) |
-| 3.8 | Nguyen et al. Soft Attention + Imbalance | soft attention, metadata branch, class-weighted loss를 함께 사용한 imbalance-aware image-tabular baseline 및 ablation 근거이다. | [상세 분석](literature_review_papers/3_8_nguyen_soft_attention_imbalance.md) |
+| 번호 | 논문명 | 핵심 역할 | 추가논의 |상세 분석 링크 | 
+|---|---|---|---|---|
+| 3.1 | SLICE-3D Dataset | ISIC 2024 train dataset의 공식 데이터셋 근거이며, ultra-rare malignant target, weak benign label, patient-level split 필요성을 정당화하는 1차 자료 | 1.patient-level split; 2.benign label에 weak label이 포함되므로 label noise 고려 | [상세 분석](literature_review_papers/3_1_slice_3d_dataset.md) |
+| 3.2 | Automated Triage with 3D-TBP | ISIC 2024 challenge metric, metadata/patient-context ablation, image score와 tabular feature late fusion을 직접 뒷받침하는 핵심 baseline reference | 1.stable diffusion 합성데이터 생성; 2.ugly duckling sign; 3.특성 상관관계 고려| [상세 분석](literature_review_papers/3_2_automated_triage_3d_tbp.md) |
+| 3.3 | Wang et al. Explainable Multimodal AI | 3D-TBP image-derived prediction vector와 clinical feature를 XGBoost로 결합하는 late fusion 및 SHAP/CAM 기반 설명 가능성 설계의 근거이다. | 1.ISIC2024 와 HAM10000 데이터셋 안겹쳐서 학습에 사용 가능 | [상세 분석](literature_review_papers/3_3_wang_explainable_multimodal_ai.md) |
+| 3.4 | MetaBlock | metadata가 image feature map을 modulation하는 중간 fusion 구조의 대표 논문으로, 단순 concatenation을 넘어선 fusion baseline 후보이다. | 1.PAD-UFES-20 데이터셋 검토 필요; 2.gate형태 fusion; 3.stratified 5-fold | [상세 분석](literature_review_papers/3_4_metablock_metadata_modulation.md) |
+| 3.5 | MMF-Net | image branch와 metadata branch 사이의 self-attention 및 cross-attention fusion을 비교 대상으로 설계할 때 사용할 수 있는 선행 연구이다. | 1.강력한 attention 성능; 2.stratified 5-fold | [상세 분석](literature_review_papers/3_5_mmf_net_cross_attention_fusion.md) |
+| 3.6 | Yap et al. Multimodal Classification | dermoscopy, clinical image, patient metadata 결합이 image-only보다 나은 성능을 보인 초기 multimodal skin lesion classification 근거이다. | 1.여러 source 사용 | [상세 분석](literature_review_papers/3_6_yap_multimodal_skin_lesion_classification.md) |
+| 3.7 | Islam et al. Patient Metadata Fusion | patient-separated split, metadata fusion, decision-level voting으로 high-sensitivity triage 성능을 개선한 최근 multimodal triage reference이다. | --- |[상세 분석](literature_review_papers/3_7_islam_patient_metadata_fusion.md) |
+| 3.8 | Nguyen et al. Soft Attention + Imbalance | soft attention, metadata branch, class-weighted loss를 함께 사용한 imbalance-aware image-tabular baseline 및 ablation 근거이다. | --- | [상세 분석](literature_review_papers/3_8_nguyen_soft_attention_imbalance.md) |
