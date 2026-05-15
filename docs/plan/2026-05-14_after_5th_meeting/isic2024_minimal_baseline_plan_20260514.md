@@ -42,9 +42,10 @@ input:
   multimodal: strict metadata features + ResNet-50 image embedding
 
 split:
-  locked patient-level split
-  train_validation_data 내부 cv_validation_fold 사용
-  test_data는 final reporting 전용
+  patient-level Triple Stratified Nested CV
+  cv_test_fold == outer_test
+  outer test fold를 제외한 cv_train 내부에서 inner_train / inner_validation 사용
+  outer_test는 final reporting 전용
 
 model:
   metadata: LogisticRegression(class_weight="balanced")
@@ -96,7 +97,7 @@ docs/eda/isic2024_strict_input_export.md
 ```text
 raw train metadata/image
   -> strict input export
-  -> locked patient-level split
+  -> patient-level Triple Stratified Nested CV split
   -> metadata-only baseline
   -> image-only baseline
   -> image embedding export
@@ -112,9 +113,9 @@ raw train metadata/image
 4. `iddx_full_train_only` sidecar는 v0에서 사용하지 않는다.
 5. Metadata 결측치 처리, scaling, encoding은 fold train에서만 fit한다.
 6. Validation/test에는 train-fitted transform만 적용한다.
-7. Image baseline은 metadata baseline과 같은 locked split CSV를 사용한다.
+7. Image baseline은 metadata baseline과 같은 nested split CSV를 사용한다.
 8. Fusion은 `isic_id` 기준으로 strict metadata feature와 image embedding을 join한다.
-9. `test_data`는 model choice, threshold selection, calibration, feature selection에 사용하지 않는다.
+9. `outer_test`는 model choice, threshold selection, calibration, feature selection에 사용하지 않는다.
 
 ## 5. v0 모델 정의
 
@@ -218,7 +219,7 @@ fine-tuning
 config: experiments/configs/image_baselines/resnet50/config.json
 image_size: 224
 pretrained weights: torchvision DEFAULT
-threshold_source: validation_f1
+threshold_source: inner_validation_f1
 ```
 
 v0에서는 ResNet-50 하나만 쓴다. DenseNet, EfficientNet, ViT 계열은 이후 확장으로 둔다.
@@ -270,8 +271,7 @@ PYTHONPATH=./src python -m isic2024_multimodal.cli.export_strict_input_dataset
 ```text
 data/processed/isic2024_strict_model_input.csv
 data/processed/isic2024_iddx_full_train_only_sidecar.csv
-data/splits/isic2024_train_validation_test_split_seed42.csv
-data/splits/isic2024_train_validation_5fold_seed42.csv
+data/splits/isic2024_official_train_nested_5x4_seed42.csv
 experiments/evidence/validation_protocol/isic2024_strict_input_export_summary_seed42.json
 ```
 
@@ -379,13 +379,13 @@ false negative count
 Threshold-dependent metric은 validation에서 선택한 threshold만 사용한다.
 
 ```text
-threshold_source = validation_f1
+threshold_source = inner_validation_f1
 ```
 
-Test fold는 final reporting 전용이다.
+Outer test fold는 final reporting 전용이다.
 
 ```text
-test_data는 threshold selection, model choice, calibration, feature selection에 사용하지 않는다.
+outer_test는 threshold selection, model choice, calibration, feature selection에 사용하지 않는다.
 ```
 
 ## 8. 추가 진행 범위
@@ -486,7 +486,7 @@ must not be required by validation/test/inference dataloaders
 v0 baseline은 아래가 모두 충족될 때 완료로 본다.
 
 1. `metadata_dummy`, `metadata_logreg_balanced`, `image_dummy`, `image_resnet50_finetune`, `multimodal_concat` 결과가 있다.
-2. 모든 결과가 같은 locked patient-level split을 사용한다.
+2. 모든 결과가 같은 patient-level Triple Stratified Nested CV split을 사용한다.
 3. Patient overlap audit이 0이다.
 4. `iddx_full`과 diagnosis/reference columns가 ordinary input에 없다.
 5. Metadata preprocessing은 fold train에서만 fit된다.

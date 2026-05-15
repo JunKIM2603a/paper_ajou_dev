@@ -104,9 +104,9 @@ conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python
 - `env PYTHONPATH=./src`: `src/` 아래의 `isic2024_multimodal` 패키지를 import할 수 있게 한다.
 - `python -m isic2024_multimodal.cli.<command>`: `src/isic2024_multimodal/cli/` 아래의 CLI entrypoint를 실행한다.
 
-### 1. Strict input dataset과 patient-level split 생성
+### 1. Strict input dataset과 patient-level Nested CV split 생성
 
-Strict input dataset, train-only `iddx_full` sidecar, patient-level split artifact를 생성한다. 자세한 설명은 `docs/eda/isic2024_strict_input_export.md`에 있다.
+Strict input dataset, train-only `iddx_full` sidecar, patient-level Triple Stratified Nested CV artifact를 생성한다. 자세한 설명은 `docs/eda/isic2024_strict_input_export.md`와 `docs/reproducibility.md`에 있다.
 
 ```bash
 conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.export_strict_input_dataset \
@@ -121,12 +121,11 @@ conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python
 - `data/processed/isic2024_iddx_full_train_only_sidecar.csv`
   - `iddx_full`을 `iddx_full_train_only`로 분리한 sidecar 파일이다.
   - LUPI / privileged supervision candidate에서 training-only signal로만 사용해야 한다.
-- `data/splits/isic2024_train_validation_test_split_seed42.csv`
-  - patient-level holdout train/validation pool과 test split이다.
-- `data/splits/isic2024_train_validation_5fold_seed42.csv`
-  - train/validation pool 내부의 patient-level 5-fold split이다.
+- `data/splits/isic2024_official_train_nested_5x4_seed42.csv`
+  - outer 5-fold `cv_test_fold` / `outer_test`와 각 `cv_train` 내부 inner 4-fold `inner_train` / `inner_validation` assignment다.
+  - 모든 split role은 patient-level이며 같은 Triple Stratified objective로 만든다.
 - `experiments/evidence/validation_protocol/isic2024_strict_input_export_summary_seed42.json`
-  - column contract, split count, patient overlap audit 요약이다.
+  - column contract, nested split count, patient overlap audit, outer/inner balance audit 요약이다.
 
 기본값을 바꿔야 할 때 사용할 수 있는 주요 옵션은 다음과 같다.
 
@@ -134,8 +133,8 @@ conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python
 conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.export_strict_input_dataset \
   --dataset-root data/raw \
   --seed 42 \
-  --test-size 0.20 \
-  --cv-folds 5
+  --outer-folds 5 \
+  --inner-folds 4
 ```
 
 주의: `data/raw/isic_2024_challenge/`는 읽기 전용 raw data 영역이다. 이 명령은 raw data를 수정하지 않고 `data/processed/`, `data/splits/`, `experiments/evidence/`에 파생 artifact를 쓴다.
@@ -150,7 +149,7 @@ conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python
 
 ### 3. Tabular baseline 실행
 
-Tabular baseline은 locked split CSV와 validation-selected threshold를 사용한다. 자세한 설명은 `docs/eda/isic2024_tabular_baselines.md`에 있다.
+Tabular baseline은 nested split CSV와 inner-validation-selected threshold를 사용한다. 자세한 설명은 `docs/eda/isic2024_tabular_baselines.md`에 있다.
 
 GPU 사용 전에는 `paper` 환경에서 CUDA가 보이는지 확인한다.
 
@@ -188,10 +187,10 @@ conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python
 - `--devices 0`: 모델별 subprocess에 GPU를 배정한다.
 - LightGBM은 WSL/CUDA 환경에서 OpenCL GPU를 요구하지 않도록 CPU backend로 실행된다. XGBoost, CatBoost, FT-Transformer 계열은 CUDA를 사용한다.
 - 기본 split 파일:
-  - `data/splits/isic2024_train_validation_test_split_seed42.csv`
-  - `data/splits/isic2024_train_validation_5fold_seed42.csv`
-- threshold는 validation set에서 F1 기준으로 선택한다.
-- test fold는 threshold 선택, feature selection, preprocessing fitting에 사용하면 안 된다.
+  - `data/splits/isic2024_official_train_nested_5x4_seed42.csv`
+- 기본 실행은 `--outer-fold 0 --inner-fold 0` 조합을 읽는다. 논문 결과는 outer fold별로 반복해 fold-wise summary를 만든다.
+- threshold는 `inner_validation`에서 F1 기준으로 선택한다.
+- `outer_test`는 threshold 선택, feature selection, preprocessing fitting, model choice에 사용하면 안 된다.
 
 실행 로그는 `[YYYY-MM-DD HH:MM:SS]` prefix로 preflight, model subprocess, report 생성의 시작/종료와 duration을 찍는다. 각 model subprocess 내부에서는 data/protocol load, trial, final_test 시작/종료 시간이 남고, 각 `summary.json`에는 `started_at`, `ended_at`, `duration_seconds`, `timing_seconds`가 저장된다.
 
@@ -237,7 +236,7 @@ conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python
 - `--config`: image model config JSON 경로다.
 - 기본 dataset root는 `data/raw/isic_2024_challenge`다.
 - 기본 output root는 `experiments/outputs/image_baselines`다.
-- split은 image manifest의 group id를 기준으로 만든다. group id는 `patient_id`, `lesion_id`, `isic_id` 순서로 fallback한다.
+- split은 tabular baseline과 같은 nested split CSV를 읽는다. image manifest는 `isic_id`로 이 artifact에 join되며, patient overlap audit이 0이어야 실행된다.
 
 빠른 동작 확인은 epoch, trial, sample 수를 줄여서 실행한다.
 

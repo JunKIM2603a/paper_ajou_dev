@@ -217,6 +217,82 @@ def create_splits_from_locked_csvs(
     return {split_name: _to_image_samples(items, split_name=split_name) for split_name, items in split_items.items()}
 
 
+def create_splits_from_nested_csv(
+    manifest: list[dict[str, Any]],
+    *,
+    nested_split_csv: str | Path,
+    outer_fold: int,
+    inner_fold: int,
+) -> dict[str, list[ImageSample]]:
+    nested_path = Path(nested_split_csv)
+    if not nested_path.exists():
+        raise FileNotFoundError(
+            "Nested CV split CSV file is required for paper-valid image baselines. "
+            f"Missing: {nested_path}"
+        )
+
+    split_rows = read_csv_rows(nested_path)
+    selected_rows = [
+        row
+        for row in split_rows
+        if int(row.get("outer_fold", -1)) == int(outer_fold)
+        and int(row.get("inner_fold", -1)) == int(inner_fold)
+    ]
+    if not selected_rows:
+        raise RuntimeError(f"No nested split rows found for outer_fold={outer_fold}, inner_fold={inner_fold}")
+    selected_ids = [str(row["isic_id"]) for row in selected_rows]
+    if len(selected_ids) != len(set(selected_ids)):
+        raise RuntimeError(
+            "Nested split must have exactly one role row per isic_id for the selected outer/inner fold."
+        )
+    allowed_roles = {"inner_train", "inner_validation", "outer_test"}
+    unexpected_roles = sorted({str(row.get("split_role", "")) for row in selected_rows} - allowed_roles)
+    if unexpected_roles:
+        raise RuntimeError(f"Nested split CSV has unexpected split_role values: {unexpected_roles}")
+
+    train_ids = {str(row["isic_id"]) for row in selected_rows if row.get("split_role") == "inner_train"}
+    val_ids = {str(row["isic_id"]) for row in selected_rows if row.get("split_role") == "inner_validation"}
+    test_ids = {str(row["isic_id"]) for row in selected_rows if row.get("split_role") == "outer_test"}
+    if not train_ids or not val_ids or not test_ids:
+        raise RuntimeError(
+            "Nested split CSV produced an empty image split: "
+            f"inner_train={len(train_ids)}, inner_validation={len(val_ids)}, outer_test={len(test_ids)}"
+        )
+
+    patient_lookup = {str(row["isic_id"]): str(row.get("patient_id", "")) for row in selected_rows}
+    overlap_checks = locked_split_patient_overlap(
+        train_ids=train_ids,
+        val_ids=val_ids,
+        test_ids=test_ids,
+        patient_lookup=patient_lookup,
+    )
+    failed_checks = {key: value for key, value in overlap_checks.items() if value != 0}
+    if failed_checks:
+        raise RuntimeError(f"Nested image split patient overlap audit failed: {failed_checks}")
+
+    split_items = {"train": [], "val": [], "test": []}
+    missing_manifest_ids = {"train": 0, "val": 0, "test": 0}
+    manifest_ids = {str(sample["isic_id"]) for sample in manifest}
+    for split_name, ids in [("train", train_ids), ("val", val_ids), ("test", test_ids)]:
+        missing_manifest_ids[split_name] = len(ids - manifest_ids)
+    for sample in manifest:
+        isic_id = str(sample["isic_id"])
+        if isic_id in train_ids:
+            split_items["train"].append(sample)
+        elif isic_id in val_ids:
+            split_items["val"].append(sample)
+        elif isic_id in test_ids:
+            split_items["test"].append(sample)
+
+    if any(not split_items[name] for name in split_items):
+        raise RuntimeError(
+            "Nested split has no image samples after manifest filtering: "
+            f"train={len(split_items['train'])}, val={len(split_items['val'])}, test={len(split_items['test'])}, "
+            f"missing_manifest_ids={missing_manifest_ids}"
+        )
+    return {split_name: _to_image_samples(items, split_name=split_name) for split_name, items in split_items.items()}
+
+
 def read_csv_rows(path: Path) -> list[dict[str, str]]:
     with path.open("r", encoding="utf-8-sig", newline="") as file:
         return [dict(row) for row in csv.DictReader(file)]

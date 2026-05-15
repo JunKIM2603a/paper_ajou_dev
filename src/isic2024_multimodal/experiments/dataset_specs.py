@@ -28,6 +28,10 @@ class DatasetSpec:
     processed_dataset_root: Path | None
     feature_set_json: Path | None
     feature_sets: list[str]
+    split_protocol: str
+    nested_split_csv: Path
+    outer_fold: int
+    inner_fold: int
     holdout_split_csv: Path
     cv_split_csv: Path
     cv_fold: int
@@ -42,6 +46,10 @@ class DatasetSpec:
             "processed_dataset_root": str(self.processed_dataset_root) if self.processed_dataset_root else None,
             "feature_set_json": str(self.feature_set_json) if self.feature_set_json else None,
             "feature_sets": self.feature_sets,
+            "split_protocol": self.split_protocol,
+            "nested_split_csv": str(self.nested_split_csv),
+            "outer_fold": self.outer_fold,
+            "inner_fold": self.inner_fold,
             "holdout_split_csv": str(self.holdout_split_csv),
             "cv_split_csv": str(self.cv_split_csv),
             "cv_fold": self.cv_fold,
@@ -79,6 +87,13 @@ def load_dataset_spec(path: str | Path, *, repo_root: str | Path | None = None) 
             else None
         ),
         feature_sets=feature_sets,
+        split_protocol=str(payload.get("split_protocol", "nested_cv")),
+        nested_split_csv=resolve_path(
+            payload.get("nested_split_csv", "data/splits/isic2024_official_train_nested_5x4_seed42.csv"),
+            repo_root=repo_root,
+        ),
+        outer_fold=int(payload.get("outer_fold", 0)),
+        inner_fold=int(payload.get("inner_fold", 0)),
         holdout_split_csv=resolve_path(
             payload.get("holdout_split_csv", "data/splits/isic2024_train_validation_test_split_seed42.csv"),
             repo_root=repo_root,
@@ -144,4 +159,3 @@ def resolve_path(path: str | Path, *, repo_root: Path) -> Path:
     if value.is_absolute():
         return value
     return repo_root / value
-

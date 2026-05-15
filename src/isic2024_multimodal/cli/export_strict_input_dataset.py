@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from isic2024_multimodal.data.tabular_dataset import DEFAULT_DATASET_ROOT, DEFAULT_TARGET_COLUMN, load_tabular_dataframe
-from isic2024_multimodal.data.triple_stratified_split import build_holdout_and_cv_assignments
+from isic2024_multimodal.data.triple_stratified_split import build_nested_cv_assignments
 
 
 STRICT_INPUT_COLUMNS = [
@@ -76,20 +76,15 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--dataset-root", default=str(DEFAULT_DATASET_ROOT))
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--test-size", type=float, default=0.20)
-    parser.add_argument("--cv-folds", type=int, default=5)
+    parser.add_argument("--outer-folds", type=int, default=5)
+    parser.add_argument("--inner-folds", type=int, default=4)
     parser.add_argument("--sample-count-bins", type=int, default=5)
     parser.add_argument("--strict-output", default="data/processed/isic2024_strict_model_input.csv")
     parser.add_argument("--iddx-sidecar-output", default="data/processed/isic2024_iddx_full_train_only_sidecar.csv")
     parser.add_argument(
-        "--holdout-split-output",
+        "--nested-split-output",
         default=None,
-        help="Defaults to data/splits/isic2024_train_validation_test_split_seed{seed}.csv",
-    )
-    parser.add_argument(
-        "--cv-split-output",
-        default=None,
-        help="Defaults to data/splits/isic2024_train_validation_5fold_seed{seed}.csv",
+        help="Defaults to data/splits/isic2024_official_train_nested_{outer}x{inner}_seed{seed}.csv",
     )
     parser.add_argument(
         "--summary-output",
@@ -105,25 +100,23 @@ def main() -> None:
     frame = load_tabular_dataframe(args.dataset_root, include_image_columns=False)
     validate_source_frame(frame)
 
-    split_results = build_holdout_and_cv_assignments(
+    split_results = build_nested_cv_assignments(
         frame,
         seed=args.seed,
-        test_size=args.test_size,
-        cv_folds=args.cv_folds,
+        outer_folds=args.outer_folds,
+        inner_folds=args.inner_folds,
         sample_count_bins=args.sample_count_bins,
     )
 
     strict_frame = build_strict_model_input(frame)
     iddx_sidecar_frame = build_iddx_sidecar(frame)
-    holdout_split_frame = build_holdout_split_frame(frame, split_results["holdout"].patient_assignment)
-    cv_split_frame = build_cv_split_frame(frame, holdout_split_frame, split_results["cv"].patient_assignment)
+    nested_split_frame = build_nested_split_frame(frame, split_results)
 
     summary = build_export_summary(
         frame=frame,
         strict_frame=strict_frame,
         iddx_sidecar_frame=iddx_sidecar_frame,
-        holdout_split_frame=holdout_split_frame,
-        cv_split_frame=cv_split_frame,
+        nested_split_frame=nested_split_frame,
         split_results=split_results,
         args=args,
         output_paths=output_paths,
@@ -132,14 +125,12 @@ def main() -> None:
 
     write_csv(strict_frame, output_paths["strict_output"])
     write_csv(iddx_sidecar_frame, output_paths["iddx_sidecar_output"])
-    write_csv(holdout_split_frame, output_paths["holdout_split_output"])
-    write_csv(cv_split_frame, output_paths["cv_split_output"])
+    write_csv(nested_split_frame, output_paths["nested_split_output"])
     write_json(summary, output_paths["summary_output"])
 
     print(f"Saved strict input dataset to {output_paths['strict_output']}")
     print(f"Saved train-only iddx sidecar to {output_paths['iddx_sidecar_output']}")
-    print(f"Saved holdout split to {output_paths['holdout_split_output']}")
-    print(f"Saved CV split to {output_paths['cv_split_output']}")
+    print(f"Saved nested CV split to {output_paths['nested_split_output']}")
     print(f"Saved validation protocol summary to {output_paths['summary_output']}")
 
 
@@ -148,10 +139,10 @@ def resolve_output_paths(args: argparse.Namespace) -> dict[str, Path]:
     return {
         "strict_output": Path(args.strict_output),
         "iddx_sidecar_output": Path(args.iddx_sidecar_output),
-        "holdout_split_output": Path(
-            args.holdout_split_output or f"data/splits/isic2024_train_validation_test_split_seed{seed}.csv"
+        "nested_split_output": Path(
+            args.nested_split_output
+            or f"data/splits/isic2024_official_train_nested_{args.outer_folds}x{args.inner_folds}_seed{seed}.csv"
         ),
-        "cv_split_output": Path(args.cv_split_output or f"data/splits/isic2024_train_validation_5fold_seed{seed}.csv"),
         "summary_output": Path(
             args.summary_output
             or f"experiments/evidence/validation_protocol/isic2024_strict_input_export_summary_seed{seed}.json"
@@ -186,6 +177,49 @@ def build_iddx_sidecar(frame):
     return sidecar_frame.rename(columns={"iddx_full": "iddx_full_train_only"})[SIDECAR_OUTPUT_COLUMNS]
 
 
+def build_nested_split_frame(frame, split_results):
+    rows = []
+    base_frame = frame[IDENTIFIER_COLUMNS].copy()
+    patient_ids = frame["patient_id"].astype(str)
+    outer_assignment = split_results.outer.patient_assignment
+    for outer_fold in range(split_results.outer_folds):
+        inner_assignment = split_results.inner_by_outer_fold[outer_fold].patient_assignment
+        for inner_fold in range(split_results.inner_folds):
+            role = patient_ids.map(
+                lambda patient_id: nested_split_role(
+                    patient_id,
+                    outer_fold=outer_fold,
+                    inner_fold=inner_fold,
+                    outer_assignment=outer_assignment,
+                    inner_assignment=inner_assignment,
+                )
+            )
+            role_frame = base_frame.copy()
+            role_frame["outer_fold"] = outer_fold
+            role_frame["cv_test_fold"] = outer_fold
+            role_frame["inner_fold"] = inner_fold
+            role_frame["split_role"] = role
+            rows.append(role_frame)
+    import pandas as pd
+
+    return pd.concat(rows, ignore_index=True)
+
+
+def nested_split_role(
+    patient_id: str,
+    *,
+    outer_fold: int,
+    inner_fold: int,
+    outer_assignment: dict[str, int],
+    inner_assignment: dict[str, int],
+) -> str:
+    if int(outer_assignment[patient_id]) == int(outer_fold):
+        return "outer_test"
+    if int(inner_assignment[patient_id]) == int(inner_fold):
+        return "inner_validation"
+    return "inner_train"
+
+
 def build_holdout_split_frame(frame, assignment: dict[str, int]):
     split_frame = frame[IDENTIFIER_COLUMNS].copy()
     split_frame["split"] = frame["patient_id"].astype(str).map(
@@ -206,23 +240,22 @@ def build_export_summary(
     frame,
     strict_frame,
     iddx_sidecar_frame,
-    holdout_split_frame,
-    cv_split_frame,
+    nested_split_frame,
     split_results,
     args: argparse.Namespace,
     output_paths: dict[str, Path],
 ) -> dict[str, Any]:
-    holdout_counts = summarize_holdout_split(frame, holdout_split_frame)
-    cv_counts = summarize_cv_split(frame, cv_split_frame)
-    overlap_summary = summarize_patient_overlap(holdout_split_frame, cv_split_frame)
+    nested_summary = summarize_nested_split(frame, nested_split_frame)
+    overlap_summary = summarize_nested_patient_overlap(nested_split_frame)
     disallowed_present = sorted(set(strict_frame.columns) & DISALLOWED_MAIN_COLUMNS)
     missingness_summary = summarize_missingness(frame)
 
     return {
         "dataset_name": "isic2024_strict_input_iddx_full_contract",
+        "protocol_version": "patient_level_triple_stratified_nested_cv_v1",
         "seed": args.seed,
-        "test_size": args.test_size,
-        "cv_folds": args.cv_folds,
+        "outer_folds": args.outer_folds,
+        "inner_folds": args.inner_folds,
         "sample_count_bins": args.sample_count_bins,
         "source": {
             "dataset_root": str(Path(args.dataset_root)),
@@ -247,16 +280,27 @@ def build_export_summary(
             "row_aligned_with_strict_input": bool(strict_frame["isic_id"].equals(iddx_sidecar_frame["isic_id"])),
         },
         "split_scores": {
-            "holdout_balance_score": split_results["holdout"].balance_score,
-            "cv_balance_score": split_results["cv"].balance_score,
+            "outer_balance_score": split_results.outer.balance_score,
+            "inner_balance_scores": {
+                str(outer_fold): inner_result.balance_score
+                for outer_fold, inner_result in split_results.inner_by_outer_fold.items()
+            },
         },
-        "holdout_summary": holdout_counts,
-        "cv_summary": cv_counts,
+        "nested_cv_summary": nested_summary,
         "missingness_summary": missingness_summary,
         "overlap_summary": overlap_summary,
         "leakage_controls": {
-            "patient_disjoint_holdout": overlap_summary["train_validation_test_patient_overlap"] == 0,
-            "patient_disjoint_cv": all(item["cv_train_cv_validation_patient_overlap"] == 0 for item in overlap_summary["cv"]),
+            "patient_disjoint_outer_cv": all(
+                item["cv_train_outer_test_patient_overlap"] == 0 for item in overlap_summary["outer"]
+            ),
+            "patient_disjoint_inner_cv": all(
+                item["inner_train_inner_validation_patient_overlap"] == 0
+                and item["inner_train_outer_test_patient_overlap"] == 0
+                and item["inner_validation_outer_test_patient_overlap"] == 0
+                for item in overlap_summary["inner"]
+            ),
+            "triple_stratified_outer_folds": True,
+            "triple_stratified_inner_folds": True,
             "iddx_full_excluded_from_strict_input": "iddx_full" not in strict_frame.columns,
             "diagnosis_reference_columns_excluded_from_strict_input": len(disallowed_present) == 0,
             "train_only_preprocessing_performed": False,
@@ -328,6 +372,85 @@ def summarize_cv_split(frame, cv_split_frame) -> list[dict[str, Any]]:
     )
     summary["positive_rate_pct"] = (summary["positive_rows"] / summary["rows"] * 100).round(5)
     return summary.to_dict(orient="records")
+
+
+def summarize_nested_split(frame, nested_split_frame) -> dict[str, list[dict[str, Any]]]:
+    merged = nested_split_frame.merge(
+        frame[IDENTIFIER_COLUMNS + [DEFAULT_TARGET_COLUMN]],
+        on=IDENTIFIER_COLUMNS,
+        how="left",
+        validate="many_to_one",
+    )
+    outer_source = merged.assign(
+        outer_role=merged["split_role"].where(
+            merged["split_role"].eq("outer_test"),
+            "cv_train",
+        )
+    )
+    outer_source = outer_source.drop_duplicates(["isic_id", "outer_fold", "outer_role"])
+    outer_summary = (
+        outer_source.groupby(["outer_fold", "outer_role"], dropna=False)
+        .agg(
+            rows=("isic_id", "nunique"),
+            patients=("patient_id", "nunique"),
+            positive_rows=(DEFAULT_TARGET_COLUMN, "sum"),
+        )
+        .reset_index()
+        .sort_values(["outer_fold", "outer_role"])
+    )
+    outer_summary["positive_rate_pct"] = (outer_summary["positive_rows"] / outer_summary["rows"] * 100).round(5)
+
+    inner_source = merged.loc[~merged["split_role"].eq("outer_test")].copy()
+    inner_summary = (
+        inner_source.groupby(["outer_fold", "inner_fold", "split_role"], dropna=False)
+        .agg(
+            rows=("isic_id", "nunique"),
+            patients=("patient_id", "nunique"),
+            positive_rows=(DEFAULT_TARGET_COLUMN, "sum"),
+        )
+        .reset_index()
+        .sort_values(["outer_fold", "inner_fold", "split_role"])
+    )
+    inner_summary["positive_rate_pct"] = (inner_summary["positive_rows"] / inner_summary["rows"] * 100).round(5)
+    return {
+        "outer": outer_summary.to_dict(orient="records"),
+        "inner": inner_summary.to_dict(orient="records"),
+    }
+
+
+def summarize_nested_patient_overlap(nested_split_frame) -> dict[str, Any]:
+    outer_rows = []
+    inner_rows = []
+    for outer_fold, outer_frame in nested_split_frame.groupby("outer_fold", dropna=False):
+        outer_test_patients = set(
+            outer_frame.loc[outer_frame["split_role"].eq("outer_test"), "patient_id"].astype(str)
+        )
+        cv_train_patients = set(
+            outer_frame.loc[~outer_frame["split_role"].eq("outer_test"), "patient_id"].astype(str)
+        )
+        outer_rows.append(
+            {
+                "outer_fold": int(outer_fold),
+                "cv_train_outer_test_patient_overlap": len(cv_train_patients & outer_test_patients),
+            }
+        )
+        for inner_fold, inner_frame in outer_frame.groupby("inner_fold", dropna=False):
+            inner_train_patients = set(
+                inner_frame.loc[inner_frame["split_role"].eq("inner_train"), "patient_id"].astype(str)
+            )
+            inner_validation_patients = set(
+                inner_frame.loc[inner_frame["split_role"].eq("inner_validation"), "patient_id"].astype(str)
+            )
+            inner_rows.append(
+                {
+                    "outer_fold": int(outer_fold),
+                    "inner_fold": int(inner_fold),
+                    "inner_train_inner_validation_patient_overlap": len(inner_train_patients & inner_validation_patients),
+                    "inner_train_outer_test_patient_overlap": len(inner_train_patients & outer_test_patients),
+                    "inner_validation_outer_test_patient_overlap": len(inner_validation_patients & outer_test_patients),
+                }
+            )
+    return {"outer": outer_rows, "inner": inner_rows}
 
 
 def summarize_patient_overlap(holdout_split_frame, cv_split_frame) -> dict[str, Any]:

@@ -17,6 +17,7 @@ PRIMARY_PAUC_METRIC = "pauc_above_tpr80"
 STRICT_BASE = "strict_base"
 STRICT_FE = "strict_fe"
 STRICT_MAIN_INPUT = "strict_main_input"
+DEFAULT_NESTED_SPLIT_CSV = "data/splits/isic2024_official_train_nested_5x4_seed42.csv"
 DEFAULT_HOLDOUT_SPLIT_CSV = "data/splits/isic2024_train_validation_test_split_seed42.csv"
 DEFAULT_CV_SPLIT_CSV = "data/splits/isic2024_train_validation_5fold_seed42.csv"
 
@@ -62,6 +63,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model-family", default="tabular_baselines", help="Experiment family tag.")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--split-seed", type=int, default=DEFAULT_SEED)
+    parser.add_argument("--split-protocol", choices=["nested_cv", "legacy_holdout"], default="nested_cv")
+    parser.add_argument("--nested-split-csv", default=DEFAULT_NESTED_SPLIT_CSV)
+    parser.add_argument("--outer-fold", type=int, default=0)
+    parser.add_argument("--inner-fold", type=int, default=0)
     parser.add_argument("--cv-fold", type=int, default=0)
     parser.add_argument("--holdout-split-csv", default=DEFAULT_HOLDOUT_SPLIT_CSV)
     parser.add_argument("--cv-split-csv", default=DEFAULT_CV_SPLIT_CSV)
@@ -204,11 +209,8 @@ def main() -> None:
     target_column = feature_payload["target_column"]
     if target_column != DEFAULT_TARGET_COLUMN:
         raise RuntimeError(f"Unexpected target column in feature set JSON: {target_column}")
-    split_definition = load_locked_split_definition(
-        holdout_split_csv=args.holdout_split_csv,
-        cv_split_csv=args.cv_split_csv,
-        cv_fold=args.cv_fold,
-    )
+    split_definition = load_split_definition(args)
+    split_definition = enrich_split_definition_with_frame_audit(frame, split_definition)
     sample_ids = frame["isic_id"].astype(str).copy()
     use_final_inputs = is_final_inputs_feature_payload(feature_payload)
     final_feature_frames = (
@@ -257,17 +259,21 @@ def main() -> None:
                 {
                     "seed": args.seed,
                     "split_seed": args.split_seed,
+                    "split_protocol": args.split_protocol,
+                    "outer_fold": args.outer_fold,
+                    "inner_fold": args.inner_fold,
+                    "nested_split_csv": str(Path(args.nested_split_csv).resolve()),
                     "cv_fold": args.cv_fold,
                     "holdout_split_csv": str(Path(args.holdout_split_csv).resolve()),
                     "cv_split_csv": str(Path(args.cv_split_csv).resolve()),
-                    "split_source": "locked_split_csv",
+                    "split_source": split_definition["split_source"],
                     "max_train_rows": args.max_train_rows,
                     "max_val_rows": args.max_val_rows,
                     "max_test_rows": args.max_test_rows,
                     "dataset_root": str(Path(args.dataset_root).resolve()),
                     "split_group_policy": "patient_id -> lesion_id -> isic_id",
                     "primary_metric_name": PRIMARY_PAUC_METRIC,
-                    "threshold_source": "validation_f1",
+                    "threshold_source": threshold_source_for_split(split_definition),
                     "selected_feature_sets": ",".join(sorted(available_feature_sets)),
                     "runtime_device": args.device,
                     "requested_device": args.device,
@@ -543,11 +549,8 @@ def run_preflight(args: argparse.Namespace) -> dict[str, Any]:
     available_feature_sets = resolve_available_feature_sets(feature_payload, args.feature_sets, args.feature_set_json)
     specs = get_model_specs(args.models)
     frame = load_merged_dataframe(args.dataset_root)
-    split_definition = load_locked_split_definition(
-        holdout_split_csv=args.holdout_split_csv,
-        cv_split_csv=args.cv_split_csv,
-        cv_fold=args.cv_fold,
-    )
+    split_definition = load_split_definition(args)
+    split_definition = enrich_split_definition_with_frame_audit(frame, split_definition)
     sample_ids = set(frame["isic_id"].astype(str))
     split_ids = split_definition["train_ids"] | split_definition["val_ids"] | split_definition["test_ids"]
     missing_split_ids = sorted(split_ids - sample_ids)
@@ -596,13 +599,18 @@ def run_preflight(args: argparse.Namespace) -> dict[str, Any]:
         "model_family": getattr(args, "model_family", "tabular_baselines"),
         "requested_device": args.device,
         "effective_devices": {spec.name: effective_tabular_device(spec.name, args.device) for spec in specs},
-        "split_source": "locked_split_csv",
+        "split_protocol": getattr(args, "split_protocol", "nested_cv"),
+        "split_source": split_definition["split_source"],
+        "nested_split_csv": split_definition.get("nested_split_csv"),
+        "outer_fold": split_definition.get("outer_fold"),
+        "inner_fold": split_definition.get("inner_fold"),
         "split_rows": {
             "train": int(split_definition["num_train_rows"]),
             "val": int(split_definition["num_val_rows"]),
             "test": int(split_definition["num_test_rows"]),
         },
         "overlap_checks": split_definition["overlap_checks"],
+        "triple_balance_audit": split_definition.get("triple_balance_audit"),
         "output_root": str(output_root.resolve()),
         "output_root_exists": output_root.exists(),
         "output_summary_count": summary_count,
@@ -744,9 +752,10 @@ def train_and_evaluate(
             "requested_device": device,
             "effective_device": effective_device,
             "runtime_parameters": runtime_parameters,
-            "threshold_source": "validation_f1",
+            "threshold_source": threshold_source_for_split(split_definition),
             "selected_threshold": selected_threshold,
-            "split_source": "locked_split_csv",
+            "split_source": split_definition["split_source"],
+            "split_protocol": split_definition.get("split_protocol", "legacy_holdout"),
             "missing_value_policy": missing_value_policy_summary(),
             "split_summary": {
                 "num_train_rows": int(len(X_train)),
@@ -762,9 +771,15 @@ def train_and_evaluate(
                 "locked_num_val_rows": int(split_definition["num_val_rows"]),
                 "locked_num_test_rows": int(split_definition["num_test_rows"]),
                 "split_group_policy": "patient_id -> lesion_id -> isic_id",
-                "holdout_split_csv": split_definition["holdout_split_csv"],
-                "cv_split_csv": split_definition["cv_split_csv"],
-                "cv_fold": split_definition["cv_fold"],
+                "nested_split_csv": split_definition.get("nested_split_csv"),
+                "outer_fold": split_definition.get("outer_fold"),
+                "inner_fold": split_definition.get("inner_fold"),
+                "holdout_split_csv": split_definition.get("holdout_split_csv"),
+                "cv_split_csv": split_definition.get("cv_split_csv"),
+                "cv_fold": split_definition.get("cv_fold"),
+                "threshold_source": threshold_source_for_split(split_definition),
+                "patient_overlap_audit": split_definition["overlap_checks"],
+                "triple_balance_audit": split_definition.get("triple_balance_audit"),
                 "numeric_columns": numeric_columns,
                 "categorical_columns": categorical_columns,
                 "runtime_device": device,
@@ -806,6 +821,149 @@ def limit_split_rows(X, y, max_rows: int | None, *, seed: int):
         selected_index = list(X.index[:max_rows])
     selected_index = pd.Index(selected_index)
     return X.loc[selected_index].copy(), y.loc[selected_index].copy()
+
+
+def load_split_definition(args: argparse.Namespace) -> dict[str, Any]:
+    default_protocol = "nested_cv" if hasattr(args, "nested_split_csv") else "legacy_holdout"
+    if getattr(args, "split_protocol", default_protocol) == "legacy_holdout":
+        return load_locked_split_definition(
+            holdout_split_csv=args.holdout_split_csv,
+            cv_split_csv=args.cv_split_csv,
+            cv_fold=args.cv_fold,
+        )
+    return load_nested_split_definition(
+        nested_split_csv=args.nested_split_csv,
+        outer_fold=args.outer_fold,
+        inner_fold=args.inner_fold,
+    )
+
+
+def threshold_source_for_split(split_definition: dict[str, Any]) -> str:
+    return "inner_validation_f1" if split_definition.get("split_protocol") == "nested_cv" else "validation_f1"
+
+
+def enrich_split_definition_with_frame_audit(frame, split_definition: dict[str, Any]) -> dict[str, Any]:
+    split_definition = dict(split_definition)
+    split_definition["triple_balance_audit"] = build_tabular_split_balance_audit(frame, split_definition)
+    return split_definition
+
+
+def build_tabular_split_balance_audit(frame, split_definition: dict[str, Any]) -> list[dict[str, Any]]:
+    from isic2024_multimodal.data.triple_stratified_split import make_patient_split_profile
+
+    sample_ids = frame["isic_id"].astype(str)
+    patient_profile = make_patient_split_profile(frame)
+    roles = [
+        ("inner_train" if split_definition.get("split_protocol") == "nested_cv" else "train", split_definition["train_ids"]),
+        (
+            "inner_validation" if split_definition.get("split_protocol") == "nested_cv" else "validation",
+            split_definition["val_ids"],
+        ),
+        ("outer_test" if split_definition.get("split_protocol") == "nested_cv" else "test", split_definition["test_ids"]),
+    ]
+    rows: list[dict[str, Any]] = []
+    for role, role_ids in roles:
+        role_mask = sample_ids.isin(role_ids)
+        role_frame = frame.loc[role_mask]
+        role_patient_ids = set(role_frame["patient_id"].astype(str))
+        role_profile = patient_profile.loc[patient_profile["patient_id"].astype(str).isin(role_patient_ids)]
+        row_count = int(len(role_frame))
+        rows.append(
+            {
+                "role": role,
+                "rows": row_count,
+                "patients": int(len(role_patient_ids)),
+                "positive_rows": int(role_frame[DEFAULT_TARGET_COLUMN].sum()),
+                "positive_rate_pct": round(
+                    float(role_frame[DEFAULT_TARGET_COLUMN].sum()) / max(row_count, 1) * 100,
+                    6,
+                ),
+                "malignant_patients": int(role_profile["has_malignant"].sum()),
+                "sample_count_bins_present": int(role_profile["sample_count_bin"].nunique()),
+                "triple_strata_present": int(role_profile["triple_stratum"].nunique()),
+            }
+        )
+    return rows
+
+
+def load_nested_split_definition(*, nested_split_csv: str, outer_fold: int, inner_fold: int) -> dict[str, Any]:
+    import pandas as pd
+
+    nested_path = Path(nested_split_csv)
+    if not nested_path.exists():
+        raise FileNotFoundError(
+            "Nested CV split CSV is required for paper-valid tabular baselines. "
+            f"Missing: {nested_path}. Generate it with: "
+            "`PYTHONPATH=./src python -m isic2024_multimodal.cli.export_strict_input_dataset`"
+        )
+
+    split_frame = pd.read_csv(nested_path, low_memory=False)
+    required_columns = {"isic_id", "patient_id", "outer_fold", "inner_fold", "split_role"}
+    if not required_columns.issubset(split_frame.columns):
+        raise RuntimeError(f"Nested split CSV is missing columns: {sorted(required_columns - set(split_frame.columns))}")
+
+    split_frame["isic_id"] = split_frame["isic_id"].astype(str)
+    split_frame["patient_id"] = split_frame["patient_id"].astype(str)
+    split_frame["outer_fold"] = split_frame["outer_fold"].astype(int)
+    split_frame["inner_fold"] = split_frame["inner_fold"].astype(int)
+    selected = split_frame.loc[
+        split_frame["outer_fold"].eq(int(outer_fold))
+        & split_frame["inner_fold"].eq(int(inner_fold))
+    ].copy()
+    if selected.empty:
+        raise RuntimeError(f"No nested split rows found for outer_fold={outer_fold}, inner_fold={inner_fold}")
+    if not selected["isic_id"].is_unique:
+        duplicate_count = int(selected["isic_id"].duplicated().sum())
+        raise RuntimeError(
+            "Nested split must have exactly one role row per isic_id for the selected "
+            f"outer/inner fold, duplicate_count={duplicate_count}"
+        )
+    allowed_roles = {"inner_train", "inner_validation", "outer_test"}
+    unexpected_roles = sorted(set(selected["split_role"].astype(str)) - allowed_roles)
+    if unexpected_roles:
+        raise RuntimeError(f"Nested split CSV has unexpected split_role values: {unexpected_roles}")
+
+    train_frame = selected.loc[selected["split_role"].eq("inner_train")].copy()
+    val_frame = selected.loc[selected["split_role"].eq("inner_validation")].copy()
+    test_frame = selected.loc[selected["split_role"].eq("outer_test")].copy()
+    train_ids = set(train_frame["isic_id"])
+    val_ids = set(val_frame["isic_id"])
+    test_ids = set(test_frame["isic_id"])
+    if not train_ids or not val_ids or not test_ids:
+        raise RuntimeError(
+            "Nested split produced an empty tabular split: "
+            f"inner_train={len(train_ids)}, inner_validation={len(val_ids)}, outer_test={len(test_ids)}"
+        )
+
+    train_patients = set(train_frame["patient_id"])
+    val_patients = set(val_frame["patient_id"])
+    test_patients = set(test_frame["patient_id"])
+    overlap_checks = {
+        "inner_train_inner_validation_patient_overlap": len(train_patients & val_patients),
+        "inner_train_outer_test_patient_overlap": len(train_patients & test_patients),
+        "inner_validation_outer_test_patient_overlap": len(val_patients & test_patients),
+    }
+    failed_checks = {key: value for key, value in overlap_checks.items() if value != 0}
+    if failed_checks:
+        raise RuntimeError(f"Nested split patient overlap audit failed: {failed_checks}")
+
+    return {
+        "train_ids": train_ids,
+        "val_ids": val_ids,
+        "test_ids": test_ids,
+        "split_protocol": "nested_cv",
+        "split_source": "nested_cv_split_csv",
+        "nested_split_csv": str(nested_path),
+        "outer_fold": int(outer_fold),
+        "inner_fold": int(inner_fold),
+        "num_train_rows": len(train_ids),
+        "num_val_rows": len(val_ids),
+        "num_test_rows": len(test_ids),
+        "num_train_patients": len(train_patients),
+        "num_val_patients": len(val_patients),
+        "num_test_patients": len(test_patients),
+        "overlap_checks": overlap_checks,
+    }
 
 
 def load_locked_split_definition(*, holdout_split_csv: str, cv_split_csv: str, cv_fold: int) -> dict[str, Any]:
@@ -862,6 +1020,8 @@ def load_locked_split_definition(*, holdout_split_csv: str, cv_split_csv: str, c
         "train_ids": train_ids,
         "val_ids": val_ids,
         "test_ids": test_ids,
+        "split_protocol": "legacy_holdout",
+        "split_source": "locked_split_csv",
         "holdout_split_csv": str(holdout_path),
         "cv_split_csv": str(cv_path),
         "cv_fold": int(cv_fold),

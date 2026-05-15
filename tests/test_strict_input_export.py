@@ -6,15 +6,14 @@ from isic2024_multimodal.cli.export_strict_input_dataset import (
     DISALLOWED_MAIN_COLUMNS,
     MAIN_OUTPUT_COLUMNS,
     STRICT_INPUT_COLUMNS,
-    build_cv_split_frame,
-    build_holdout_split_frame,
     build_iddx_sidecar,
+    build_nested_split_frame,
     build_strict_model_input,
     summarize_missingness,
-    summarize_patient_overlap,
+    summarize_nested_patient_overlap,
     validate_source_frame,
 )
-from isic2024_multimodal.data.triple_stratified_split import build_holdout_and_cv_assignments
+from isic2024_multimodal.data.triple_stratified_split import build_nested_cv_assignments
 
 
 def make_synthetic_frame() -> pd.DataFrame:
@@ -79,27 +78,30 @@ def test_missingness_summary_records_roles_without_imputation() -> None:
     assert pd.isna(frame.loc[0, "age_approx"])
 
 
-def test_patient_disjoint_holdout_and_cv_splits() -> None:
+def test_patient_disjoint_nested_cv_splits() -> None:
     frame = make_synthetic_frame()
-    split_results = build_holdout_and_cv_assignments(frame, seed=42, test_size=0.2, cv_folds=5, sample_count_bins=5)
+    split_results = build_nested_cv_assignments(frame, seed=42, outer_folds=5, inner_folds=4, sample_count_bins=5)
 
-    holdout_split_frame = build_holdout_split_frame(frame, split_results["holdout"].patient_assignment)
-    cv_split_frame = build_cv_split_frame(frame, holdout_split_frame, split_results["cv"].patient_assignment)
-    overlap_summary = summarize_patient_overlap(holdout_split_frame, cv_split_frame)
+    nested_split_frame = build_nested_split_frame(frame, split_results)
+    overlap_summary = summarize_nested_patient_overlap(nested_split_frame)
 
-    assert overlap_summary["train_validation_test_patient_overlap"] == 0
-    assert len(cv_split_frame["cv_validation_fold"].unique()) == 5
-    for fold_summary in overlap_summary["cv"]:
-        assert fold_summary["cv_train_cv_validation_patient_overlap"] == 0
-        assert fold_summary["cv_validation_test_data_patient_overlap"] == 0
-        assert fold_summary["cv_train_test_data_patient_overlap"] == 0
+    assert set(nested_split_frame["split_role"].unique()) == {"inner_train", "inner_validation", "outer_test"}
+    assert nested_split_frame["outer_fold"].nunique() == 5
+    assert nested_split_frame["inner_fold"].nunique() == 4
+    for fold_summary in overlap_summary["outer"]:
+        assert fold_summary["cv_train_outer_test_patient_overlap"] == 0
+    for fold_summary in overlap_summary["inner"]:
+        assert fold_summary["inner_train_inner_validation_patient_overlap"] == 0
+        assert fold_summary["inner_train_outer_test_patient_overlap"] == 0
+        assert fold_summary["inner_validation_outer_test_patient_overlap"] == 0
 
 
 def test_triple_stratified_split_is_deterministic_for_same_seed() -> None:
     frame = make_synthetic_frame()
 
-    first = build_holdout_and_cv_assignments(frame, seed=42, test_size=0.2, cv_folds=5, sample_count_bins=5)
-    second = build_holdout_and_cv_assignments(frame, seed=42, test_size=0.2, cv_folds=5, sample_count_bins=5)
+    first = build_nested_cv_assignments(frame, seed=42, outer_folds=5, inner_folds=4, sample_count_bins=5)
+    second = build_nested_cv_assignments(frame, seed=42, outer_folds=5, inner_folds=4, sample_count_bins=5)
 
-    assert first["holdout"].patient_assignment == second["holdout"].patient_assignment
-    assert first["cv"].patient_assignment == second["cv"].patient_assignment
+    assert first.outer.patient_assignment == second.outer.patient_assignment
+    for outer_fold in range(first.outer_folds):
+        assert first.inner_by_outer_fold[outer_fold].patient_assignment == second.inner_by_outer_fold[outer_fold].patient_assignment

@@ -10,6 +10,7 @@ from isic2024_multimodal.baselines.tabular.baselines import build_lightgbm_estim
 from isic2024_multimodal.cli.run_all_tabular_models import build_command, build_preflight_command
 from isic2024_multimodal.cli.run_tabular_baseline import (
     load_locked_split_definition,
+    load_nested_split_definition,
     run_preflight,
     select_trial_score,
     validate_runtime_device,
@@ -51,6 +52,20 @@ def write_split_csvs(tmp_path):
     return holdout_path, cv_path
 
 
+def write_nested_split_csv(tmp_path):
+    nested_path = tmp_path / "nested.csv"
+    nested_frame = pd.DataFrame(
+        [
+            {"isic_id": "A", "patient_id": "P1", "lesion_id": "L1", "outer_fold": 0, "cv_test_fold": 0, "inner_fold": 0, "split_role": "outer_test"},
+            {"isic_id": "B", "patient_id": "P2", "lesion_id": "L2", "outer_fold": 0, "cv_test_fold": 0, "inner_fold": 0, "split_role": "inner_validation"},
+            {"isic_id": "C", "patient_id": "P3", "lesion_id": "L3", "outer_fold": 0, "cv_test_fold": 0, "inner_fold": 0, "split_role": "inner_train"},
+            {"isic_id": "D", "patient_id": "P4", "lesion_id": "L4", "outer_fold": 0, "cv_test_fold": 0, "inner_fold": 0, "split_role": "inner_train"},
+        ]
+    )
+    nested_frame.to_csv(nested_path, index=False)
+    return nested_path
+
+
 def test_locked_split_definition_is_patient_disjoint(tmp_path) -> None:
     holdout_path, cv_path = write_split_csvs(tmp_path)
 
@@ -79,6 +94,26 @@ def test_locked_split_does_not_depend_on_trial_seed(tmp_path) -> None:
     assert first["train_ids"] == second["train_ids"]
     assert first["val_ids"] == second["val_ids"]
     assert first["test_ids"] == second["test_ids"]
+
+
+def test_nested_split_definition_is_patient_disjoint(tmp_path) -> None:
+    nested_path = write_nested_split_csv(tmp_path)
+
+    split_definition = load_nested_split_definition(
+        nested_split_csv=str(nested_path),
+        outer_fold=0,
+        inner_fold=0,
+    )
+
+    assert split_definition["train_ids"] == {"C", "D"}
+    assert split_definition["val_ids"] == {"B"}
+    assert split_definition["test_ids"] == {"A"}
+    assert split_definition["split_protocol"] == "nested_cv"
+    assert split_definition["overlap_checks"] == {
+        "inner_train_inner_validation_patient_overlap": 0,
+        "inner_train_outer_test_patient_overlap": 0,
+        "inner_validation_outer_test_patient_overlap": 0,
+    }
 
 
 def test_threshold_selection_uses_validation_probabilities() -> None:
@@ -294,6 +329,10 @@ def test_run_all_tabular_gpu_command_passes_cuda_device() -> None:
         tracking_uri="file:experiments/logs/mlruns",
         seed=42,
         split_seed=42,
+        split_protocol="nested_cv",
+        nested_split_csv="data/splits/isic2024_official_train_nested_5x4_seed42.csv",
+        outer_fold=0,
+        inner_fold=0,
         cv_fold=0,
         holdout_split_csv="data/splits/isic2024_train_validation_test_split_seed42.csv",
         cv_split_csv="data/splits/isic2024_train_validation_5fold_seed42.csv",

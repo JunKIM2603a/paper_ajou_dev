@@ -62,6 +62,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model-family", default="tabular_baselines", help="Experiment family tag.")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--split-seed", type=int, default=DEFAULT_SEED)
+    parser.add_argument("--split-protocol", choices=["nested_cv", "legacy_holdout"], default="nested_cv")
+    parser.add_argument("--nested-split-csv", default="data/splits/isic2024_official_train_nested_5x4_seed42.csv")
+    parser.add_argument("--outer-fold", type=int, default=0)
+    parser.add_argument("--inner-fold", type=int, default=0)
     parser.add_argument("--cv-fold", type=int, default=0)
     parser.add_argument("--holdout-split-csv", default="data/splits/isic2024_train_validation_test_split_seed42.csv")
     parser.add_argument("--cv-split-csv", default="data/splits/isic2024_train_validation_5fold_seed42.csv")
@@ -264,6 +268,14 @@ def build_preflight_command(args: argparse.Namespace, *, device: int | None) -> 
         str(args.seed),
         "--split-seed",
         str(args.split_seed),
+        "--split-protocol",
+        args.split_protocol,
+        "--nested-split-csv",
+        str(resolve_repo_path(args.nested_split_csv)),
+        "--outer-fold",
+        str(args.outer_fold),
+        "--inner-fold",
+        str(args.inner_fold),
         "--cv-fold",
         str(args.cv_fold),
         "--holdout-split-csv",
@@ -318,6 +330,14 @@ def build_command(model_name: str, args: argparse.Namespace, *, device: int | No
         str(args.seed),
         "--split-seed",
         str(args.split_seed),
+        "--split-protocol",
+        args.split_protocol,
+        "--nested-split-csv",
+        str(resolve_repo_path(args.nested_split_csv)),
+        "--outer-fold",
+        str(args.outer_fold),
+        "--inner-fold",
+        str(args.inner_fold),
         "--cv-fold",
         str(args.cv_fold),
         "--holdout-split-csv",

@@ -21,6 +21,7 @@ from isic2024_multimodal.training.reproducibility import (
 )
 from isic2024_multimodal.utils.runtime_env import ensure_expected_conda_env, get_default_mlflow_tracking_uri, load_project_env
 
+DEFAULT_NESTED_SPLIT_CSV = "data/splits/isic2024_official_train_nested_5x4_seed42.csv"
 DEFAULT_HOLDOUT_SPLIT_CSV = "data/splits/isic2024_train_validation_test_split_seed42.csv"
 DEFAULT_CV_SPLIT_CSV = "data/splits/isic2024_train_validation_5fold_seed42.csv"
 
@@ -52,6 +53,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dataset-id", default=None, help="Versioned dataset id for registry/report filtering.")
     parser.add_argument("--dataset-spec", default=None, help="Dataset spec JSON path used for this run.")
     parser.add_argument("--model-family", default="image_baselines", help="Experiment family tag.")
+    parser.add_argument("--split-protocol", choices=["nested_cv", "legacy_holdout"], default="nested_cv")
+    parser.add_argument("--nested-split-csv", default=DEFAULT_NESTED_SPLIT_CSV)
+    parser.add_argument("--outer-fold", type=int, default=0)
+    parser.add_argument("--inner-fold", type=int, default=0)
     parser.add_argument("--holdout-split-csv", default=DEFAULT_HOLDOUT_SPLIT_CSV)
     parser.add_argument("--cv-split-csv", default=DEFAULT_CV_SPLIT_CSV)
     parser.add_argument("--cv-fold", type=int, default=0)
@@ -132,6 +137,7 @@ def main() -> None:
     from isic2024_multimodal.data.image_dataset import (
         ImageClassificationDataset,
         build_manifest,
+        create_splits_from_nested_csv,
         create_splits_from_locked_csvs,
         resolve_dataset_root,
     )
@@ -192,11 +198,25 @@ def main() -> None:
         cache_path=Path(args.output_root) / "cache" / "isic2024_challenge_image_manifest.json",
     )
     _log(f"manifest ready: {len(manifest)} samples")
-    splits = create_splits_from_locked_csvs(
-        manifest,
-        holdout_split_csv=args.holdout_split_csv,
-        cv_split_csv=args.cv_split_csv,
-        cv_fold=args.cv_fold,
+    if args.split_protocol == "legacy_holdout":
+        splits = create_splits_from_locked_csvs(
+            manifest,
+            holdout_split_csv=args.holdout_split_csv,
+            cv_split_csv=args.cv_split_csv,
+            cv_fold=args.cv_fold,
+        )
+        split_source = "locked_split_csv"
+    else:
+        splits = create_splits_from_nested_csv(
+            manifest,
+            nested_split_csv=args.nested_split_csv,
+            outer_fold=args.outer_fold,
+            inner_fold=args.inner_fold,
+        )
+        split_source = "nested_cv_split_csv"
+    split_protocol_audit = image_split_protocol_audit(
+        splits,
+        nested_protocol=args.split_protocol == "nested_cv",
     )
     splits["train"] = _limit_samples(splits["train"], args.max_train_samples, seed=seed)
     splits["val"] = _limit_samples(splits["val"], args.max_val_samples, seed=seed + 1)
@@ -215,11 +235,17 @@ def main() -> None:
                     "dataset_spec_path": args.dataset_spec,
                     "model_family": args.model_family,
                     "run_group_id": args.run_group_id,
-                    "split_source": "locked_split_csv",
+                    "split_protocol": args.split_protocol,
+                    "split_source": split_source,
+                    "nested_split_csv": str(Path(args.nested_split_csv).resolve()),
+                    "outer_fold": args.outer_fold,
+                    "inner_fold": args.inner_fold,
                     "holdout_split_csv": str(Path(args.holdout_split_csv).resolve()),
                     "cv_split_csv": str(Path(args.cv_split_csv).resolve()),
                     "cv_fold": args.cv_fold,
                     "split_rows": {name: len(items) for name, items in splits.items()},
+                    "patient_overlap_audit": split_protocol_audit["patient_overlap_audit"],
+                    "triple_balance_audit": split_protocol_audit["triple_balance_audit"],
                     "checkpoint_download": checkpoint_download,
                     "checkpoint_preflight": checkpoint_preflight,
                     "image_preprocessing_contract": preprocessing_contract,
@@ -348,7 +374,11 @@ def main() -> None:
                 "dataset_id": args.dataset_id,
                 "dataset_spec_path": args.dataset_spec,
                 "model_family": args.model_family,
-                "split_source": "locked_split_csv",
+                "split_protocol": args.split_protocol,
+                "split_source": split_source,
+                "nested_split_csv": str(Path(args.nested_split_csv).resolve()),
+                "outer_fold": args.outer_fold,
+                "inner_fold": args.inner_fold,
                 "holdout_split_csv": str(Path(args.holdout_split_csv).resolve()),
                 "cv_split_csv": str(Path(args.cv_split_csv).resolve()),
                 "cv_fold": args.cv_fold,
@@ -443,10 +473,19 @@ def main() -> None:
                             "dataset_id": args.dataset_id,
                             "dataset_spec_path": args.dataset_spec,
                             "model_family": args.model_family,
-                            "split_source": "locked_split_csv",
+                            "split_protocol": args.split_protocol,
+                            "split_source": split_source,
+                            "threshold_source": "inner_validation_f1"
+                            if args.split_protocol == "nested_cv"
+                            else summary.get("threshold_source", "validation_f1"),
+                            "nested_split_csv": str(Path(args.nested_split_csv).resolve()),
+                            "outer_fold": args.outer_fold,
+                            "inner_fold": args.inner_fold,
                             "holdout_split_csv": str(Path(args.holdout_split_csv).resolve()),
                             "cv_split_csv": str(Path(args.cv_split_csv).resolve()),
                             "cv_fold": args.cv_fold,
+                            "patient_overlap_audit": split_protocol_audit["patient_overlap_audit"],
+                            "triple_balance_audit": split_protocol_audit["triple_balance_audit"],
                         }
                     )
                     (output_dir / "summary.json").write_text(
@@ -665,6 +704,61 @@ def _select_trial_plan(
             )
         selected.append(indexed_combinations[trial_index])
     return selected
+
+
+def image_split_protocol_audit(
+    splits: dict[str, list[Any]],
+    *,
+    nested_protocol: bool,
+) -> dict[str, Any]:
+    role_names = (
+        {"train": "inner_train", "val": "inner_validation", "test": "outer_test"}
+        if nested_protocol
+        else {"train": "train", "val": "validation", "test": "test"}
+    )
+    patient_sets = {
+        name: {
+            str(sample.metadata.get("patient_id", ""))
+            for sample in samples
+            if str(sample.metadata.get("patient_id", ""))
+        }
+        for name, samples in splits.items()
+    }
+    role_distribution = []
+    for split_name in ["train", "val", "test"]:
+        samples = splits[split_name]
+        patients = patient_sets[split_name]
+        positive_rows = sum(int(getattr(sample, "label", 0)) for sample in samples)
+        row_count = len(samples)
+        role_distribution.append(
+            {
+                "role": role_names[split_name],
+                "rows": int(row_count),
+                "patients": int(len(patients)),
+                "positive_rows": int(positive_rows),
+                "positive_rate_pct": round(float(positive_rows) / max(row_count, 1) * 100, 6),
+            }
+        )
+
+    if nested_protocol:
+        overlap_audit = {
+            "inner_train_inner_validation_patient_overlap": len(patient_sets["train"] & patient_sets["val"]),
+            "inner_train_outer_test_patient_overlap": len(patient_sets["train"] & patient_sets["test"]),
+            "inner_validation_outer_test_patient_overlap": len(patient_sets["val"] & patient_sets["test"]),
+        }
+    else:
+        overlap_audit = {
+            "train_val_patient_overlap": len(patient_sets["train"] & patient_sets["val"]),
+            "train_test_patient_overlap": len(patient_sets["train"] & patient_sets["test"]),
+            "val_test_patient_overlap": len(patient_sets["val"] & patient_sets["test"]),
+        }
+    failed_checks = {key: value for key, value in overlap_audit.items() if value != 0}
+    if failed_checks:
+        raise RuntimeError(f"Image split patient overlap audit failed: {failed_checks}")
+    return {
+        "patient_overlap_audit": overlap_audit,
+        "triple_balance_audit": role_distribution,
+    }
 
 
 def _disable_pretrained_weights(config: dict[str, Any]) -> None:

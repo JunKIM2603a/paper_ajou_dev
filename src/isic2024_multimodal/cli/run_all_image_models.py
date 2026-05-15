@@ -51,6 +51,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dataset-id", default=None, help="Versioned dataset id for registry/report filtering.")
     parser.add_argument("--dataset-spec", default=None, help="Dataset spec JSON path used for this run.")
     parser.add_argument("--model-family", default="image_baselines", help="Experiment family tag.")
+    parser.add_argument("--split-protocol", choices=["nested_cv", "legacy_holdout"], default="nested_cv")
+    parser.add_argument("--nested-split-csv", default="data/splits/isic2024_official_train_nested_5x4_seed42.csv")
+    parser.add_argument("--outer-fold", type=int, default=0)
+    parser.add_argument("--inner-fold", type=int, default=0)
     parser.add_argument("--holdout-split-csv", default="data/splits/isic2024_train_validation_test_split_seed42.csv")
     parser.add_argument("--cv-split-csv", default="data/splits/isic2024_train_validation_5fold_seed42.csv")
     parser.add_argument("--cv-fold", type=int, default=0)
@@ -218,6 +222,10 @@ def filter_config_paths(
 
 
 def build_command(config_path: Path, args: argparse.Namespace, *, device: int | None) -> list[str]:
+    split_protocol = getattr(args, "split_protocol", "nested_cv")
+    nested_split_csv = getattr(args, "nested_split_csv", "data/splits/isic2024_official_train_nested_5x4_seed42.csv")
+    outer_fold = getattr(args, "outer_fold", 0)
+    inner_fold = getattr(args, "inner_fold", 0)
     command = [
         sys.executable,
         "-m",
@@ -240,6 +248,14 @@ def build_command(config_path: Path, args: argparse.Namespace, *, device: int | 
         args.dataset_spec or "",
         "--model-family",
         args.model_family,
+        "--split-protocol",
+        split_protocol,
+        "--nested-split-csv",
+        str(resolve_repo_path(nested_split_csv)),
+        "--outer-fold",
+        str(outer_fold),
+        "--inner-fold",
+        str(inner_fold),
         "--holdout-split-csv",
         str(resolve_repo_path(args.holdout_split_csv)),
         "--cv-split-csv",

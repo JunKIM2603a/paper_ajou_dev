@@ -2,7 +2,7 @@
 
 이 폴더는 ISIC2024 / SLICE-3D / 3D-TBP 기반 멀티모달 피부암 논문조사 결과를 축적하는 공간이다.
 
-기본 관점은 `lesion image + ordinary inference-time tabular metadata -> malignant probability`이다. LUPI, privileged supervision(특권 정보 기반 감독), diagnosis text(진단 텍스트), pathology-derived text(병리 유래 텍스트), `iddx_full` 기반 방법은 기본 baseline(기준 모델)이 아니라 candidate(후보 방법) 또는 related idea(관련 아이디어)로 분리한다.
+기본 관점은 `lesion image + strict_input -> malignant probability`이다. 여기서 `strict_input`은 ordinary inference-time tabular metadata model input을 뜻한다. LUPI, privileged supervision(특권 정보 기반 감독), diagnosis text(진단 텍스트), pathology-derived text(병리 유래 텍스트), `iddx_full` 기반 방법은 기본 baseline(기준 모델)이 아니라 `train-only privileged supervision candidate` 또는 related idea(관련 아이디어)로 분리한다.
 
 ## 파일
 
@@ -31,6 +31,6 @@
 - 우리 연구와의 관련성
 - 검증 메모
 
-## Strict-Contract 규칙
+## strict_input Contract 규칙
 
-`iddx_full`, diagnosis text(진단 텍스트), pathology-derived context(병리 유래 맥락), oracle diagnosis label(정답 진단 label)을 inference input(추론 입력)으로 요구하는 논문은 이 프로젝트의 strict multimodal baseline(엄격한 멀티모달 기준 모델)과 직접 비교하지 않는다. 이런 논문은 related work(관련 연구), limitation discussion(한계 논의), 또는 candidate method context(후보 방법 맥락)로만 사용한다.
+`iddx_full`, diagnosis text(진단 텍스트), pathology-derived context(병리 유래 맥락), oracle diagnosis label(정답 진단 label)을 inference input(추론 입력)으로 요구하는 논문은 이 프로젝트의 `image + strict_input` baseline과 직접 비교하지 않는다. 이런 논문은 related work(관련 연구), limitation discussion(한계 논의), 또는 `train-only privileged supervision candidate` 맥락으로만 사용한다.

@@ -13,6 +13,15 @@ class TripleSplitResult:
     balance_score: float
 
 
+@dataclass(frozen=True)
+class NestedCVResult:
+    outer: TripleSplitResult
+    inner_by_outer_fold: dict[int, TripleSplitResult]
+    patient_profile: Any
+    outer_folds: int
+    inner_folds: int
+
+
 def make_patient_split_profile(
     frame,
     *,
@@ -109,9 +118,21 @@ def assign_triple_stratified_groups(
 
                 left_row = patient_rows_by_id[left_patient_id]
                 right_row = patient_rows_by_id[right_patient_id]
-                candidate_groups = _copy_group_state(groups)
-                _move_patient(candidate_groups, left_row, from_group=left_group, to_group=right_group)
-                _move_patient(candidate_groups, right_row, from_group=right_group, to_group=left_group)
+                candidate_groups = _copy_group_state_for_swap(groups, left_group, right_group)
+                _move_patient(
+                    candidate_groups,
+                    left_row,
+                    from_group=left_group,
+                    to_group=right_group,
+                    track_patient_ids=False,
+                )
+                _move_patient(
+                    candidate_groups,
+                    right_row,
+                    from_group=right_group,
+                    to_group=left_group,
+                    track_patient_ids=False,
+                )
                 candidate_score = _triple_balance_score(candidate_groups, total, target_ratios, bin_values)
 
                 if candidate_score + 1e-12 < best_score:
@@ -162,6 +183,66 @@ def build_holdout_and_cv_assignments(
         "holdout": holdout_result,
         "cv": cv_result,
     }
+
+
+def build_nested_cv_assignments(
+    frame,
+    *,
+    seed: int = 42,
+    outer_folds: int = 5,
+    inner_folds: int = 4,
+    sample_count_bins: int = 5,
+) -> NestedCVResult:
+    """Build patient-level Triple Stratified outer and inner CV assignments.
+
+    The outer assignment defines ``cv_test_fold`` / ``outer_test``. For each
+    outer fold, the remaining patients are split again with the same balancing
+    objective to produce inner validation folds. The inner assignment is scoped
+    to the corresponding outer fold and must never include outer-test patients.
+    """
+    if outer_folds < 2:
+        raise ValueError(f"outer_folds must be >= 2, got {outer_folds}")
+    if inner_folds < 2:
+        raise ValueError(f"inner_folds must be >= 2, got {inner_folds}")
+    if inner_folds >= outer_folds:
+        raise ValueError(
+            "inner_folds must be smaller than outer_folds so each outer train "
+            f"pool can be re-split without reusing the outer test fold, got "
+            f"inner_folds={inner_folds}, outer_folds={outer_folds}"
+        )
+
+    patient_profile = make_patient_split_profile(frame, sample_count_bins=sample_count_bins)
+    outer_result = assign_triple_stratified_groups(
+        patient_profile,
+        n_groups=outer_folds,
+        target_ratios=[1.0 / outer_folds] * outer_folds,
+        seed=seed,
+    )
+
+    inner_by_outer_fold: dict[int, TripleSplitResult] = {}
+    for outer_fold in range(outer_folds):
+        outer_test_patients = {
+            patient_id
+            for patient_id, assigned_outer_fold in outer_result.patient_assignment.items()
+            if int(assigned_outer_fold) == outer_fold
+        }
+        outer_train_profile = patient_profile.loc[
+            ~patient_profile["patient_id"].astype(str).isin(outer_test_patients)
+        ].copy()
+        inner_by_outer_fold[outer_fold] = assign_triple_stratified_groups(
+            outer_train_profile,
+            n_groups=inner_folds,
+            target_ratios=[1.0 / inner_folds] * inner_folds,
+            seed=seed + 1000 + outer_fold,
+        )
+
+    return NestedCVResult(
+        outer=outer_result,
+        inner_by_outer_fold=inner_by_outer_fold,
+        patient_profile=patient_profile,
+        outer_folds=outer_folds,
+        inner_folds=inner_folds,
+    )
 
 
 def _make_sample_count_bin(series, *, q: int):
@@ -228,8 +309,9 @@ def _build_group_state_from_assignment(patient_frame, assignment: dict[str, int]
     return groups
 
 
-def _add_patient(state: dict[str, Any], patient_row) -> None:
-    state["patient_ids"].append(str(patient_row["patient_id"]))
+def _add_patient(state: dict[str, Any], patient_row, *, track_patient_ids: bool = True) -> None:
+    if track_patient_ids:
+        state["patient_ids"].append(str(patient_row["patient_id"]))
     state["patients"] += 1
     state["rows"] += float(patient_row["patient_rows"])
     state["positive_rows"] += float(patient_row["positive_rows"])
@@ -237,8 +319,9 @@ def _add_patient(state: dict[str, Any], patient_row) -> None:
     state["bin_counts"][str(patient_row["sample_count_bin"])] += 1.0
 
 
-def _remove_patient(state: dict[str, Any], patient_row) -> None:
-    state["patient_ids"].remove(str(patient_row["patient_id"]))
+def _remove_patient(state: dict[str, Any], patient_row, *, track_patient_ids: bool = True) -> None:
+    if track_patient_ids:
+        state["patient_ids"].remove(str(patient_row["patient_id"]))
     state["patients"] -= 1
     state["rows"] -= float(patient_row["patient_rows"])
     state["positive_rows"] -= float(patient_row["positive_rows"])
@@ -246,23 +329,34 @@ def _remove_patient(state: dict[str, Any], patient_row) -> None:
     state["bin_counts"][str(patient_row["sample_count_bin"])] -= 1.0
 
 
-def _move_patient(groups, patient_row, *, from_group: int, to_group: int) -> None:
-    _remove_patient(groups[from_group], patient_row)
-    _add_patient(groups[to_group], patient_row)
+def _move_patient(groups, patient_row, *, from_group: int, to_group: int, track_patient_ids: bool = True) -> None:
+    _remove_patient(groups[from_group], patient_row, track_patient_ids=track_patient_ids)
+    _add_patient(groups[to_group], patient_row, track_patient_ids=track_patient_ids)
 
 
-def _copy_group_state(groups):
+def _copy_group_state(groups, *, include_patient_ids: bool = True):
     return [
-        {
-            "patient_ids": list(state["patient_ids"]),
-            "patients": state["patients"],
-            "rows": state["rows"],
-            "positive_rows": state["positive_rows"],
-            "malignant_patients": state["malignant_patients"],
-            "bin_counts": dict(state["bin_counts"]),
-        }
+        _copy_one_group_state(state, include_patient_ids=include_patient_ids)
         for state in groups
     ]
+
+
+def _copy_group_state_for_swap(groups, first_group: int, second_group: int):
+    copied_groups = list(groups)
+    copied_groups[first_group] = _copy_one_group_state(groups[first_group], include_patient_ids=False)
+    copied_groups[second_group] = _copy_one_group_state(groups[second_group], include_patient_ids=False)
+    return copied_groups
+
+
+def _copy_one_group_state(state, *, include_patient_ids: bool):
+    return {
+        "patient_ids": list(state["patient_ids"]) if include_patient_ids else [],
+        "patients": state["patients"],
+        "rows": state["rows"],
+        "positive_rows": state["positive_rows"],
+        "malignant_patients": state["malignant_patients"],
+        "bin_counts": dict(state["bin_counts"]),
+    }
 
 
 def _summarize_total(patient_frame, bin_values: list[str]) -> dict[str, Any]:

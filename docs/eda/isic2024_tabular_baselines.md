@@ -156,7 +156,7 @@ rm -rf experiments/outputs/tabular_baselines \
        experiments/logs/mlflow.db
 ```
 
-이 명령은 `data/raw`, `data/processed`, `data/splits`, `experiments/registry`를 삭제하지 않는다. locked split CSV는 paper-valid 결과의 protocol 입력이므로, split을 의도적으로 재생성하는 경우가 아니면 유지한다.
+이 명령은 `data/raw`, `data/processed`, `data/splits`, `experiments/registry`를 삭제하지 않는다. Nested CV split CSV는 paper-valid 결과의 protocol 입력이므로, split을 의도적으로 재생성하는 경우가 아니면 유지한다.
 
 실행 로그는 `[YYYY-MM-DD HH:MM:SS]` prefix로 preflight, 모델별 subprocess, report 생성의 시작/종료와 duration을 남긴다. 개별 `run_tabular_baseline` subprocess 내부에서는 data/protocol load, trial, final_test 시간이 출력되고, 각 `summary.json`의 `timing_seconds`에 `prepare_splits_seconds`, `build_estimator_seconds`, `fit_seconds`, `select_threshold_seconds`, `evaluate_train_seconds`, `evaluate_val_seconds`, `evaluate_test_seconds`가 저장된다.
 
@@ -179,11 +179,10 @@ conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python
 
 ## Split Protocol
 
-기본 실행은 locked split artifacts를 사용한다.
+기본 실행은 patient-level Triple Stratified Nested CV artifact를 사용한다.
 
 ```text
-data/splits/isic2024_train_validation_test_split_seed42.csv
-data/splits/isic2024_train_validation_5fold_seed42.csv
+data/splits/isic2024_official_train_nested_5x4_seed42.csv
 ```
 
 이 파일이 없으면 먼저 strict input export를 실행한다.
@@ -192,14 +191,16 @@ data/splits/isic2024_train_validation_5fold_seed42.csv
 PYTHONPATH=./src python -m isic2024_multimodal.cli.export_strict_input_dataset
 ```
 
-Runner는 `cv_validation_fold` 하나를 validation fold로 쓰고, 같은 `train_validation_data` 안의 나머지 rows를 train으로 쓴다. `test_data`는 locked internal holdout이다.
+Runner는 기본적으로 `outer_fold=0`, `inner_fold=0`을 읽는다. 선택된 `outer_fold`의 `outer_test`는 최종 평가 전용이고, 같은 outer fold의 `cv_train` 내부에서 `inner_validation` 하나를 validation fold로, 나머지를 `inner_train`으로 쓴다.
+
+논문용 fold-wise 결과는 `outer_fold=0..4`를 반복해서 만든다. 각 outer fold 내부의 model choice, hyperparameter, early stopping, threshold, calibration은 `inner_validation`에서만 수행해야 한다.
 
 ## Threshold Protocol
 
 F1, precision, recall, balanced accuracy는 validation probabilities에서 선택한 threshold를 사용한다.
 
 ```text
-threshold_source = validation_f1
+threshold_source = inner_validation_f1
 ```
 
 AUC, pAUC, Average Precision은 threshold-independent metric으로 probabilities에서 계산한다. Trial selection은 validation metrics만 사용하며 test metrics로 fallback하지 않는다.
@@ -258,11 +259,13 @@ Each summary records:
 model_name
 hyperparameters
 split_source
-holdout_split_csv
-cv_split_csv
-cv_fold
+nested_split_csv
+outer_fold
+inner_fold
 threshold_source
 selected_threshold
+patient_overlap_audit
+triple_balance_audit
 train/val/test metrics
 numeric_columns
 categorical_columns
