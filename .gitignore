@@ -16,11 +16,11 @@ data/splits/*
 !data/splits/isic2024_official_train_nested_5x4_seed42.csv
 
 # Experiment logs and generated outputs
-!data/evidence/validation_protocol/isic2024_strict_input_export_summary_seed42.json
 experiments/logs/*
 !experiments/logs/.gitkeep
 experiments/outputs/*
 !experiments/outputs/.gitkeep
+!experiments/evidence/validation_protocol/isic2024_strict_input_export_summary_seed42.json
 mlruns/
 artifacts/
 
