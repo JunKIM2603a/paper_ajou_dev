@@ -20,6 +20,17 @@ experiments/outputs/*
 mlruns/
 artifacts/
 
+# Git-friendly experiment summaries
+# Keep small paper-facing CSV/JSON/Markdown tables under experiments/tables/ trackable.
+# Large/raw run artifacts should stay under experiments/outputs/ above.
+experiments/tables/**/smoke*/
+experiments/tables/**/*smoke*
+experiments/tables/**/*.parquet
+experiments/tables/**/*.pkl
+experiments/tables/**/*.pickle
+experiments/tables/**/*.npy
+experiments/tables/**/*.npz
+
 # Model checkpoints and large model artifacts
 checkpoints/
 *.ckpt
