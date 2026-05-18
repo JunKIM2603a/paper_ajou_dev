@@ -8,6 +8,7 @@ import pytest
 
 from isic2024_multimodal.cli.run_image_baseline import select_trial_score
 from isic2024_multimodal.cli.run_all_image_models import build_command as build_image_command
+from isic2024_multimodal.cli.run_baseline_suite import build_suite_commands
 from isic2024_multimodal.cli.image_baseline_status import (
     artifact_status_for_model,
     build_status_records,
@@ -693,3 +694,32 @@ def test_family_runner_builds_tabular_family_command(tmp_path) -> None:
     assert command[command.index("--output-root") + 1] == str(paths.output_root)
     assert command[command.index("--max-train-rows") + 1] == "10"
     assert command[command.index("--device-policy") + 1] == "auto"
+
+
+def test_baseline_suite_builds_tabular_and_image_family_commands() -> None:
+    args = types.SimpleNamespace(
+        families=["tabular_baselines", "image_baselines"],
+        run_group_id="baseline_suite_unit",
+        devices=[0, 1],
+        device_policy="cpu",
+        smoke=True,
+        preflight_only=True,
+        resume=True,
+        reset_family_output=False,
+        skip_reports=True,
+    )
+
+    commands = build_suite_commands(args)
+
+    assert [entry.family for entry in commands] == ["tabular_baselines", "image_baselines"]
+    for entry in commands:
+        command = entry.command
+        assert "isic2024_multimodal.cli.run_experiment_family" in command
+        assert command[command.index("--family") + 1] == entry.family
+        assert command[command.index("--run-group-id") + 1] == "baseline_suite_unit"
+        assert command[command.index("--device-policy") + 1] == "cpu"
+        assert command[command.index("--devices") + 1 : command.index("--devices") + 3] == ["0", "1"]
+        assert "--smoke" in command
+        assert "--preflight-only" in command
+        assert "--resume" in command
+        assert "--skip-reports" in command
