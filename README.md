@@ -100,7 +100,7 @@ conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python
 ```
 
 - `conda run -n paper`: `paper` conda 환경에서 실행한다.
-- `ISIC2024_EXPECTED_CONDA_ENV=paper`: 일부 CLI의 conda 환경 검사를 현재 로컬 env 이름에 맞춘다.
+- `ISIC2024_EXPECTED_CONDA_ENV=paper`: CLI의 conda 환경 검사 기준을 `paper`로 명시한다.
 - `env PYTHONPATH=./src`: `src/` 아래의 `isic2024_multimodal` 패키지를 import할 수 있게 한다.
 - `python -m isic2024_multimodal.cli.<command>`: `src/isic2024_multimodal/cli/` 아래의 CLI entrypoint를 실행한다.
 
@@ -157,9 +157,9 @@ GPU 사용 전에는 `paper` 환경에서 CUDA가 보이는지 확인한다.
 conda run -n paper python -c "import torch; print(torch.__version__); print(torch.version.cuda); print(torch.cuda.is_available()); print(torch.cuda.device_count())"
 ```
 
-`torch.cuda.is_available()`가 `True`이고 GPU 수가 1 이상이어야 tabular GPU 실행이 가능하다. 현재 GPU 사용을 위해 확인한 기준 환경은 `torch 2.5.1+cu121`, `torchvision 0.20.1+cu121`, `torchaudio 2.5.1+cu121`, `lightgbm 4.6.0`이다.
+`torch.cuda.is_available()`가 `True`이고 GPU 수가 1 이상이면 기본 실행은 CUDA를 우선 사용한다. GPU가 없거나 CUDA tensor allocation이 실패하면 runner가 CPU로 자동 fallback하고 summary/log에 fallback reason을 남긴다. 현재 GPU 사용을 위해 확인한 기준 환경은 `torch 2.5.1+cu121`, `torchvision 0.20.1+cu121`, `torchaudio 2.5.1+cu121`, `lightgbm 4.6.0`이다.
 
-GPU를 사용할 수 있으면 GPU-capable tabular 모델은 기본적으로 모델별 subprocess runner로 실행한다. 단일 GPU에서도 `run_all_tabular_models --devices 0`를 권장한다. 모델별 프로세스가 분리되어 FT-Transformer와 tree model 사이의 GPU 메모리 잔류 위험이 낮다.
+GPU를 사용할 수 있으면 GPU-capable tabular 모델은 기본적으로 모델별 subprocess runner에서 GPU 0을 우선 사용한다. `--devices 0` 또는 `--devices 0 1`은 사용할 GPU를 명시하거나 병렬 실행할 때 쓴다. CPU를 강제하려면 all-model runner에서는 `--device-policy cpu`, 단일 runner에서는 `--device cpu`를 사용한다.
 
 권장 초기화는 위의 `run_experiment_family --reset-family-output`이다. 기존 직접 runner 결과와 local MLflow history까지 모두 지우는 전체 실험 로그 초기화가 필요할 때만 아래 명령을 쓴다.
 
@@ -184,11 +184,14 @@ conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python
 
 - `--models`: 실행할 tabular model 목록이다.
 - `--feature-sets strict_main_input`: strict inference-time input feature set만 사용한다.
-- `--devices 0`: 모델별 subprocess에 GPU를 배정한다.
+- `--devices 0`: 사용할 GPU를 명시한다. 생략하면 `--device-policy auto`가 GPU 0을 우선 사용하고, GPU를 쓸 수 없으면 CPU로 fallback한다.
 - LightGBM은 WSL/CUDA 환경에서 OpenCL GPU를 요구하지 않도록 CPU backend로 실행된다. XGBoost, CatBoost, FT-Transformer 계열은 CUDA를 사용한다.
 - 기본 split 파일:
   - `data/splits/isic2024_official_train_nested_5x4_seed42.csv`
-- 기본 실행은 `--outer-fold 0 --inner-fold 0` 조합을 읽는다. 논문 결과는 outer fold별로 반복해 fold-wise summary를 만든다.
+- 기본 실행은 `--outer-fold 0 --inner-fold 0` 조합 하나를 읽는다. 현재 runner는 이 조합에서 `inner_train`으로 trial을 학습하고, `inner_validation`으로 best hyperparameter와 threshold를 선택한 뒤, 같은 `inner_train`으로 best 설정을 다시 학습하고 `outer_test`를 평가한다.
+- 전체 nested fold를 자동 반복하려면 `run_all_tabular_models --all-folds`를 사용한다. 이 옵션은 nested split CSV에서 모든 `(outer_fold, inner_fold)` 조합 20개를 실행하고, output은 fold별 하위 폴더에 나눈다.
+- 현재 요약기는 20개 실행 결과를 읽어 validation 기준으로 outer fold별 대표 실행 하나를 고른다. 이 결과는 `validation-selected nested summary`이며, full `cv_train` refit은 수행하지 않는다.
+- 논문 final model 확정 후에는 outer fold별 best hyperparameter를 확정하고, full `cv_train`에서 train-only preprocessing과 model을 다시 fit한 뒤, `outer_test`에서 한 번 평가하는 절차를 별도로 수행하는 것이 이상적이다.
 - threshold는 `inner_validation`에서 F1 기준으로 선택한다.
 - `outer_test`는 threshold 선택, feature selection, preprocessing fitting, model choice에 사용하면 안 된다.
 
@@ -196,13 +199,24 @@ conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python
 
 `run_all_tabular_models`는 기본적으로 timestamp 기반 `run_group_id`를 만들고, 실행 후 CSV/HTML report를 해당 run group으로 필터링한다. 같은 결과 묶음을 명시적으로 재생산하거나 report를 다시 만들고 싶으면 `--run-group-id <id>`를 직접 지정한다.
 
-`logistic_regression`, `svm`, `mlp`는 CPU 실행 시 sklearn estimator를 쓰지만 `--device cuda`를 주면 repo-native torch estimator로 바뀐다. Paper-facing sklearn baseline으로 비교하려면 이 세 모델은 CPU 명령으로 따로 실행한다.
+`logistic_regression`, `svm`, `mlp`는 CPU 실행 시 sklearn estimator를 쓰지만 GPU auto/cuda 실행에서는 repo-native torch estimator로 바뀐다. Paper-facing sklearn baseline으로 비교하려면 이 세 모델은 CPU 명령으로 따로 실행한다.
 
 ```bash
 conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_tabular_baseline \
   --dataset-root data/raw \
   --models logistic_regression svm mlp \
-  --feature-sets strict_main_input
+  --feature-sets strict_main_input \
+  --device cpu
+```
+
+전체 nested fold 조합을 자동 실행하려면:
+
+```bash
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_all_tabular_models \
+  --dataset-root data/raw/isic_2024_challenge \
+  --models logistic_regression \
+  --feature-sets strict_main_input \
+  --all-folds
 ```
 
 빠른 smoke test는 모델과 row 수를 줄여서 실행한다.
@@ -220,8 +234,7 @@ conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python
   --skip-reports
 ```
 
-옵션을 생략하면 기본값이 `--device cpu`라서 GPU를 사용하지 않는다.
-단일 모델 디버깅이 필요할 때만 `run_tabular_baseline --device cuda`를 직접 사용한다.
+옵션을 생략하면 기본값은 GPU 우선 `--device auto`다. sklearn 고전 baseline을 강제로 확인할 때는 `run_tabular_baseline --device cpu`를 직접 사용한다.
 
 ### 4. Image baseline 단일 config 실행
 
@@ -297,7 +310,7 @@ conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python
   --devices 0
 ```
 
-GPU-capable tabular model 목록을 모델 단위 subprocess로 실행하고, 실행 후 report를 생성한다. `--devices 0`은 각 subprocess에 `CUDA_VISIBLE_DEVICES=0`을 배정하고 `--device cuda`를 전달한다. GPU가 보이지 않거나 PyTorch CUDA 초기화가 실패하면 preflight 단계에서 중단된다.
+GPU-capable tabular model 목록을 모델 단위 subprocess로 실행하고, 실행 후 report를 생성한다. `--devices 0`은 각 subprocess에 `CUDA_VISIBLE_DEVICES=0`을 배정하고 `--device cuda`를 전달한다. GPU가 보이지 않거나 PyTorch CUDA 초기화가 실패하면 CPU로 fallback하고 summary/log에 `device_fallback_reason`을 남긴다.
 
 기존 직접 runner 결과와 local MLflow history를 함께 비우는 전체 로그 초기화가 필요할 때만 다음 명령을 쓴다. Family 단위 초기화는 `run_experiment_family --reset-family-output`을 우선 사용한다.
 

@@ -1,9 +1,11 @@
 {
   "dataset_id": "strict_main_input_plus_embeddings_v1",
-  "dataset_root": "data/raw",
+  "dataset_root": "data/raw/isic_2024_challenge",
   "processed_dataset_root": "data/processed/datasets/strict_main_input_plus_embeddings_v1",
   "feature_set_json": "experiments/evidence/eda/isic_2024/final_inputs/feature_sets_recommended.json",
-  "feature_sets": ["strict_main_input"],
+  "feature_sets": [
+    "strict_main_input"
+  ],
   "embedding_root": "data/processed/datasets/strict_main_input_plus_embeddings_v1/embeddings",
   "holdout_split_csv": "data/splits/isic2024_train_validation_test_split_seed42.csv",
   "cv_split_csv": "data/splits/isic2024_train_validation_5fold_seed42.csv",
@@ -15,5 +17,9 @@
     "pathology_text",
     "oracle_diagnosis",
     "target_derived_diagnosis"
-  ]
+  ],
+  "split_protocol": "nested_cv",
+  "nested_split_csv": "data/splits/isic2024_official_train_nested_5x4_seed42.csv",
+  "outer_fold": 0,
+  "inner_fold": 0
 }

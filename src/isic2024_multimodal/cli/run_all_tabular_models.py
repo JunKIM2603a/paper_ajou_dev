@@ -13,6 +13,7 @@ from pathlib import Path
 
 from isic2024_multimodal.evaluation.metrics import PRIMARY_PAUC_METRIC
 from isic2024_multimodal.training.reproducibility import DEFAULT_SEED
+from isic2024_multimodal.utils.device import resolve_device_list
 from isic2024_multimodal.utils.runtime_env import (
     DEFAULT_MLFLOW_FILE_TRACKING_URI,
     DEFAULT_MLFLOW_SQLITE_TRACKING_URI,
@@ -41,9 +42,25 @@ def make_run_group_id(prefix: str = "tabular_all") -> str:
 
 
 @dataclass
+class FoldSelection:
+    outer_fold: int | None = None
+    inner_fold: int | None = None
+    cv_fold: int | None = None
+
+    @property
+    def label(self) -> str:
+        if self.outer_fold is not None and self.inner_fold is not None:
+            return f"outer_{self.outer_fold:02d}_inner_{self.inner_fold:02d}"
+        if self.cv_fold is not None:
+            return f"cv_{self.cv_fold:02d}"
+        return "single_fold"
+
+
+@dataclass
 class RunningJob:
     device: int
     model_name: str
+    fold: FoldSelection
     process: subprocess.Popen
     started_at: float
 
@@ -67,12 +84,28 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--outer-fold", type=int, default=0)
     parser.add_argument("--inner-fold", type=int, default=0)
     parser.add_argument("--cv-fold", type=int, default=0)
+    parser.add_argument(
+        "--all-folds",
+        "--all-nested-folds",
+        action="store_true",
+        dest="all_folds",
+        help=(
+            "Run every fold found in the split artifact. For nested_cv this runs every "
+            "(outer_fold, inner_fold) pair; for legacy_holdout this runs every cv_fold."
+        ),
+    )
     parser.add_argument("--holdout-split-csv", default="data/splits/isic2024_train_validation_test_split_seed42.csv")
     parser.add_argument("--cv-split-csv", default="data/splits/isic2024_train_validation_5fold_seed42.csv")
     parser.add_argument("--max-train-rows", type=int, default=None)
     parser.add_argument("--max-val-rows", type=int, default=None)
     parser.add_argument("--max-test-rows", type=int, default=None)
     parser.add_argument("--devices", nargs="*", type=int, default=None, help="Visible GPU indices to run in parallel.")
+    parser.add_argument(
+        "--device-policy",
+        choices=["auto", "cpu"],
+        default="auto",
+        help="Device policy for subprocesses. auto prefers CUDA and falls back to CPU; cpu forces CPU.",
+    )
     parser.add_argument("--models", nargs="*", default=DEFAULT_MODELS)
     parser.add_argument("--feature-sets", nargs="*", default=DEFAULT_FEATURE_SETS)
     parser.add_argument(
@@ -107,21 +140,35 @@ def main() -> None:
     log_event(
         "Start "
         f"run_group_id={args.run_group_id} models={','.join(args.models)} "
-        f"feature_sets={','.join(args.feature_sets)} devices={args.devices or 'cpu'}"
+        f"feature_sets={','.join(args.feature_sets)} requested_devices={args.devices or 'auto'} "
+        f"device_policy={args.device_policy}"
     )
 
-    if args.devices:
-        validate_gpu_request(args.devices)
-    preflight_device = args.devices[0] if args.devices else None
-    preflight_failures = run_preflight(args, device=preflight_device)
+    device_resolution = resolve_device_list(args.devices, device_policy=args.device_policy)
+    args.resolved_devices = device_resolution.resolved_devices
+    args.device_fallback_reason = device_resolution.fallback_reason
+    log_event(
+        f"Resolved devices={args.resolved_devices or 'cpu'} "
+        f"cuda_available={device_resolution.cuda_available} "
+        f"visible_device_count={device_resolution.visible_device_count} "
+        f"fallback={args.device_fallback_reason or 'none'}"
+    )
+    fold_selections = resolve_fold_selections(args)
+    log_event(
+        "Resolved folds="
+        f"{','.join(fold.label for fold in fold_selections)} "
+        f"count={len(fold_selections)}"
+    )
+    preflight_device = args.resolved_devices[0] if args.resolved_devices else None
+    preflight_failures = run_preflights(args, device=preflight_device, fold_selections=fold_selections)
     if preflight_failures:
         log_event("Preflight failed; no model jobs were launched.")
         raise SystemExit(1)
 
-    if args.devices:
-        failures = run_parallel(args)
+    if args.resolved_devices:
+        failures = run_parallel(args, fold_selections=fold_selections)
     else:
-        failures = run_sequential(args)
+        failures = run_sequential(args, fold_selections=fold_selections)
 
     report_failures = [] if args.skip_reports else generate_reports(args)
     failures.extend(report_failures)
@@ -153,54 +200,47 @@ def log_event(message: str) -> None:
     print(f"[{current_timestamp()}] [run_all_tabular_models] {message}", flush=True)
 
 
-def validate_gpu_request(devices: list[int]) -> None:
-    import torch
-
-    unique_devices = sorted(set(devices))
-    if len(unique_devices) != len(devices):
-        raise RuntimeError(f"Duplicate GPU ids are not allowed: {devices}")
-    if not torch.cuda.is_available():
-        raise RuntimeError("`--devices` was provided, but torch.cuda.is_available() is False.")
-    visible_count = torch.cuda.device_count()
-    for device in unique_devices:
-        if device < 0 or device >= visible_count:
-            raise RuntimeError(f"GPU id {device} is out of range for {visible_count} visible devices.")
-
-
-def run_sequential(args: argparse.Namespace) -> list[dict[str, str | int]]:
+def run_sequential(args: argparse.Namespace, *, fold_selections: list[FoldSelection]) -> list[dict[str, str | int]]:
     failures: list[dict[str, str | int]] = []
     env = build_subprocess_env()
-    for model_name in args.models:
-        command = build_command(model_name, args, device=None)
-        model_start = time.time()
-        log_event(f"Start model={model_name} device=cpu")
-        result = subprocess.run(command, check=False, cwd=REPO_ROOT, env=env)
-        log_event(
-            f"Finished model={model_name} device=cpu returncode={result.returncode} "
-            f"duration={format_duration(time.time() - model_start)}"
-        )
-        if result.returncode != 0:
-            failures.append({"model": model_name, "returncode": result.returncode})
+    for fold in fold_selections:
+        for model_name in args.models:
+            command = build_command(model_name, args, device=None, fold=fold)
+            model_start = time.time()
+            log_event(f"Start model={model_name} fold={fold.label} device=cpu")
+            result = subprocess.run(command, check=False, cwd=REPO_ROOT, env=env)
+            log_event(
+                f"Finished model={model_name} fold={fold.label} device=cpu returncode={result.returncode} "
+                f"duration={format_duration(time.time() - model_start)}"
+            )
+            if result.returncode != 0:
+                failures.append({"model": f"{model_name}:{fold.label}", "returncode": result.returncode})
     return failures
 
 
-def run_parallel(args: argparse.Namespace) -> list[dict[str, str | int]]:
+def run_parallel(args: argparse.Namespace, *, fold_selections: list[FoldSelection]) -> list[dict[str, str | int]]:
     failures: list[dict[str, str | int]] = []
-    pending = deque(args.models)
+    pending = deque((fold, model_name) for fold in fold_selections for model_name in args.models)
     active: dict[int, RunningJob] = {}
-    devices = list(args.devices or [])
+    devices = list(args.resolved_devices or [])
 
     while pending or active:
         for device in devices:
             if device in active or not pending:
                 continue
-            model_name = pending.popleft()
-            command = build_command(model_name, args, device=device)
+            fold, model_name = pending.popleft()
+            command = build_command(model_name, args, device=device, fold=fold)
             env = build_subprocess_env(device=device)
             started_at = time.time()
-            log_event(f"Start model={model_name} gpu={device}")
+            log_event(f"Start model={model_name} fold={fold.label} gpu={device}")
             process = subprocess.Popen(command, cwd=REPO_ROOT, env=env)
-            active[device] = RunningJob(device=device, model_name=model_name, process=process, started_at=started_at)
+            active[device] = RunningJob(
+                device=device,
+                model_name=model_name,
+                fold=fold,
+                process=process,
+                started_at=started_at,
+            )
 
         completed_devices: list[int] = []
         for device, job in active.items():
@@ -208,11 +248,11 @@ def run_parallel(args: argparse.Namespace) -> list[dict[str, str | int]]:
             if returncode is None:
                 continue
             log_event(
-                f"Finished model={job.model_name} gpu={device} returncode={returncode} "
+                f"Finished model={job.model_name} fold={job.fold.label} gpu={device} returncode={returncode} "
                 f"duration={format_duration(time.time() - job.started_at)}"
             )
             if returncode != 0:
-                failures.append({"model": job.model_name, "returncode": returncode})
+                failures.append({"model": f"{job.model_name}:{job.fold.label}", "returncode": returncode})
             completed_devices.append(device)
 
         for device in completed_devices:
@@ -224,22 +264,46 @@ def run_parallel(args: argparse.Namespace) -> list[dict[str, str | int]]:
     return failures
 
 
-def run_preflight(args: argparse.Namespace, *, device: int | None) -> list[dict[str, str | int]]:
-    command = build_preflight_command(args, device=device)
+def run_preflights(
+    args: argparse.Namespace,
+    *,
+    device: int | None,
+    fold_selections: list[FoldSelection],
+) -> list[dict[str, str | int]]:
+    failures: list[dict[str, str | int]] = []
+    for fold in fold_selections:
+        failures.extend(run_preflight(args, device=device, fold=fold))
+    return failures
+
+
+def run_preflight(
+    args: argparse.Namespace,
+    *,
+    device: int | None,
+    fold: FoldSelection | None = None,
+) -> list[dict[str, str | int]]:
+    fold = fold or fold_from_args(args)
+    command = build_preflight_command(args, device=device, fold=fold)
     env = build_subprocess_env(device=device)
     preflight_start = time.time()
-    log_event("Start preflight")
+    log_event(f"Start preflight fold={fold.label}")
     result = subprocess.run(command, check=False, cwd=REPO_ROOT, env=env)
     log_event(
-        f"Finished preflight returncode={result.returncode} "
+        f"Finished preflight fold={fold.label} returncode={result.returncode} "
         f"duration={format_duration(time.time() - preflight_start)}"
     )
     if result.returncode != 0:
-        return [{"model": "preflight", "returncode": result.returncode}]
+        return [{"model": f"preflight:{fold.label}", "returncode": result.returncode}]
     return []
 
 
-def build_preflight_command(args: argparse.Namespace, *, device: int | None) -> list[str]:
+def build_preflight_command(
+    args: argparse.Namespace,
+    *,
+    device: int | None,
+    fold: FoldSelection | None = None,
+) -> list[str]:
+    fold = fold or fold_from_args(args)
     command = [
         sys.executable,
         "-m",
@@ -261,7 +325,7 @@ def build_preflight_command(args: argparse.Namespace, *, device: int | None) -> 
         "--model-family",
         getattr(args, "model_family", "tabular_baselines"),
         "--output-root",
-        str(resolve_repo_path(args.output_root)),
+        str(command_output_root(args, fold)),
         "--tracking-uri",
         args.tracking_uri,
         "--seed",
@@ -273,11 +337,11 @@ def build_preflight_command(args: argparse.Namespace, *, device: int | None) -> 
         "--nested-split-csv",
         str(resolve_repo_path(args.nested_split_csv)),
         "--outer-fold",
-        str(args.outer_fold),
+        str(fold.outer_fold if fold.outer_fold is not None else args.outer_fold),
         "--inner-fold",
-        str(args.inner_fold),
+        str(fold.inner_fold if fold.inner_fold is not None else args.inner_fold),
         "--cv-fold",
-        str(args.cv_fold),
+        str(fold.cv_fold if fold.cv_fold is not None else args.cv_fold),
         "--holdout-split-csv",
         str(resolve_repo_path(args.holdout_split_csv)),
         "--cv-split-csv",
@@ -296,12 +360,20 @@ def build_preflight_command(args: argparse.Namespace, *, device: int | None) -> 
         command.extend(["--max-val-rows", str(args.max_val_rows)])
     if args.max_test_rows is not None:
         command.extend(["--max-test-rows", str(args.max_test_rows)])
-    if device is not None:
-        command.extend(["--device", "cuda"])
+    device_arg = command_device_arg(args, device)
+    if device_arg is not None:
+        command.extend(["--device", device_arg])
     return command
 
 
-def build_command(model_name: str, args: argparse.Namespace, *, device: int | None) -> list[str]:
+def build_command(
+    model_name: str,
+    args: argparse.Namespace,
+    *,
+    device: int | None,
+    fold: FoldSelection | None = None,
+) -> list[str]:
+    fold = fold or fold_from_args(args)
     command = [
         sys.executable,
         "-m",
@@ -323,7 +395,7 @@ def build_command(model_name: str, args: argparse.Namespace, *, device: int | No
         "--model-family",
         getattr(args, "model_family", "tabular_baselines"),
         "--output-root",
-        str(resolve_repo_path(args.output_root)),
+        str(command_output_root(args, fold)),
         "--tracking-uri",
         args.tracking_uri,
         "--seed",
@@ -335,11 +407,11 @@ def build_command(model_name: str, args: argparse.Namespace, *, device: int | No
         "--nested-split-csv",
         str(resolve_repo_path(args.nested_split_csv)),
         "--outer-fold",
-        str(args.outer_fold),
+        str(fold.outer_fold if fold.outer_fold is not None else args.outer_fold),
         "--inner-fold",
-        str(args.inner_fold),
+        str(fold.inner_fold if fold.inner_fold is not None else args.inner_fold),
         "--cv-fold",
-        str(args.cv_fold),
+        str(fold.cv_fold if fold.cv_fold is not None else args.cv_fold),
         "--holdout-split-csv",
         str(resolve_repo_path(args.holdout_split_csv)),
         "--cv-split-csv",
@@ -356,9 +428,75 @@ def build_command(model_name: str, args: argparse.Namespace, *, device: int | No
         command.extend(["--max-val-rows", str(args.max_val_rows)])
     if args.max_test_rows is not None:
         command.extend(["--max-test-rows", str(args.max_test_rows)])
-    if device is not None:
-        command.extend(["--device", "cuda"])
+    device_arg = command_device_arg(args, device)
+    if device_arg is not None:
+        command.extend(["--device", device_arg])
     return command
+
+
+def command_device_arg(args: argparse.Namespace, device: int | None) -> str | None:
+    if device is not None:
+        return "cuda"
+    if getattr(args, "device_policy", "auto") == "cpu":
+        return "cpu"
+    if getattr(args, "devices", None) and not getattr(args, "resolved_devices", []):
+        return "cpu"
+    return None
+
+
+def fold_from_args(args: argparse.Namespace) -> FoldSelection:
+    if getattr(args, "split_protocol", "nested_cv") == "nested_cv":
+        return FoldSelection(outer_fold=int(args.outer_fold), inner_fold=int(args.inner_fold))
+    return FoldSelection(cv_fold=int(args.cv_fold))
+
+
+def command_output_root(args: argparse.Namespace, fold: FoldSelection) -> Path:
+    output_root = resolve_repo_path(args.output_root)
+    if getattr(args, "all_folds", False):
+        return output_root / fold.label
+    return output_root
+
+
+def resolve_fold_selections(args: argparse.Namespace) -> list[FoldSelection]:
+    if not getattr(args, "all_folds", False):
+        return [fold_from_args(args)]
+
+    if getattr(args, "split_protocol", "nested_cv") == "nested_cv":
+        return resolve_nested_fold_selections(args.nested_split_csv)
+    return resolve_legacy_cv_fold_selections(args.cv_split_csv)
+
+
+def resolve_nested_fold_selections(nested_split_csv: str | Path) -> list[FoldSelection]:
+    import pandas as pd
+
+    nested_path = resolve_repo_path(nested_split_csv)
+    if not nested_path.exists():
+        raise FileNotFoundError(f"Nested split CSV not found: {nested_path}")
+    split_frame = pd.read_csv(nested_path, usecols=["outer_fold", "inner_fold"], low_memory=False)
+    fold_pairs = (
+        split_frame[["outer_fold", "inner_fold"]]
+        .drop_duplicates()
+        .sort_values(["outer_fold", "inner_fold"])
+    )
+    if fold_pairs.empty:
+        raise RuntimeError(f"Nested split CSV has no fold pairs: {nested_path}")
+    return [
+        FoldSelection(outer_fold=int(row.outer_fold), inner_fold=int(row.inner_fold))
+        for row in fold_pairs.itertuples(index=False)
+    ]
+
+
+def resolve_legacy_cv_fold_selections(cv_split_csv: str | Path) -> list[FoldSelection]:
+    import pandas as pd
+
+    cv_path = resolve_repo_path(cv_split_csv)
+    if not cv_path.exists():
+        raise FileNotFoundError(f"CV split CSV not found: {cv_path}")
+    cv_frame = pd.read_csv(cv_path, usecols=["cv_validation_fold"], low_memory=False)
+    cv_folds = sorted(int(value) for value in cv_frame["cv_validation_fold"].dropna().unique().tolist())
+    if not cv_folds:
+        raise RuntimeError(f"CV split CSV has no cv_validation_fold values: {cv_path}")
+    return [FoldSelection(cv_fold=cv_fold) for cv_fold in cv_folds]
 
 
 def generate_reports(args: argparse.Namespace) -> list[dict[str, str | int]]:

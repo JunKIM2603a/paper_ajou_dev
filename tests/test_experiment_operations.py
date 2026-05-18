@@ -18,6 +18,12 @@ from isic2024_multimodal.cli.run_experiment_family import build_tabular_command
 from isic2024_multimodal.data.image_dataset import create_splits_from_locked_csvs
 from isic2024_multimodal.experiments.dataset_specs import load_dataset_spec
 from isic2024_multimodal.experiments.families import reset_family_outputs, resolve_family_paths
+from isic2024_multimodal.experiments.nested_cv_summary import (
+    collect_nested_cv_summary_records,
+    select_outer_fold_records,
+    summarize_selected_test_metrics,
+    write_nested_cv_summary_outputs,
+)
 from isic2024_multimodal.experiments.registry import read_selection_registry, write_family_selection
 from isic2024_multimodal.models.image.checkpoint_preflight import preflight_image_model_config
 from isic2024_multimodal.models.image.checkpoint_downloads import download_checkpoint, infer_model_key
@@ -131,6 +137,174 @@ def test_registry_writes_best_selection_from_local_summaries(tmp_path) -> None:
     assert selection is not None
     assert selection["model_name"] == "catboost"
     assert registry["run_a"]["validation_metric"] == 0.2
+
+
+def test_nested_cv_summary_selects_outer_fold_candidates_by_validation_only(tmp_path) -> None:
+    output_root = tmp_path / "experiments" / "outputs" / "tabular_baselines" / "run_a"
+    write_json(
+        output_root / "outer_00_inner_00" / "high_test" / "best_final_test" / "summary.json",
+        {
+            "model_name": "high_test",
+            "outer_fold": 0,
+            "inner_fold": 0,
+            "selected_threshold": 0.4,
+            "threshold_source": "inner_validation_f1",
+            "hyperparameters": {"feature_set": "strict_main_input"},
+            "metrics": {
+                "val": {"pauc_above_tpr80": 0.10},
+                "test": {
+                    "pauc_above_tpr80": 0.90,
+                    "auc_roc": 0.80,
+                    "f1_score": 0.30,
+                    "precision": 0.25,
+                    "recall": 0.50,
+                    "balanced_accuracy": 0.60,
+                },
+            },
+        },
+    )
+    write_json(
+        output_root / "outer_00_inner_00" / "high_test" / "high_test_trial_001" / "summary.json",
+        {
+            "model_name": "trial_duplicate_should_be_ignored",
+            "outer_fold": 0,
+            "inner_fold": 0,
+            "metrics": {
+                "val": {"pauc_above_tpr80": 0.99},
+                "test": {"pauc_above_tpr80": 0.99},
+            },
+        },
+    )
+    write_json(
+        output_root / "outer_00_inner_01" / "validation_winner" / "best_final_test" / "summary.json",
+        {
+            "model_name": "validation_winner",
+            "outer_fold": 0,
+            "inner_fold": 1,
+            "selected_threshold": 0.5,
+            "threshold_source": "inner_validation_f1",
+            "hyperparameters": {"feature_set": "strict_main_input"},
+            "metrics": {
+                "val": {"pauc_above_tpr80": 0.20},
+                "test": {
+                    "pauc_above_tpr80": 0.10,
+                    "auc_roc": 0.70,
+                    "f1_score": 0.20,
+                    "precision": 0.15,
+                    "recall": 0.40,
+                    "balanced_accuracy": 0.55,
+                },
+            },
+        },
+    )
+    write_json(
+        output_root / "outer_01_inner_00" / "fold_one" / "best_final_test" / "summary.json",
+        {
+            "model_name": "fold_one",
+            "outer_fold": 1,
+            "inner_fold": 0,
+            "selected_threshold": 0.6,
+            "threshold_source": "inner_validation_f1",
+            "hyperparameters": {"feature_set": "strict_main_input"},
+            "metrics": {
+                "val": {"pauc_above_tpr80": 0.15},
+                "test": {
+                    "pauc_above_tpr80": 0.40,
+                    "auc_roc": 0.75,
+                    "f1_score": 0.25,
+                    "precision": 0.20,
+                    "recall": 0.45,
+                    "balanced_accuracy": 0.58,
+                },
+            },
+        },
+    )
+    write_json(
+        output_root / "outer_01_inner_01" / "auc_only_high_value" / "best_final_test" / "summary.json",
+        {
+            "model_name": "auc_only_high_value",
+            "outer_fold": 1,
+            "inner_fold": 1,
+            "selected_threshold": 0.7,
+            "threshold_source": "inner_validation_f1",
+            "hyperparameters": {"feature_set": "strict_main_input"},
+            "metrics": {
+                "val": {"auc_roc": 0.99},
+                "test": {
+                    "pauc_above_tpr80": 0.99,
+                    "auc_roc": 0.99,
+                    "f1_score": 0.90,
+                    "precision": 0.90,
+                    "recall": 0.90,
+                    "balanced_accuracy": 0.90,
+                },
+            },
+        },
+    )
+
+    records = collect_nested_cv_summary_records(
+        output_root=output_root,
+        family="tabular_baselines",
+        run_group_id="run_a",
+    )
+    selected = select_outer_fold_records(records)
+    selected_by_outer = {record.outer_fold: record for record in selected}
+    metric_summary = summarize_selected_test_metrics(selected)
+    pauc_summary = next(row for row in metric_summary if row["metric"] == "pauc_above_tpr80")
+    table_root = tmp_path / "experiments" / "tables" / "tabular_baselines" / "run_a" / "nested_cv"
+
+    manifest = write_nested_cv_summary_outputs(
+        records=records,
+        table_root=table_root,
+        family="tabular_baselines",
+        run_group_id="run_a",
+        expected_outer_folds=2,
+    )
+
+    assert len(records) == 4
+    assert selected_by_outer[0].model_name == "validation_winner"
+    assert selected_by_outer[0].test_metrics["pauc_above_tpr80"] == 0.10
+    assert selected_by_outer[1].model_name == "fold_one"
+    assert pauc_summary["mean"] == pytest.approx(0.25)
+    assert manifest["selected_outer_fold_count"] == 2
+    assert (table_root / "nested_cv_all_candidates.csv").exists()
+    assert (table_root / "nested_cv_outer_selection.csv").exists()
+    assert (table_root / "nested_cv_metric_summary.csv").exists()
+    markdown = (table_root / "nested_cv_summary.md").read_text(encoding="utf-8")
+    assert "Selection uses validation metrics only" in markdown
+    assert "validation_winner" in markdown
+
+
+def test_nested_cv_summary_parses_image_style_summaries(tmp_path) -> None:
+    output_root = tmp_path / "experiments" / "outputs" / "image_baselines" / "run_a"
+    write_json(
+        output_root / "resnet50" / "trial_001" / "summary.json",
+        {
+            "model_name": "resnet50",
+            "split_summary": {"outer_fold": 2, "inner_fold": 3},
+            "selected_threshold": 0.35,
+            "threshold_source": "inner_validation_f1",
+            "best_validation_metrics": {"auc_roc": 0.72, "average_precision": 0.08},
+            "test_metrics": {
+                "pauc_above_tpr80": 0.12,
+                "auc_roc": 0.74,
+                "f1_score": 0.22,
+            },
+        },
+    )
+
+    records = collect_nested_cv_summary_records(
+        output_root=output_root,
+        family="image_baselines",
+        run_group_id="run_a",
+    )
+
+    assert len(records) == 1
+    assert records[0].outer_fold == 2
+    assert records[0].inner_fold == 3
+    assert records[0].validation_metric_name == "auc_roc"
+    assert records[0].validation_metric == 0.72
+    assert records[0].test_metrics["pauc_above_tpr80"] == 0.12
 
 
 def test_locked_image_split_uses_csv_membership(tmp_path) -> None:
@@ -315,6 +489,40 @@ def test_run_all_image_models_passes_auto_download_flag(tmp_path) -> None:
     assert "--auto-download-checkpoints" in command
 
 
+def test_run_all_image_models_cpu_policy_passes_cpu_device(tmp_path) -> None:
+    config = tmp_path / "resnet50" / "config.json"
+    config.parent.mkdir(parents=True)
+    config.write_text("{}", encoding="utf-8")
+    args = types.SimpleNamespace(
+        dataset_root="data/raw/isic_2024_challenge",
+        output_root="experiments/outputs/image_baselines",
+        tracking_uri="file:experiments/logs/mlruns",
+        experiment_name="ISIC2024-Image-Baselines",
+        run_group_id="unit_group",
+        dataset_id="image_preprocessed_v1",
+        dataset_spec="experiments/configs/dataset_specs/image_preprocessed_v1.json",
+        model_family="image_baselines",
+        holdout_split_csv="data/splits/isic2024_train_validation_test_split_seed42.csv",
+        cv_split_csv="data/splits/isic2024_train_validation_5fold_seed42.csv",
+        cv_fold=0,
+        seed=42,
+        max_trials=None,
+        epochs_override=None,
+        max_train_samples=None,
+        max_val_samples=None,
+        max_test_samples=None,
+        disable_pretrained=False,
+        auto_download_checkpoints=False,
+        device_policy="cpu",
+        devices=None,
+        resolved_devices=[],
+    )
+
+    command = build_image_command(config, args, device=None)
+
+    assert command[command.index("--device") + 1] == "cpu"
+
+
 def test_image_status_classifies_not_started_and_checkpoint_missing(tmp_path) -> None:
     hub_status = checkpoint_status_for_model(
         {
@@ -467,6 +675,7 @@ def test_family_runner_builds_tabular_family_command(tmp_path) -> None:
         run_group_id="run_a",
         tracking_uri="file:experiments/logs/mlruns",
         devices=[0],
+        device_policy="auto",
         smoke=True,
         skip_reports=True,
     )
@@ -483,3 +692,4 @@ def test_family_runner_builds_tabular_family_command(tmp_path) -> None:
     assert command[command.index("--model-family") + 1] == "tabular_baselines"
     assert command[command.index("--output-root") + 1] == str(paths.output_root)
     assert command[command.index("--max-train-rows") + 1] == "10"
+    assert command[command.index("--device-policy") + 1] == "auto"

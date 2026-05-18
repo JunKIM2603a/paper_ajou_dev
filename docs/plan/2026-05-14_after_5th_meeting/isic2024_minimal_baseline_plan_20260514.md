@@ -263,7 +263,7 @@ validation/test에는 train-fitted fusion pipeline만 적용한다.
 ### 6.1 Strict input export
 
 ```bash
-PYTHONPATH=./src python -m isic2024_multimodal.cli.export_strict_input_dataset
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.export_strict_input_dataset
 ```
 
 생성되는 주요 산출물:
@@ -278,7 +278,7 @@ experiments/evidence/validation_protocol/isic2024_strict_input_export_summary_se
 ### 6.2 Metadata baseline preflight
 
 ```bash
-PYTHONPATH=./src python -m isic2024_multimodal.cli.run_tabular_baseline \
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_tabular_baseline \
   --models logistic_regression \
   --feature-sets strict_main_input \
   --preflight-only
@@ -287,7 +287,7 @@ PYTHONPATH=./src python -m isic2024_multimodal.cli.run_tabular_baseline \
 ### 6.3 Metadata baseline run
 
 ```bash
-PYTHONPATH=./src python -m isic2024_multimodal.cli.run_tabular_baseline \
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_tabular_baseline \
   --models logistic_regression \
   --feature-sets strict_main_input \
   --run-group-id minimal_v0_metadata_logreg_balanced
@@ -303,7 +303,7 @@ unweighted LogisticRegression은 v0에 포함하지 않는다.
 ### 6.4 Image baseline preflight
 
 ```bash
-PYTHONPATH=./src python -m isic2024_multimodal.cli.run_image_baseline \
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_image_baseline \
   --config experiments/configs/image_baselines/resnet50/config.json \
   --preflight-only
 ```
@@ -311,7 +311,7 @@ PYTHONPATH=./src python -m isic2024_multimodal.cli.run_image_baseline \
 ### 6.5 Image baseline run
 
 ```bash
-PYTHONPATH=./src python -m isic2024_multimodal.cli.run_image_baseline \
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_image_baseline \
   --config experiments/configs/image_baselines/resnet50/config.json \
   --run-group-id minimal_v0_image_resnet50_finetune
 ```

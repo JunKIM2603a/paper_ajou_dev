@@ -40,6 +40,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run-group-id", default=None, help="Reusable run group id. Defaults to timestamp.")
     parser.add_argument("--tracking-uri", default=get_repo_default_mlflow_tracking_uri())
     parser.add_argument("--devices", nargs="*", type=int, default=None)
+    parser.add_argument(
+        "--device-policy",
+        choices=["auto", "cpu"],
+        default="auto",
+        help="Device policy for family runners. auto prefers CUDA and falls back to CPU; cpu forces CPU.",
+    )
     parser.add_argument("--smoke", action="store_true")
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--preflight-only", action="store_true")
@@ -160,6 +166,7 @@ def build_run_manifest(
         "tracking_uri": args.tracking_uri,
         "experiment_name": suite.get("experiment_name", EXPERIMENT_FAMILIES[args.family]),
         "devices": args.devices,
+        "device_policy": args.device_policy,
         "created_at": current_timestamp(),
     }
 
@@ -179,6 +186,8 @@ def build_preflight_summary(manifest: dict[str, Any]) -> dict[str, Any]:
         "inner_fold": dataset["inner_fold"],
         "holdout_split_csv": dataset["holdout_split_csv"],
         "cv_split_csv": dataset["cv_split_csv"],
+        "device_policy": manifest.get("device_policy", "auto"),
+        "requested_devices": manifest.get("devices"),
         "output_root": manifest["output_root"],
         "table_root": manifest["table_root"],
     }
@@ -242,6 +251,8 @@ def build_tabular_command(*, suite: dict[str, Any], dataset_spec, paths: FamilyP
         str(paths.table_root / "mlflow_leaderboard.csv"),
         "--html-report-output",
         str(paths.table_root / "mlflow_report.html"),
+        "--device-policy",
+        getattr(args, "device_policy", "auto"),
     ]
     append_list(command, "--models", suite.get("models"))
     append_list(command, "--feature-sets", suite.get("feature_sets", dataset_spec.feature_sets))
@@ -293,6 +304,8 @@ def build_image_command(*, suite: dict[str, Any], dataset_spec, paths: FamilyPat
         str(paths.table_root / "mlflow_leaderboard.csv"),
         "--html-report-output",
         str(paths.table_root / "mlflow_report.html"),
+        "--device-policy",
+        getattr(args, "device_policy", "auto"),
     ]
     append_list(command, "--models", suite.get("models"))
     append_list(command, "--exclude-models", suite.get("exclude_models"))
@@ -343,6 +356,8 @@ def build_multimodal_command(
         str(dataset_spec.outer_fold),
         "--inner-fold",
         str(dataset_spec.inner_fold),
+        "--device",
+        getattr(args, "device_policy", "auto"),
     ]
     return command
 

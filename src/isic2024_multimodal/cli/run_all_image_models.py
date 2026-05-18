@@ -13,6 +13,7 @@ from pathlib import Path
 
 from isic2024_multimodal.evaluation.metrics import PRIMARY_PAUC_METRIC
 from isic2024_multimodal.training.reproducibility import DEFAULT_SEED
+from isic2024_multimodal.utils.device import resolve_device_list
 from isic2024_multimodal.utils.runtime_env import (
     DEFAULT_MLFLOW_FILE_TRACKING_URI,
     DEFAULT_MLFLOW_SQLITE_TRACKING_URI,
@@ -67,6 +68,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--disable-pretrained", action="store_true")
     parser.add_argument("--auto-download-checkpoints", action="store_true")
     parser.add_argument("--devices", nargs="*", type=int, default=None, help="Visible GPU indices to run in parallel.")
+    parser.add_argument(
+        "--device-policy",
+        choices=["auto", "cpu"],
+        default="auto",
+        help="Device policy for subprocesses. auto prefers CUDA and falls back to CPU; cpu forces CPU.",
+    )
     parser.add_argument("--models", nargs="*", default=None, help="Optional model directory names to include.")
     parser.add_argument("--exclude-models", nargs="*", default=None, help="Optional model directory names to exclude.")
     parser.add_argument(
@@ -114,8 +121,23 @@ def main() -> None:
     if not config_paths:
         raise RuntimeError(f"No model config files found under {base_dir}.")
 
-    if args.devices:
-        validate_gpu_request(args.devices)
+    print(
+        f"[run_all_models] requested_devices={args.devices or 'auto'} device_policy={args.device_policy}",
+        flush=True,
+    )
+    device_resolution = resolve_device_list(args.devices, device_policy=args.device_policy)
+    args.resolved_devices = device_resolution.resolved_devices
+    args.device_fallback_reason = device_resolution.fallback_reason
+    print(
+        "[run_all_models] "
+        f"resolved_devices={args.resolved_devices or 'cpu'} "
+        f"cuda_available={device_resolution.cuda_available} "
+        f"visible_device_count={device_resolution.visible_device_count} "
+        f"fallback={args.device_fallback_reason or 'none'}",
+        flush=True,
+    )
+
+    if args.resolved_devices:
         failures = run_parallel(config_paths, args)
     else:
         failures = run_sequential(config_paths, args)
@@ -129,27 +151,6 @@ def main() -> None:
             print(f"  - {failure['model']} (returncode={failure['returncode']})")
         raise SystemExit(1)
     command_status["value"] = "ok"
-
-
-def validate_gpu_request(devices: list[int]) -> None:
-    import torch
-
-    unique_devices = sorted(set(devices))
-    if len(unique_devices) != len(devices):
-        raise RuntimeError(f"Duplicate GPU ids are not allowed: {devices}")
-    if not torch.cuda.is_available():
-        raise RuntimeError("`--devices` was provided, but torch.cuda.is_available() is False.")
-    visible_count = torch.cuda.device_count()
-    if visible_count < len(unique_devices):
-        raise RuntimeError(
-            f"Requested {len(unique_devices)} GPUs via --devices {unique_devices}, "
-            f"but only {visible_count} visible CUDA devices are available."
-        )
-    for device in unique_devices:
-        if device < 0:
-            raise RuntimeError(f"GPU ids must be non-negative, got {device}")
-        if device >= visible_count:
-            raise RuntimeError(f"GPU id {device} is out of range for {visible_count} visible devices.")
 
 
 def run_sequential(config_paths: list[Path], args: argparse.Namespace) -> list[dict[str, str | int]]:
@@ -169,7 +170,7 @@ def run_parallel(config_paths: list[Path], args: argparse.Namespace) -> list[dic
     failures: list[dict[str, str | int]] = []
     pending = deque(config_paths)
     active: dict[int, RunningJob] = {}
-    devices = list(args.devices or [])
+    devices = list(args.resolved_devices or [])
 
     while pending or active:
         for device in devices:
@@ -265,8 +266,9 @@ def build_command(config_path: Path, args: argparse.Namespace, *, device: int | 
         "--seed",
         str(args.seed),
     ]
-    if device is not None:
-        command.extend(["--device", "cuda"])
+    device_arg = command_device_arg(args, device)
+    if device_arg is not None:
+        command.extend(["--device", device_arg])
     if args.max_trials is not None:
         command.extend(["--max-trials", str(args.max_trials)])
     if args.epochs_override is not None:
@@ -282,6 +284,16 @@ def build_command(config_path: Path, args: argparse.Namespace, *, device: int | 
     if args.auto_download_checkpoints:
         command.append("--auto-download-checkpoints")
     return command
+
+
+def command_device_arg(args: argparse.Namespace, device: int | None) -> str | None:
+    if device is not None:
+        return "cuda"
+    if getattr(args, "device_policy", "auto") == "cpu":
+        return "cpu"
+    if getattr(args, "devices", None) and not getattr(args, "resolved_devices", []):
+        return "cpu"
+    return None
 
 
 def generate_reports(args: argparse.Namespace) -> list[dict[str, str | int]]:

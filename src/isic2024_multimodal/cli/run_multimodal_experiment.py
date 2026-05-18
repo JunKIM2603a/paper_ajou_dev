@@ -24,6 +24,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--nested-split-csv", default="data/splits/isic2024_official_train_nested_5x4_seed42.csv")
     parser.add_argument("--outer-fold", type=int, default=0)
     parser.add_argument("--inner-fold", type=int, default=0)
+    parser.add_argument(
+        "--device",
+        default="auto",
+        help="Runtime device policy for the future multimodal runner. auto prefers CUDA and falls back to CPU.",
+    )
     return parser.parse_args()
 
 

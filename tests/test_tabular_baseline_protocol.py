@@ -7,7 +7,12 @@ import pandas as pd
 import pytest
 
 from isic2024_multimodal.baselines.tabular.baselines import build_lightgbm_estimator
-from isic2024_multimodal.cli.run_all_tabular_models import build_command, build_preflight_command
+from isic2024_multimodal.cli.run_all_tabular_models import (
+    FoldSelection,
+    build_command,
+    build_preflight_command,
+    resolve_nested_fold_selections,
+)
 from isic2024_multimodal.cli.run_tabular_baseline import (
     load_locked_split_definition,
     load_nested_split_definition,
@@ -27,6 +32,7 @@ from isic2024_multimodal.features.tabular_missing import (
     missing_value_policy_summary,
 )
 from isic2024_multimodal.reporting.mlflow_report import build_filter_string
+from isic2024_multimodal.utils import device as device_utils
 
 
 def write_split_csvs(tmp_path):
@@ -351,6 +357,143 @@ def test_run_all_tabular_gpu_command_passes_cuda_device() -> None:
     assert command[command.index("--run-group-id") + 1] == "unit_group"
     assert preflight_command[preflight_command.index("--run-group-id") + 1] == "unit_group"
     assert "--preflight-only" in preflight_command
+
+
+def test_device_resolver_auto_prefers_cuda_when_usable(monkeypatch) -> None:
+    monkeypatch.setattr(
+        device_utils,
+        "_cuda_status",
+        lambda: {"available": True, "count": 2, "usable": True, "reason": None},
+    )
+
+    resolution = device_utils.resolve_device("auto")
+    list_resolution = device_utils.resolve_device_list(None)
+
+    assert resolution.requested_device == "auto"
+    assert resolution.resolved_device == "cuda"
+    assert resolution.fallback_reason is None
+    assert list_resolution.resolved_devices == [0]
+    assert list_resolution.fallback_reason is None
+
+
+def test_device_resolver_falls_back_to_cpu_when_cuda_unavailable(monkeypatch) -> None:
+    monkeypatch.setattr(
+        device_utils,
+        "_cuda_status",
+        lambda: {
+            "available": False,
+            "count": 0,
+            "usable": False,
+            "reason": "torch.cuda.is_available() is False",
+        },
+    )
+
+    resolution = device_utils.resolve_device("cuda")
+    list_resolution = device_utils.resolve_device_list([0])
+
+    assert resolution.requested_device == "cuda"
+    assert resolution.resolved_device == "cpu"
+    assert "torch.cuda.is_available" in str(resolution.fallback_reason)
+    assert list_resolution.requested_devices == [0]
+    assert list_resolution.resolved_devices == []
+    assert "torch.cuda.is_available" in str(list_resolution.fallback_reason)
+
+
+def test_run_all_tabular_cpu_policy_passes_cpu_device() -> None:
+    args = types.SimpleNamespace(
+        dataset_root="data/raw",
+        eda_dir="experiments/evidence/eda/isic_2024",
+        feature_set_json="experiments/evidence/eda/isic_2024/final_inputs/feature_sets_recommended.json",
+        experiment_name="test",
+        run_group_id="unit_group",
+        output_root="experiments/outputs/tabular_baselines_smoke",
+        tracking_uri="file:experiments/logs/mlruns",
+        seed=42,
+        split_seed=42,
+        split_protocol="nested_cv",
+        nested_split_csv="data/splits/isic2024_official_train_nested_5x4_seed42.csv",
+        outer_fold=0,
+        inner_fold=0,
+        cv_fold=0,
+        holdout_split_csv="data/splits/isic2024_train_validation_test_split_seed42.csv",
+        cv_split_csv="data/splits/isic2024_train_validation_5fold_seed42.csv",
+        feature_sets=["strict_main_input"],
+        models=["xgboost"],
+        max_train_rows=None,
+        max_val_rows=None,
+        max_test_rows=None,
+        device_policy="cpu",
+        devices=None,
+        resolved_devices=[],
+    )
+
+    command = build_command("xgboost", args, device=None)
+    preflight_command = build_preflight_command(args, device=None)
+
+    assert command[command.index("--device") + 1] == "cpu"
+    assert preflight_command[preflight_command.index("--device") + 1] == "cpu"
+
+
+def test_run_all_tabular_discovers_all_nested_fold_pairs(tmp_path) -> None:
+    nested_path = tmp_path / "nested.csv"
+    pd.DataFrame(
+        [
+            {"isic_id": "A", "outer_fold": 1, "inner_fold": 1},
+            {"isic_id": "B", "outer_fold": 0, "inner_fold": 1},
+            {"isic_id": "C", "outer_fold": 0, "inner_fold": 0},
+            {"isic_id": "D", "outer_fold": 1, "inner_fold": 0},
+            {"isic_id": "E", "outer_fold": 1, "inner_fold": 0},
+        ]
+    ).to_csv(nested_path, index=False)
+
+    folds = resolve_nested_fold_selections(nested_path)
+
+    assert [fold.label for fold in folds] == [
+        "outer_00_inner_00",
+        "outer_00_inner_01",
+        "outer_01_inner_00",
+        "outer_01_inner_01",
+    ]
+
+
+def test_run_all_tabular_all_folds_command_scopes_fold_output(tmp_path) -> None:
+    args = types.SimpleNamespace(
+        dataset_root="data/raw",
+        eda_dir="experiments/evidence/eda/isic_2024",
+        feature_set_json="experiments/evidence/eda/isic_2024/final_inputs/feature_sets_recommended.json",
+        experiment_name="test",
+        run_group_id="unit_group",
+        output_root=str(tmp_path / "tabular_outputs"),
+        tracking_uri="file:experiments/logs/mlruns",
+        seed=42,
+        split_seed=42,
+        split_protocol="nested_cv",
+        nested_split_csv="data/splits/isic2024_official_train_nested_5x4_seed42.csv",
+        outer_fold=0,
+        inner_fold=0,
+        cv_fold=0,
+        holdout_split_csv="data/splits/isic2024_train_validation_test_split_seed42.csv",
+        cv_split_csv="data/splits/isic2024_train_validation_5fold_seed42.csv",
+        feature_sets=["strict_main_input"],
+        models=["xgboost"],
+        max_train_rows=None,
+        max_val_rows=None,
+        max_test_rows=None,
+        all_folds=True,
+    )
+    fold = FoldSelection(outer_fold=3, inner_fold=2)
+
+    command = build_command("xgboost", args, device=None, fold=fold)
+    preflight_command = build_preflight_command(args, device=None, fold=fold)
+
+    assert command[command.index("--outer-fold") + 1] == "3"
+    assert command[command.index("--inner-fold") + 1] == "2"
+    assert command[command.index("--output-root") + 1].endswith("tabular_outputs/outer_03_inner_02")
+    assert preflight_command[preflight_command.index("--outer-fold") + 1] == "3"
+    assert preflight_command[preflight_command.index("--inner-fold") + 1] == "2"
+    assert preflight_command[preflight_command.index("--output-root") + 1].endswith(
+        "tabular_outputs/outer_03_inner_02"
+    )
 
 
 def test_mlflow_report_filter_can_scope_run_group() -> None:

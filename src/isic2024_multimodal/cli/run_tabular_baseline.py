@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from isic2024_multimodal.utils.device import resolve_device
 from isic2024_multimodal.utils.runtime_env import ensure_expected_conda_env, get_default_mlflow_tracking_uri
 
 DEFAULT_DATASET_ROOT = "data/raw/isic_2024_challenge"
@@ -80,8 +81,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--device",
-        default="cpu",
-        help="Runtime device for tabular estimators. Use `cuda` to enable GPU-capable backends.",
+        default="auto",
+        help="Runtime device for tabular estimators. Use `auto`, `cpu`, or `cuda`; auto prefers CUDA and falls back to CPU.",
     )
     parser.add_argument(
         "--feature-sets",
@@ -122,13 +123,21 @@ def main() -> None:
             f"run_group_id={args.run_group_id} duration={format_duration(time.time() - command_start)}"
         )
 
+    ensure_expected_conda_env()
+    requested_device = args.device
+    device_resolution = resolve_device(requested_device)
+    args.requested_device = device_resolution.requested_device
+    args.device = device_resolution.resolved_device
+    args.device_fallback_reason = device_resolution.fallback_reason
+    args.cuda_available = device_resolution.cuda_available
+    args.visible_device_count = device_resolution.visible_device_count
     atexit.register(log_command_end)
     log_event(
         "Start "
         f"run_group_id={args.run_group_id} models={','.join(args.models)} "
-        f"feature_sets={','.join(args.feature_sets)} requested_device={args.device}"
+        f"feature_sets={','.join(args.feature_sets)} requested_device={args.requested_device} "
+        f"resolved_device={args.device} fallback={args.device_fallback_reason or 'none'}"
     )
-    ensure_expected_conda_env()
     global binary_classification_metrics
     global build_catboost_estimator
     global build_final_feature_frames
@@ -239,8 +248,8 @@ def main() -> None:
         best_result = None
         best_run_name = None
         log_event(
-            f"Start model={spec.name} requested_device={args.device} "
-            f"effective_device={model_effective_device} trials={len(combinations)}"
+            f"Start model={spec.name} requested_device={args.requested_device} "
+            f"resolved_device={args.device} effective_device={model_effective_device} trials={len(combinations)}"
         )
 
         with mlflow.start_run(run_name=parent_run_name):
@@ -276,8 +285,20 @@ def main() -> None:
                     "threshold_source": threshold_source_for_split(split_definition),
                     "selected_feature_sets": ",".join(sorted(available_feature_sets)),
                     "runtime_device": args.device,
-                    "requested_device": args.device,
+                    "requested_device": args.requested_device,
+                    "resolved_device": args.device,
+                    "device_fallback_reason": args.device_fallback_reason,
                     "effective_device": model_effective_device,
+                    "effective_device_reason": tabular_effective_device_reason(
+                        spec.name,
+                        resolved_device=args.device,
+                        effective_device=model_effective_device,
+                    ),
+                    "estimator_backend": tabular_estimator_backend(
+                        spec.name,
+                        resolved_device=args.device,
+                        effective_device=model_effective_device,
+                    ),
                     "run_group_id": args.run_group_id,
                     "dataset_id": args.dataset_id,
                     "dataset_spec_path": args.dataset_spec,
@@ -328,6 +349,8 @@ def main() -> None:
                     hyperparameters=hyperparameters,
                     output_dir=output_dir,
                     device=args.device,
+                    requested_device=args.requested_device,
+                    device_fallback_reason=args.device_fallback_reason,
                     run_group_id=args.run_group_id,
                     dataset_id=args.dataset_id,
                     dataset_spec_path=args.dataset_spec,
@@ -360,8 +383,11 @@ def main() -> None:
                     mlflow.log_param("feature_count", len(features))
                     mlflow.log_param("feature_set", feature_set_name)
                     mlflow.log_param("runtime_device", args.device)
-                    mlflow.log_param("requested_device", args.device)
+                    mlflow.log_param("requested_device", args.requested_device)
+                    mlflow.log_param("resolved_device", args.device)
+                    mlflow.log_param("device_fallback_reason", args.device_fallback_reason)
                     mlflow.log_param("effective_device", summary["effective_device"])
+                    mlflow.log_param("estimator_backend", summary["estimator_backend"])
                     mlflow.log_param("run_group_id", args.run_group_id)
                     mlflow.log_param("dataset_id", args.dataset_id)
                     mlflow.log_param("dataset_spec_path", args.dataset_spec)
@@ -419,6 +445,8 @@ def main() -> None:
                 hyperparameters=best_result["hyperparameters"],
                 output_dir=final_output_dir,
                 device=args.device,
+                requested_device=args.requested_device,
+                device_fallback_reason=args.device_fallback_reason,
                 run_group_id=args.run_group_id,
                 dataset_id=args.dataset_id,
                 dataset_spec_path=args.dataset_spec,
@@ -449,7 +477,11 @@ def main() -> None:
             mlflow.log_param("model_family", args.model_family)
             mlflow.log_param("selected_threshold", best_final_summary["selected_threshold"])
             mlflow.log_param("threshold_source", best_final_summary["threshold_source"])
+            mlflow.log_param("requested_device", args.requested_device)
+            mlflow.log_param("resolved_device", args.device)
+            mlflow.log_param("device_fallback_reason", args.device_fallback_reason)
             mlflow.log_param("best_effective_device", best_final_summary["effective_device"])
+            mlflow.log_param("best_estimator_backend", best_final_summary["estimator_backend"])
             mlflow.log_params(
                 {
                     f"best_runtime_{key}": normalize_param_value(value)
@@ -597,8 +629,20 @@ def run_preflight(args: argparse.Namespace) -> dict[str, Any]:
         "dataset_id": getattr(args, "dataset_id", None),
         "dataset_spec_path": getattr(args, "dataset_spec", None),
         "model_family": getattr(args, "model_family", "tabular_baselines"),
-        "requested_device": args.device,
+        "requested_device": getattr(args, "requested_device", args.device),
+        "resolved_device": args.device,
+        "cuda_available": getattr(args, "cuda_available", None),
+        "visible_device_count": getattr(args, "visible_device_count", None),
+        "device_fallback_reason": getattr(args, "device_fallback_reason", None),
         "effective_devices": {spec.name: effective_tabular_device(spec.name, args.device) for spec in specs},
+        "effective_device_reasons": {
+            spec.name: tabular_effective_device_reason(
+                spec.name,
+                resolved_device=args.device,
+                effective_device=effective_tabular_device(spec.name, args.device),
+            )
+            for spec in specs
+        },
         "split_protocol": getattr(args, "split_protocol", "nested_cv"),
         "split_source": split_definition["split_source"],
         "nested_split_csv": split_definition.get("nested_split_csv"),
@@ -637,6 +681,33 @@ def select_trial_score(summary: dict[str, Any]) -> float:
     return float(score)
 
 
+def tabular_estimator_backend(model_name: str, *, resolved_device: str, effective_device: str) -> str:
+    if model_name in {"logistic_regression", "svm", "mlp"}:
+        return "repo_torch" if str(effective_device).startswith("cuda") else "sklearn"
+    if model_name in {"ft_transformer", "ft_transformer_external"}:
+        return "repo_torch"
+    if model_name == "xgboost":
+        return "xgboost_cuda" if str(effective_device).startswith("cuda") else "xgboost_cpu"
+    if model_name == "catboost":
+        return "catboost_gpu" if str(effective_device).startswith("cuda") else "catboost_cpu"
+    if model_name == "lightgbm":
+        return "lightgbm_cpu"
+    return f"{model_name}_{effective_device or resolved_device}"
+
+
+def tabular_effective_device_reason(model_name: str, *, resolved_device: str, effective_device: str) -> str | None:
+    if model_name == "lightgbm" and str(resolved_device).startswith("cuda") and effective_device == "cpu":
+        return "LightGBM GPU backend uses OpenCL and is not validated in this CUDA workflow; using CPU."
+    if (
+        model_name in {"logistic_regression", "svm", "mlp"}
+        and str(effective_device).startswith("cuda")
+    ):
+        return "CUDA request uses the repo-native torch estimator, not the sklearn estimator."
+    if str(resolved_device).startswith("cuda") and effective_device == "cpu":
+        return f"{model_name} is not marked as CUDA-capable; using CPU."
+    return None
+
+
 def train_and_evaluate(
     *,
     frame,
@@ -647,6 +718,8 @@ def train_and_evaluate(
     hyperparameters: dict[str, Any],
     output_dir: Path,
     device: str,
+    requested_device: str,
+    device_fallback_reason: str | None,
     run_group_id: str,
     dataset_id: str | None,
     dataset_spec_path: str | None,
@@ -749,8 +822,20 @@ def train_and_evaluate(
             "model_family": model_family,
             "started_at": started_at,
             "ended_at": current_timestamp(),
-            "requested_device": device,
+            "requested_device": requested_device,
+            "resolved_device": device,
+            "device_fallback_reason": device_fallback_reason,
             "effective_device": effective_device,
+            "effective_device_reason": tabular_effective_device_reason(
+                model_name,
+                resolved_device=device,
+                effective_device=effective_device,
+            ),
+            "estimator_backend": tabular_estimator_backend(
+                model_name,
+                resolved_device=device,
+                effective_device=effective_device,
+            ),
             "runtime_parameters": runtime_parameters,
             "threshold_source": threshold_source_for_split(split_definition),
             "selected_threshold": selected_threshold,
@@ -783,8 +868,15 @@ def train_and_evaluate(
                 "numeric_columns": numeric_columns,
                 "categorical_columns": categorical_columns,
                 "runtime_device": device,
-                "requested_device": device,
+                "requested_device": requested_device,
+                "resolved_device": device,
                 "effective_device": effective_device,
+                "device_fallback_reason": device_fallback_reason,
+                "estimator_backend": tabular_estimator_backend(
+                    model_name,
+                    resolved_device=device,
+                    effective_device=effective_device,
+                ),
                 "max_train_rows": max_train_rows,
                 "max_val_rows": max_val_rows,
                 "max_test_rows": max_test_rows,
@@ -894,7 +986,8 @@ def load_nested_split_definition(*, nested_split_csv: str, outer_fold: int, inne
         raise FileNotFoundError(
             "Nested CV split CSV is required for paper-valid tabular baselines. "
             f"Missing: {nested_path}. Generate it with: "
-            "`PYTHONPATH=./src python -m isic2024_multimodal.cli.export_strict_input_dataset`"
+            "`conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src "
+            "python -m isic2024_multimodal.cli.export_strict_input_dataset`"
         )
 
     split_frame = pd.read_csv(nested_path, low_memory=False)
@@ -976,7 +1069,8 @@ def load_locked_split_definition(*, holdout_split_csv: str, cv_split_csv: str, c
         raise FileNotFoundError(
             "Locked split CSV files are required for paper-valid tabular baselines. "
             f"Missing: {missing_paths}. Generate them with: "
-            "`PYTHONPATH=./src python -m isic2024_multimodal.cli.export_strict_input_dataset`"
+            "`conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src "
+            "python -m isic2024_multimodal.cli.export_strict_input_dataset`"
         )
 
     holdout_frame = pd.read_csv(holdout_path, low_memory=False)

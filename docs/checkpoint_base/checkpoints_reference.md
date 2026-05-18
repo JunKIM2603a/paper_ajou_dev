@@ -7,31 +7,31 @@ config that requires a local checkpoint will fail preflight until that file is a
 Run a config preflight with:
 
 ```bash
-python -m isic2024_multimodal.cli.run_image_baseline --config experiments/configs/image_baselines/resnet50/config.json --preflight-only
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_image_baseline --config experiments/configs/image_baselines/resnet50/config.json --preflight-only
 ```
 
 Download registered checkpoints with:
 
 ```bash
-python -m isic2024_multimodal.cli.download_image_checkpoints --models chexzero eyepacs medclip retfound
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.download_image_checkpoints --models chexzero eyepacs medclip retfound
 ```
 
 Or let an image run download the registered checkpoint before preflight:
 
 ```bash
-python -m isic2024_multimodal.cli.run_image_baseline --config experiments/configs/image_baselines/retfound/config.json --auto-download-checkpoints --preflight-only
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_image_baseline --config experiments/configs/image_baselines/retfound/config.json --auto-download-checkpoints --preflight-only
 ```
 
 Run a smoke suite with:
 
 ```bash
-python -m isic2024_multimodal.cli.run_all_image_models --models resnet50 --auto-download-checkpoints --max-trials 1 --epochs-override 1 --max-train-samples 256 --max-val-samples 128 --max-test-samples 128
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_all_image_models --models resnet50 --auto-download-checkpoints --max-trials 1 --epochs-override 1 --max-train-samples 256 --max-val-samples 128 --max-test-samples 128
 ```
 
 Check tested / untested model status with:
 
 ```bash
-python -m isic2024_multimodal.cli.image_baseline_status
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.image_baseline_status
 ```
 
 The status command writes:

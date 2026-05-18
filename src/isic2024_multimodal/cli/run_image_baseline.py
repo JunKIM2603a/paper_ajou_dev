@@ -19,6 +19,7 @@ from isic2024_multimodal.training.reproducibility import (
     make_worker_init_fn,
     set_global_seed,
 )
+from isic2024_multimodal.utils.device import resolve_device
 from isic2024_multimodal.utils.runtime_env import ensure_expected_conda_env, get_default_mlflow_tracking_uri, load_project_env
 
 DEFAULT_NESTED_SPLIT_CSV = "data/splits/isic2024_official_train_nested_5x4_seed42.csv"
@@ -146,14 +147,21 @@ def main() -> None:
     from isic2024_multimodal.models.image.factory import build_model
     from isic2024_multimodal.training.trainer import run_training
 
-    if args.device == "auto":
-        args.device = "cuda" if torch.cuda.is_available() else "cpu"
+    device_resolution = resolve_device(args.device)
+    args.requested_device = device_resolution.requested_device
+    args.device = device_resolution.resolved_device
+    args.device_fallback_reason = device_resolution.fallback_reason
+    args.cuda_available = device_resolution.cuda_available
+    args.visible_device_count = device_resolution.visible_device_count
     resolved_dataset_root = resolve_dataset_root(args.dataset_root)
     _log(f"config={args.config}")
     _log(f"requested dataset_root={args.dataset_root}")
     _log(f"resolved dataset_root={resolved_dataset_root}")
-    _log(f"device={args.device}, output_root={args.output_root}")
-    _validate_runtime_device(args.device)
+    _log(
+        f"requested_device={args.requested_device}, resolved_device={args.device}, "
+        f"fallback={args.device_fallback_reason or 'none'}, output_root={args.output_root}"
+    )
+    _validate_runtime_device(args.device, requested_device=args.requested_device)
     # 사전학습 가중치와 허깅페이스 캐시가 사용자 홈이 아닌 프로젝트 내부에 쌓이도록 고정한다.
     cache_root = Path(args.output_root) / "cache"
     cache_root.mkdir(parents=True, exist_ok=True)
@@ -234,6 +242,12 @@ def main() -> None:
                     "dataset_id": args.dataset_id,
                     "dataset_spec_path": args.dataset_spec,
                     "model_family": args.model_family,
+                    "requested_device": args.requested_device,
+                    "resolved_device": args.device,
+                    "effective_device": args.device,
+                    "cuda_available": args.cuda_available,
+                    "visible_device_count": args.visible_device_count,
+                    "device_fallback_reason": args.device_fallback_reason,
                     "run_group_id": args.run_group_id,
                     "split_protocol": args.split_protocol,
                     "split_source": split_source,
@@ -386,6 +400,12 @@ def main() -> None:
                 "image_normalize_std": json.dumps(normalize_std),
                 "image_preprocessing_source": preprocessing_contract["source"],
                 "image_preprocessing_notes": preprocessing_contract["notes"],
+                "requested_device": args.requested_device,
+                "resolved_device": args.device,
+                "effective_device": args.device,
+                "device_fallback_reason": args.device_fallback_reason,
+                "cuda_available": args.cuda_available,
+                "visible_device_count": args.visible_device_count,
             }
         )
         if checkpoint_download is not None:
@@ -421,6 +441,10 @@ def main() -> None:
                     "split_rows": {name: len(items) for name, items in splits.items()},
                     "checkpoint_download": checkpoint_download,
                     "checkpoint_preflight": checkpoint_preflight,
+                    "requested_device": args.requested_device,
+                    "resolved_device": args.device,
+                    "effective_device": args.device,
+                    "device_fallback_reason": args.device_fallback_reason,
                     "hyperparameters": hyperparameters,
                 },
             )
@@ -443,6 +467,10 @@ def main() -> None:
                 mlflow.log_param("dataset_id", args.dataset_id)
                 mlflow.log_param("dataset_spec_path", args.dataset_spec)
                 mlflow.log_param("model_family", args.model_family)
+                mlflow.log_param("requested_device", args.requested_device)
+                mlflow.log_param("resolved_device", args.device)
+                mlflow.log_param("effective_device", args.device)
+                mlflow.log_param("device_fallback_reason", args.device_fallback_reason)
 
                 model = None
                 try:
@@ -486,6 +514,10 @@ def main() -> None:
                             "cv_fold": args.cv_fold,
                             "patient_overlap_audit": split_protocol_audit["patient_overlap_audit"],
                             "triple_balance_audit": split_protocol_audit["triple_balance_audit"],
+                            "requested_device": args.requested_device,
+                            "resolved_device": args.device,
+                            "effective_device": args.device,
+                            "device_fallback_reason": args.device_fallback_reason,
                         }
                     )
                     (output_dir / "summary.json").write_text(
@@ -507,6 +539,10 @@ def main() -> None:
                             "split_rows": {name: len(items) for name, items in splits.items()},
                             "checkpoint_download": checkpoint_download,
                             "checkpoint_preflight": checkpoint_preflight,
+                            "requested_device": args.requested_device,
+                            "resolved_device": args.device,
+                            "effective_device": args.device,
+                            "device_fallback_reason": args.device_fallback_reason,
                             "hyperparameters": hyperparameters,
                             "summary_path": str(output_dir / "summary.json"),
                         },
@@ -553,6 +589,10 @@ def main() -> None:
                             "split_rows": {name: len(items) for name, items in splits.items()},
                             "checkpoint_download": checkpoint_download,
                             "checkpoint_preflight": checkpoint_preflight,
+                            "requested_device": args.requested_device,
+                            "resolved_device": args.device,
+                            "effective_device": args.device,
+                            "device_fallback_reason": args.device_fallback_reason,
                             "hyperparameters": hyperparameters,
                             "failure_type": type(exc).__name__,
                             "failure_message": str(exc),
@@ -583,6 +623,10 @@ def main() -> None:
         mlflow.log_param("dataset_id", args.dataset_id)
         mlflow.log_param("dataset_spec_path", args.dataset_spec)
         mlflow.log_param("model_family", args.model_family)
+        mlflow.log_param("requested_device", args.requested_device)
+        mlflow.log_param("resolved_device", args.device)
+        mlflow.log_param("effective_device", args.device)
+        mlflow.log_param("device_fallback_reason", args.device_fallback_reason)
         mlflow.set_tag("best_child_run_name", best_run_name)
         mlflow.log_dict(
             {
@@ -821,12 +865,13 @@ def _cleanup_torch_state(device: str) -> None:
         torch.cuda.ipc_collect()
 
 
-def _validate_runtime_device(device: str) -> None:
+def _validate_runtime_device(device: str, *, requested_device: str | None = None) -> None:
     import torch
 
     _log(
         "runtime device preflight: "
-        f"cuda_available={torch.cuda.is_available()}, visible_device_count={torch.cuda.device_count()}, requested_device={device}"
+        f"cuda_available={torch.cuda.is_available()}, visible_device_count={torch.cuda.device_count()}, "
+        f"requested_device={requested_device or device}, resolved_device={device}"
     )
     if torch.cuda.is_available():
         visible = [

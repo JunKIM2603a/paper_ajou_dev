@@ -1,0 +1,13 @@
+model_key,model_name,status,checkpoint_status,checkpoint_path,duration_seconds,best_validation_metric,failure_type,latest_summary_path,latest_error_path,latest_run_status_path,checkpoint_notes,failure_message
+biomedclip,BioMedCLIP,not_started,hub/cache,,,,,,,,uses library/hub cache; no manual checkpoint path,
+chexzero,CheXzero,checkpoint_missing,downloadable,/home/ubuntu/wksp/paper_ajou_dev/checkpoints/CheXzero/best_128_5e-05_original_22000_0.855.pt,,,,,,,CheXzero publishes weights in a Google Drive folder; this requires the optional gdown package.; download may fail due to Google Drive access/quota,
+deit_s,DeiT-S,not_started,hub/cache,,,,,,,,uses library/hub cache; no manual checkpoint path,
+densenet121,DenseNet-121,not_started,hub/cache,,,,,,,,uses library/hub cache; no manual checkpoint path,
+dinov2_vit_s,DINOv2 ViT-S,not_started,hub/cache,,,,,,,,uses library/hub cache; no manual checkpoint path,
+efficientnet_b0,EfficientNet-B0,not_started,hub/cache,,,,,,,,uses library/hub cache; no manual checkpoint path,
+eyepacs,EyePACS,checkpoint_missing,downloadable,/home/ubuntu/wksp/paper_ajou_dev/checkpoints/EyePACS/eff_net_400x400.pt,,,,,,,EfficientNet-B3 EyePACS checkpoint from the referenced GitHub repository.,
+medclip,MedCLIP,checkpoint_missing,downloadable,/home/ubuntu/wksp/paper_ajou_dev/checkpoints/MedCLIP/official-medclip-vit/pytorch_model.bin,,,,,,,Official MedCLIP-ViT weights downloaded by the MedCLIP project.,
+resnet50,ResNet-50,completed,hub/cache,,26530.11156129837,0.0751608483931007,,/home/ubuntu/wksp/paper_ajou_dev/experiments/outputs/image_baselines/ResNet-50/ResNet-50_trial_004/summary.json,,/home/ubuntu/wksp/paper_ajou_dev/experiments/outputs/image_baselines/ResNet-50/ResNet-50_trial_004/run_status.json,uses library/hub cache; no manual checkpoint path,
+retfound,RETFound,checkpoint_missing,downloadable,/home/ubuntu/wksp/paper_ajou_dev/checkpoints/RETFound/RETFound_cfp_weights.pth,,,,,,,RETFound colour fundus ViT-Large checkpoint from the official model card.; download may fail due to Google Drive access/quota,
+torchxrayvision,TorchXRayVision,not_started,hub/cache,,,,,,,,uses library/hub cache; no manual checkpoint path,
+vit_b_16,ViT-B_16,not_started,hub/cache,,,,,,,,uses library/hub cache; no manual checkpoint path,

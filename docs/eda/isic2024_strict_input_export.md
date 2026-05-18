@@ -50,10 +50,10 @@ image + ordinary inference-time tabular metadata -> malignant probability
 
 ## Commands
 
-프로젝트 환경에서 `PYTHONPATH=./src`를 유지한다.
+프로젝트 환경에서 `ISIC2024_EXPECTED_CONDA_ENV=paper`와 `PYTHONPATH=./src`를 유지한다.
 
 ```bash
-PYTHONPATH=./src python -m isic2024_multimodal.cli.export_strict_input_dataset
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.export_strict_input_dataset
 ```
 
 기본 산출물은 다음 위치에 생성된다.
@@ -68,7 +68,7 @@ experiments/evidence/validation_protocol/isic2024_strict_input_export_summary_se
 옵션을 바꿔 다른 seed나 fold 수를 만들 수 있다.
 
 ```bash
-PYTHONPATH=./src python -m isic2024_multimodal.cli.export_strict_input_dataset \
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.export_strict_input_dataset \
   --seed 42 \
   --outer-folds 5 \
   --inner-folds 4 \
@@ -78,7 +78,7 @@ PYTHONPATH=./src python -m isic2024_multimodal.cli.export_strict_input_dataset \
 테스트 실행:
 
 ```bash
-PYTHONPATH=./src python -m pytest tests/test_strict_input_export.py
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m pytest tests/test_strict_input_export.py
 ```
 
 ## Output Contracts

@@ -1,11 +1,12 @@
 {
   "dataset_name": "isic2024_strict_input_iddx_full_contract",
+  "protocol_version": "patient_level_triple_stratified_nested_cv_v1",
   "seed": 42,
-  "test_size": 0.2,
-  "cv_folds": 5,
+  "outer_folds": 5,
+  "inner_folds": 4,
   "sample_count_bins": 5,
   "source": {
-    "dataset_root": "data/raw",
+    "dataset_root": "data/raw/isic_2024_challenge",
     "row_count": 401059,
     "patient_count": 1042,
     "isic_id_unique": true,
@@ -14,8 +15,7 @@
   "outputs": {
     "strict_output": "data/processed/isic2024_strict_model_input.csv",
     "iddx_sidecar_output": "data/processed/isic2024_iddx_full_train_only_sidecar.csv",
-    "holdout_split_output": "data/splits/isic2024_train_validation_test_split_seed42.csv",
-    "cv_split_output": "data/splits/isic2024_train_validation_5fold_seed42.csv",
+    "nested_split_output": "data/splits/isic2024_official_train_nested_5x4_seed42.csv",
     "summary_output": "experiments/evidence/validation_protocol/isic2024_strict_input_export_summary_seed42.json"
   },
   "strict_input_contract": {
@@ -83,62 +83,461 @@
     "row_aligned_with_strict_input": true
   },
   "split_scores": {
-    "holdout_balance_score": 0.40051804680086267,
-    "cv_balance_score": 3.0795167180795278
+    "outer_balance_score": 2.548586499915824,
+    "inner_balance_scores": {
+      "0": 1.6664047022019546,
+      "1": 2.032111005676723,
+      "2": 1.2402133422688222,
+      "3": 2.2811483992816575,
+      "4": 1.8154539829883056
+    }
   },
-  "holdout_summary": [
-    {
-      "split": "test_data",
-      "rows": 80212,
-      "patients": 210,
-      "positive_rows": 79,
-      "positive_rate_pct": 0.09849
-    },
-    {
-      "split": "train_validation_data",
-      "rows": 320847,
-      "patients": 832,
-      "positive_rows": 314,
-      "positive_rate_pct": 0.09787
-    }
-  ],
-  "cv_summary": [
-    {
-      "cv_validation_fold": 0,
-      "rows": 64170,
-      "patients": 174,
-      "positive_rows": 63,
-      "positive_rate_pct": 0.09818
-    },
-    {
-      "cv_validation_fold": 1,
-      "rows": 64169,
-      "patients": 169,
-      "positive_rows": 63,
-      "positive_rate_pct": 0.09818
-    },
-    {
-      "cv_validation_fold": 2,
-      "rows": 64170,
-      "patients": 165,
-      "positive_rows": 63,
-      "positive_rate_pct": 0.09818
-    },
-    {
-      "cv_validation_fold": 3,
-      "rows": 64169,
-      "patients": 163,
-      "positive_rows": 63,
-      "positive_rate_pct": 0.09818
-    },
-    {
-      "cv_validation_fold": 4,
-      "rows": 64169,
-      "patients": 161,
-      "positive_rows": 62,
-      "positive_rate_pct": 0.09662
-    }
-  ],
+  "nested_cv_summary": {
+    "outer": [
+      {
+        "outer_fold": 0,
+        "outer_role": "cv_train",
+        "rows": 320847,
+        "patients": 828,
+        "positive_rows": 315,
+        "positive_rate_pct": 0.09818
+      },
+      {
+        "outer_fold": 0,
+        "outer_role": "outer_test",
+        "rows": 80212,
+        "patients": 214,
+        "positive_rows": 78,
+        "positive_rate_pct": 0.09724
+      },
+      {
+        "outer_fold": 1,
+        "outer_role": "cv_train",
+        "rows": 320847,
+        "patients": 830,
+        "positive_rows": 315,
+        "positive_rate_pct": 0.09818
+      },
+      {
+        "outer_fold": 1,
+        "outer_role": "outer_test",
+        "rows": 80212,
+        "patients": 212,
+        "positive_rows": 78,
+        "positive_rate_pct": 0.09724
+      },
+      {
+        "outer_fold": 2,
+        "outer_role": "cv_train",
+        "rows": 320847,
+        "patients": 832,
+        "positive_rows": 314,
+        "positive_rate_pct": 0.09787
+      },
+      {
+        "outer_fold": 2,
+        "outer_role": "outer_test",
+        "rows": 80212,
+        "patients": 210,
+        "positive_rows": 79,
+        "positive_rate_pct": 0.09849
+      },
+      {
+        "outer_fold": 3,
+        "outer_role": "cv_train",
+        "rows": 320847,
+        "patients": 837,
+        "positive_rows": 314,
+        "positive_rate_pct": 0.09787
+      },
+      {
+        "outer_fold": 3,
+        "outer_role": "outer_test",
+        "rows": 80212,
+        "patients": 205,
+        "positive_rows": 79,
+        "positive_rate_pct": 0.09849
+      },
+      {
+        "outer_fold": 4,
+        "outer_role": "cv_train",
+        "rows": 320848,
+        "patients": 841,
+        "positive_rows": 314,
+        "positive_rate_pct": 0.09787
+      },
+      {
+        "outer_fold": 4,
+        "outer_role": "outer_test",
+        "rows": 80211,
+        "patients": 201,
+        "positive_rows": 79,
+        "positive_rate_pct": 0.09849
+      }
+    ],
+    "inner": [
+      {
+        "outer_fold": 0,
+        "inner_fold": 0,
+        "split_role": "inner_train",
+        "rows": 240635,
+        "patients": 615,
+        "positive_rows": 236,
+        "positive_rate_pct": 0.09807
+      },
+      {
+        "outer_fold": 0,
+        "inner_fold": 0,
+        "split_role": "inner_validation",
+        "rows": 80212,
+        "patients": 213,
+        "positive_rows": 79,
+        "positive_rate_pct": 0.09849
+      },
+      {
+        "outer_fold": 0,
+        "inner_fold": 1,
+        "split_role": "inner_train",
+        "rows": 240635,
+        "patients": 621,
+        "positive_rows": 236,
+        "positive_rate_pct": 0.09807
+      },
+      {
+        "outer_fold": 0,
+        "inner_fold": 1,
+        "split_role": "inner_validation",
+        "rows": 80212,
+        "patients": 207,
+        "positive_rows": 79,
+        "positive_rate_pct": 0.09849
+      },
+      {
+        "outer_fold": 0,
+        "inner_fold": 2,
+        "split_role": "inner_train",
+        "rows": 240635,
+        "patients": 623,
+        "positive_rows": 236,
+        "positive_rate_pct": 0.09807
+      },
+      {
+        "outer_fold": 0,
+        "inner_fold": 2,
+        "split_role": "inner_validation",
+        "rows": 80212,
+        "patients": 205,
+        "positive_rows": 79,
+        "positive_rate_pct": 0.09849
+      },
+      {
+        "outer_fold": 0,
+        "inner_fold": 3,
+        "split_role": "inner_train",
+        "rows": 240636,
+        "patients": 625,
+        "positive_rows": 237,
+        "positive_rate_pct": 0.09849
+      },
+      {
+        "outer_fold": 0,
+        "inner_fold": 3,
+        "split_role": "inner_validation",
+        "rows": 80211,
+        "patients": 203,
+        "positive_rows": 78,
+        "positive_rate_pct": 0.09724
+      },
+      {
+        "outer_fold": 1,
+        "inner_fold": 0,
+        "split_role": "inner_train",
+        "rows": 240636,
+        "patients": 617,
+        "positive_rows": 236,
+        "positive_rate_pct": 0.09807
+      },
+      {
+        "outer_fold": 1,
+        "inner_fold": 0,
+        "split_role": "inner_validation",
+        "rows": 80211,
+        "patients": 213,
+        "positive_rows": 79,
+        "positive_rate_pct": 0.09849
+      },
+      {
+        "outer_fold": 1,
+        "inner_fold": 1,
+        "split_role": "inner_train",
+        "rows": 240635,
+        "patients": 620,
+        "positive_rows": 237,
+        "positive_rate_pct": 0.09849
+      },
+      {
+        "outer_fold": 1,
+        "inner_fold": 1,
+        "split_role": "inner_validation",
+        "rows": 80212,
+        "patients": 210,
+        "positive_rows": 78,
+        "positive_rate_pct": 0.09724
+      },
+      {
+        "outer_fold": 1,
+        "inner_fold": 2,
+        "split_role": "inner_train",
+        "rows": 240635,
+        "patients": 623,
+        "positive_rows": 236,
+        "positive_rate_pct": 0.09807
+      },
+      {
+        "outer_fold": 1,
+        "inner_fold": 2,
+        "split_role": "inner_validation",
+        "rows": 80212,
+        "patients": 207,
+        "positive_rows": 79,
+        "positive_rate_pct": 0.09849
+      },
+      {
+        "outer_fold": 1,
+        "inner_fold": 3,
+        "split_role": "inner_train",
+        "rows": 240635,
+        "patients": 630,
+        "positive_rows": 236,
+        "positive_rate_pct": 0.09807
+      },
+      {
+        "outer_fold": 1,
+        "inner_fold": 3,
+        "split_role": "inner_validation",
+        "rows": 80212,
+        "patients": 200,
+        "positive_rows": 79,
+        "positive_rate_pct": 0.09849
+      },
+      {
+        "outer_fold": 2,
+        "inner_fold": 0,
+        "split_role": "inner_train",
+        "rows": 240635,
+        "patients": 621,
+        "positive_rows": 236,
+        "positive_rate_pct": 0.09807
+      },
+      {
+        "outer_fold": 2,
+        "inner_fold": 0,
+        "split_role": "inner_validation",
+        "rows": 80212,
+        "patients": 211,
+        "positive_rows": 78,
+        "positive_rate_pct": 0.09724
+      },
+      {
+        "outer_fold": 2,
+        "inner_fold": 1,
+        "split_role": "inner_train",
+        "rows": 240636,
+        "patients": 622,
+        "positive_rows": 235,
+        "positive_rate_pct": 0.09766
+      },
+      {
+        "outer_fold": 2,
+        "inner_fold": 1,
+        "split_role": "inner_validation",
+        "rows": 80211,
+        "patients": 210,
+        "positive_rows": 79,
+        "positive_rate_pct": 0.09849
+      },
+      {
+        "outer_fold": 2,
+        "inner_fold": 2,
+        "split_role": "inner_train",
+        "rows": 240635,
+        "patients": 626,
+        "positive_rows": 235,
+        "positive_rate_pct": 0.09766
+      },
+      {
+        "outer_fold": 2,
+        "inner_fold": 2,
+        "split_role": "inner_validation",
+        "rows": 80212,
+        "patients": 206,
+        "positive_rows": 79,
+        "positive_rate_pct": 0.09849
+      },
+      {
+        "outer_fold": 2,
+        "inner_fold": 3,
+        "split_role": "inner_train",
+        "rows": 240635,
+        "patients": 627,
+        "positive_rows": 236,
+        "positive_rate_pct": 0.09807
+      },
+      {
+        "outer_fold": 2,
+        "inner_fold": 3,
+        "split_role": "inner_validation",
+        "rows": 80212,
+        "patients": 205,
+        "positive_rows": 78,
+        "positive_rate_pct": 0.09724
+      },
+      {
+        "outer_fold": 3,
+        "inner_fold": 0,
+        "split_role": "inner_train",
+        "rows": 240635,
+        "patients": 622,
+        "positive_rows": 235,
+        "positive_rate_pct": 0.09766
+      },
+      {
+        "outer_fold": 3,
+        "inner_fold": 0,
+        "split_role": "inner_validation",
+        "rows": 80212,
+        "patients": 215,
+        "positive_rows": 79,
+        "positive_rate_pct": 0.09849
+      },
+      {
+        "outer_fold": 3,
+        "inner_fold": 1,
+        "split_role": "inner_train",
+        "rows": 240636,
+        "patients": 624,
+        "positive_rows": 236,
+        "positive_rate_pct": 0.09807
+      },
+      {
+        "outer_fold": 3,
+        "inner_fold": 1,
+        "split_role": "inner_validation",
+        "rows": 80211,
+        "patients": 213,
+        "positive_rows": 78,
+        "positive_rate_pct": 0.09724
+      },
+      {
+        "outer_fold": 3,
+        "inner_fold": 2,
+        "split_role": "inner_train",
+        "rows": 240635,
+        "patients": 629,
+        "positive_rows": 235,
+        "positive_rate_pct": 0.09766
+      },
+      {
+        "outer_fold": 3,
+        "inner_fold": 2,
+        "split_role": "inner_validation",
+        "rows": 80212,
+        "patients": 208,
+        "positive_rows": 79,
+        "positive_rate_pct": 0.09849
+      },
+      {
+        "outer_fold": 3,
+        "inner_fold": 3,
+        "split_role": "inner_train",
+        "rows": 240635,
+        "patients": 636,
+        "positive_rows": 236,
+        "positive_rate_pct": 0.09807
+      },
+      {
+        "outer_fold": 3,
+        "inner_fold": 3,
+        "split_role": "inner_validation",
+        "rows": 80212,
+        "patients": 201,
+        "positive_rows": 78,
+        "positive_rate_pct": 0.09724
+      },
+      {
+        "outer_fold": 4,
+        "inner_fold": 0,
+        "split_role": "inner_train",
+        "rows": 240636,
+        "patients": 624,
+        "positive_rows": 235,
+        "positive_rate_pct": 0.09766
+      },
+      {
+        "outer_fold": 4,
+        "inner_fold": 0,
+        "split_role": "inner_validation",
+        "rows": 80212,
+        "patients": 217,
+        "positive_rows": 79,
+        "positive_rate_pct": 0.09849
+      },
+      {
+        "outer_fold": 4,
+        "inner_fold": 1,
+        "split_role": "inner_train",
+        "rows": 240636,
+        "patients": 631,
+        "positive_rows": 235,
+        "positive_rate_pct": 0.09766
+      },
+      {
+        "outer_fold": 4,
+        "inner_fold": 1,
+        "split_role": "inner_validation",
+        "rows": 80212,
+        "patients": 210,
+        "positive_rows": 79,
+        "positive_rate_pct": 0.09849
+      },
+      {
+        "outer_fold": 4,
+        "inner_fold": 2,
+        "split_role": "inner_train",
+        "rows": 240636,
+        "patients": 632,
+        "positive_rows": 236,
+        "positive_rate_pct": 0.09807
+      },
+      {
+        "outer_fold": 4,
+        "inner_fold": 2,
+        "split_role": "inner_validation",
+        "rows": 80212,
+        "patients": 209,
+        "positive_rows": 78,
+        "positive_rate_pct": 0.09724
+      },
+      {
+        "outer_fold": 4,
+        "inner_fold": 3,
+        "split_role": "inner_train",
+        "rows": 240636,
+        "patients": 636,
+        "positive_rows": 236,
+        "positive_rate_pct": 0.09807
+      },
+      {
+        "outer_fold": 4,
+        "inner_fold": 3,
+        "split_role": "inner_validation",
+        "rows": 80212,
+        "patients": 205,
+        "positive_rows": 78,
+        "positive_rate_pct": 0.09724
+      }
+    ]
+  },
   "missingness_summary": [
     {
       "column": "iddx_5",
@@ -202,43 +601,176 @@
     }
   ],
   "overlap_summary": {
-    "train_validation_test_patient_overlap": 0,
-    "cv": [
+    "outer": [
       {
-        "cv_fold": 0,
-        "cv_train_cv_validation_patient_overlap": 0,
-        "cv_validation_test_data_patient_overlap": 0,
-        "cv_train_test_data_patient_overlap": 0
+        "outer_fold": 0,
+        "cv_train_outer_test_patient_overlap": 0
       },
       {
-        "cv_fold": 1,
-        "cv_train_cv_validation_patient_overlap": 0,
-        "cv_validation_test_data_patient_overlap": 0,
-        "cv_train_test_data_patient_overlap": 0
+        "outer_fold": 1,
+        "cv_train_outer_test_patient_overlap": 0
       },
       {
-        "cv_fold": 2,
-        "cv_train_cv_validation_patient_overlap": 0,
-        "cv_validation_test_data_patient_overlap": 0,
-        "cv_train_test_data_patient_overlap": 0
+        "outer_fold": 2,
+        "cv_train_outer_test_patient_overlap": 0
       },
       {
-        "cv_fold": 3,
-        "cv_train_cv_validation_patient_overlap": 0,
-        "cv_validation_test_data_patient_overlap": 0,
-        "cv_train_test_data_patient_overlap": 0
+        "outer_fold": 3,
+        "cv_train_outer_test_patient_overlap": 0
       },
       {
-        "cv_fold": 4,
-        "cv_train_cv_validation_patient_overlap": 0,
-        "cv_validation_test_data_patient_overlap": 0,
-        "cv_train_test_data_patient_overlap": 0
+        "outer_fold": 4,
+        "cv_train_outer_test_patient_overlap": 0
+      }
+    ],
+    "inner": [
+      {
+        "outer_fold": 0,
+        "inner_fold": 0,
+        "inner_train_inner_validation_patient_overlap": 0,
+        "inner_train_outer_test_patient_overlap": 0,
+        "inner_validation_outer_test_patient_overlap": 0
+      },
+      {
+        "outer_fold": 0,
+        "inner_fold": 1,
+        "inner_train_inner_validation_patient_overlap": 0,
+        "inner_train_outer_test_patient_overlap": 0,
+        "inner_validation_outer_test_patient_overlap": 0
+      },
+      {
+        "outer_fold": 0,
+        "inner_fold": 2,
+        "inner_train_inner_validation_patient_overlap": 0,
+        "inner_train_outer_test_patient_overlap": 0,
+        "inner_validation_outer_test_patient_overlap": 0
+      },
+      {
+        "outer_fold": 0,
+        "inner_fold": 3,
+        "inner_train_inner_validation_patient_overlap": 0,
+        "inner_train_outer_test_patient_overlap": 0,
+        "inner_validation_outer_test_patient_overlap": 0
+      },
+      {
+        "outer_fold": 1,
+        "inner_fold": 0,
+        "inner_train_inner_validation_patient_overlap": 0,
+        "inner_train_outer_test_patient_overlap": 0,
+        "inner_validation_outer_test_patient_overlap": 0
+      },
+      {
+        "outer_fold": 1,
+        "inner_fold": 1,
+        "inner_train_inner_validation_patient_overlap": 0,
+        "inner_train_outer_test_patient_overlap": 0,
+        "inner_validation_outer_test_patient_overlap": 0
+      },
+      {
+        "outer_fold": 1,
+        "inner_fold": 2,
+        "inner_train_inner_validation_patient_overlap": 0,
+        "inner_train_outer_test_patient_overlap": 0,
+        "inner_validation_outer_test_patient_overlap": 0
+      },
+      {
+        "outer_fold": 1,
+        "inner_fold": 3,
+        "inner_train_inner_validation_patient_overlap": 0,
+        "inner_train_outer_test_patient_overlap": 0,
+        "inner_validation_outer_test_patient_overlap": 0
+      },
+      {
+        "outer_fold": 2,
+        "inner_fold": 0,
+        "inner_train_inner_validation_patient_overlap": 0,
+        "inner_train_outer_test_patient_overlap": 0,
+        "inner_validation_outer_test_patient_overlap": 0
+      },
+      {
+        "outer_fold": 2,
+        "inner_fold": 1,
+        "inner_train_inner_validation_patient_overlap": 0,
+        "inner_train_outer_test_patient_overlap": 0,
+        "inner_validation_outer_test_patient_overlap": 0
+      },
+      {
+        "outer_fold": 2,
+        "inner_fold": 2,
+        "inner_train_inner_validation_patient_overlap": 0,
+        "inner_train_outer_test_patient_overlap": 0,
+        "inner_validation_outer_test_patient_overlap": 0
+      },
+      {
+        "outer_fold": 2,
+        "inner_fold": 3,
+        "inner_train_inner_validation_patient_overlap": 0,
+        "inner_train_outer_test_patient_overlap": 0,
+        "inner_validation_outer_test_patient_overlap": 0
+      },
+      {
+        "outer_fold": 3,
+        "inner_fold": 0,
+        "inner_train_inner_validation_patient_overlap": 0,
+        "inner_train_outer_test_patient_overlap": 0,
+        "inner_validation_outer_test_patient_overlap": 0
+      },
+      {
+        "outer_fold": 3,
+        "inner_fold": 1,
+        "inner_train_inner_validation_patient_overlap": 0,
+        "inner_train_outer_test_patient_overlap": 0,
+        "inner_validation_outer_test_patient_overlap": 0
+      },
+      {
+        "outer_fold": 3,
+        "inner_fold": 2,
+        "inner_train_inner_validation_patient_overlap": 0,
+        "inner_train_outer_test_patient_overlap": 0,
+        "inner_validation_outer_test_patient_overlap": 0
+      },
+      {
+        "outer_fold": 3,
+        "inner_fold": 3,
+        "inner_train_inner_validation_patient_overlap": 0,
+        "inner_train_outer_test_patient_overlap": 0,
+        "inner_validation_outer_test_patient_overlap": 0
+      },
+      {
+        "outer_fold": 4,
+        "inner_fold": 0,
+        "inner_train_inner_validation_patient_overlap": 0,
+        "inner_train_outer_test_patient_overlap": 0,
+        "inner_validation_outer_test_patient_overlap": 0
+      },
+      {
+        "outer_fold": 4,
+        "inner_fold": 1,
+        "inner_train_inner_validation_patient_overlap": 0,
+        "inner_train_outer_test_patient_overlap": 0,
+        "inner_validation_outer_test_patient_overlap": 0
+      },
+      {
+        "outer_fold": 4,
+        "inner_fold": 2,
+        "inner_train_inner_validation_patient_overlap": 0,
+        "inner_train_outer_test_patient_overlap": 0,
+        "inner_validation_outer_test_patient_overlap": 0
+      },
+      {
+        "outer_fold": 4,
+        "inner_fold": 3,
+        "inner_train_inner_validation_patient_overlap": 0,
+        "inner_train_outer_test_patient_overlap": 0,
+        "inner_validation_outer_test_patient_overlap": 0
       }
     ]
   },
   "leakage_controls": {
-    "patient_disjoint_holdout": true,
-    "patient_disjoint_cv": true,
+    "patient_disjoint_outer_cv": true,
+    "patient_disjoint_inner_cv": true,
+    "triple_stratified_outer_folds": true,
+    "triple_stratified_inner_folds": true,
     "iddx_full_excluded_from_strict_input": true,
     "diagnosis_reference_columns_excluded_from_strict_input": true,
     "train_only_preprocessing_performed": false

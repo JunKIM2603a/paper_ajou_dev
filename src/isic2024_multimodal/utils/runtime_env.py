@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 
-EXPECTED_CONDA_ENV = "paper_ajou_dev"
+EXPECTED_CONDA_ENV = "paper"
 EXPECTED_CONDA_ENV_OVERRIDE_VAR = "ISIC2024_EXPECTED_CONDA_ENV"
 DEFAULT_MLFLOW_FILE_TRACKING_URI = "file:./experiments/logs/mlruns"
 DEFAULT_MLFLOW_SQLITE_TRACKING_URI = "sqlite:///experiments/logs/mlflow.db"

@@ -56,7 +56,7 @@ CatBoost의 categorical 처리는 다른 모델과 의도적으로 다르다. Ca
 
 ## GPU Runtime Policy
 
-Tabular baseline은 기본적으로 CPU에서 실행한다. GPU를 사용하려면 all-model runner의 `--devices`를 우선 사용한다. 단일 runner의 `--device cuda`는 단일 모델 디버깅용으로 둔다.
+Tabular baseline은 기본적으로 GPU 우선 `auto` 정책으로 실행한다. CUDA가 사용 가능하고 tensor allocation이 성공하면 GPU를 쓰고, GPU가 없거나 초기화에 실패하면 CPU로 자동 fallback한다. all-model runner에서 CPU를 강제하려면 `--device-policy cpu`, 단일 runner에서 CPU를 강제하려면 `--device cpu`를 사용한다.
 
 논문 운영에서는 family runner를 우선 사용한다. 이 경로는 dataset spec, run group, output/table path, MLflow filter, selection registry를 한 번에 맞춘다.
 
@@ -91,7 +91,7 @@ GPU 사용 전에는 `paper` 환경에서 PyTorch CUDA가 실제 GPU를 볼 수 
 conda run -n paper python -c "import torch; print(torch.__version__); print(torch.version.cuda); print(torch.cuda.is_available()); print(torch.cuda.device_count())"
 ```
 
-`torch.cuda.is_available()`가 `True`이고 `torch.cuda.device_count()`가 1 이상이어야 GPU 실행이 가능하다. Driver 535 / CUDA 12.x 환경에서는 CUDA 13 wheel이 맞지 않으므로, 현재 확인한 기준은 다음과 같다.
+`torch.cuda.is_available()`가 `True`이고 `torch.cuda.device_count()`가 1 이상이면 GPU 실행이 가능하다. 그렇지 않으면 runner가 CPU로 fallback하고 `requested_device`, `resolved_device`, `effective_device`, `device_fallback_reason`을 summary/log에 남긴다. Driver 535 / CUDA 12.x 환경에서는 CUDA 13 wheel이 맞지 않으므로, 현재 확인한 기준은 다음과 같다.
 
 ```text
 torch==2.5.1+cu121
@@ -119,13 +119,13 @@ ft_transformer, ft_transformer_external
   default train/predict batch size: 2048
 
 logistic_regression, svm, mlp
-  CPU 기본값: sklearn estimator
-  --device cuda 사용 시: repo-native torch estimator
+  --device cpu / --device-policy cpu: sklearn estimator
+  auto/cuda GPU 사용 시: repo-native torch estimator
 ```
 
 따라서 paper-facing tabular baseline 비교에서 `logistic_regression`, `svm`, `mlp`의 CPU 결과와 GPU 결과는 같은 estimator 구현으로 해석하지 않는다. GPU 실행은 주로 `xgboost`, `catboost`, `ft_transformer`, `ft_transformer_external`에 사용한다. `lightgbm`은 WSL/CUDA 환경에서 CPU baseline으로 기록한다.
 
-단일 GPU 권장 실행:
+단일 GPU를 명시하는 실행:
 
 ```bash
 conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_all_tabular_models \
@@ -145,7 +145,7 @@ conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python
   --devices 0 1
 ```
 
-`run_all_tabular_models --devices 0 1`은 모델별 subprocess에 `CUDA_VISIBLE_DEVICES`를 하나씩 배정하고, 각 subprocess에 `--device cuda`를 전달한다. GPU가 보이지 않거나 PyTorch CUDA 초기화가 실패하면 preflight 단계에서 중단된다.
+`run_all_tabular_models --devices 0 1`은 가능한 GPU만 골라 모델별 subprocess에 `CUDA_VISIBLE_DEVICES`를 하나씩 배정하고, 각 subprocess에 `--device cuda`를 전달한다. GPU가 보이지 않거나 PyTorch CUDA 초기화가 실패하면 CPU로 fallback한다. `--devices`를 생략하면 `--device-policy auto`가 GPU 0을 우선 사용한다.
 
 권장 초기화는 `run_experiment_family --reset-family-output`이다. 기존 직접 runner 결과와 local MLflow history까지 모두 비우는 전체 로그 초기화가 필요할 때만 아래 명령을 쓴다.
 
@@ -188,12 +188,76 @@ data/splits/isic2024_official_train_nested_5x4_seed42.csv
 이 파일이 없으면 먼저 strict input export를 실행한다.
 
 ```bash
-PYTHONPATH=./src python -m isic2024_multimodal.cli.export_strict_input_dataset
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.export_strict_input_dataset
 ```
 
 Runner는 기본적으로 `outer_fold=0`, `inner_fold=0`을 읽는다. 선택된 `outer_fold`의 `outer_test`는 최종 평가 전용이고, 같은 outer fold의 `cv_train` 내부에서 `inner_validation` 하나를 validation fold로, 나머지를 `inner_train`으로 쓴다.
 
-논문용 fold-wise 결과는 `outer_fold=0..4`를 반복해서 만든다. 각 outer fold 내부의 model choice, hyperparameter, early stopping, threshold, calibration은 `inner_validation`에서만 수행해야 한다.
+현재 fold-wise baseline 결과를 만들 때는 `run_all_tabular_models --all-folds`로 nested split artifact 안의 모든 `(outer_fold, inner_fold)` 조합을 자동 실행할 수 있다. 각 실행 안의 model choice, hyperparameter, early stopping, threshold, calibration은 `inner_validation`에서만 수행해야 한다.
+
+`--all-folds`는 5x4 nested split 기준으로 20개 실행을 만든다. 이 20개 결과는 inner fold 반복을 포함하므로 단순 평균하지 말고, 현재 요약 도구로 outer fold별 validation-selected 대표 실행을 정리한다.
+
+## Current Nested CV Execution and Paper-Final Refit Note
+
+현재 tabular runner의 nested CV 실행 흐름은 다음과 같다.
+
+```text
+outer_fold k, inner_fold j 하나 선택
+  outer_test = 최종 평가용 partition
+  inner_train = 학습 partition
+  inner_validation = 선택 partition
+
+  여러 hyperparameter trial:
+    - inner_train으로 preprocessing fit + model fit
+    - inner_validation metric으로 best hyperparameter 선택
+
+  best hyperparameter 확정 후:
+    - 같은 inner_train으로 best 설정 재학습
+    - inner_validation에서 threshold 선택
+    - outer_test 평가
+```
+
+`--all-folds`를 사용하면 위 과정을 `outer_fold x inner_fold = 5 x 4 = 20`번 반복한다. 이때 각 `(outer_fold, inner_fold)` 조합마다 best hyperparameter가 하나씩 선택된다.
+
+현재 summary 단계는 full `cv_train` refit을 하지 않는다. `summarize_nested_cv_results`는 이미 끝난 20개 실행의 `summary.json`을 읽고, validation metric 기준으로 outer fold별 대표 실행 하나를 골라 `validation-selected nested summary`를 만든다.
+
+논문 final model 확정 후에는 다음 절차가 paper-final refit으로 별도 필요하다.
+
+```text
+outer_fold k
+  outer_test는 계속 최종 평가용으로 잠금
+  inner CV 결과로 outer fold별 best hyperparameter 확정
+  best hyperparameter로 full cv_train에서 train-only preprocessing + model refit
+  outer_test에서 한 번 평가
+```
+
+즉, 현재 baseline summary는 모델 비교와 후보 축소용으로 쓰고, full `cv_train` refit 여부는 최종 논문 표에서 별도로 기록한다. Outer test metric이 높은 run을 골라내면 paper-valid selection이 아니다.
+
+`run_all_tabular_models --all-folds`로 생성된 큰 산출물은 `experiments/outputs/` 아래에 두고 Git에 올리지 않는다. Git에는 outer fold별 선택 결과와 metric 요약만 작게 산출해서 올린다.
+
+```bash
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.summarize_nested_cv_results \
+  --family tabular_baselines \
+  --run-group-id <run_group_id>
+```
+
+기본 출력 위치는 다음과 같다.
+
+```text
+experiments/tables/tabular_baselines/<run_group_id>/nested_cv/
+```
+
+생성되는 Git-friendly 산출물은 다음과 같다.
+
+| 파일 | 역할 |
+|---|---|
+| `nested_cv_all_candidates.csv` | 모든 `(outer_fold, inner_fold, model)` 후보의 validation/test 요약 |
+| `nested_cv_outer_selection.csv` | outer fold별 validation-selected 대표 실행 1개 |
+| `nested_cv_metric_summary.csv` | 선택된 outer fold들의 test metric mean/std/min/max |
+| `nested_cv_summary.md` | 발표/공유용 짧은 Markdown 요약 |
+| `nested_cv_summary.json` | 위 내용을 재사용하기 위한 machine-readable manifest |
+
+이 summarizer는 이미 끝난 run의 `summary.json`을 읽어 작은 표를 만드는 도구다. 추가 학습이나 full `cv_train` refit을 수행하지 않으며, 선택 기준은 validation metric만 사용한다.
 
 ## Threshold Protocol
 
@@ -210,7 +274,7 @@ AUC, pAUC, Average Precision은 threshold-independent metric으로 probabilities
 Smoke run:
 
 ```bash
-PYTHONPATH=./src python -m isic2024_multimodal.cli.run_all_tabular_models \
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_all_tabular_models \
   --models xgboost \
   --feature-sets strict_main_input \
   --devices 0 \
@@ -224,7 +288,7 @@ PYTHONPATH=./src python -m isic2024_multimodal.cli.run_all_tabular_models \
 Paper-facing run은 row cap을 사용하지 않는다.
 
 ```bash
-PYTHONPATH=./src python -m isic2024_multimodal.cli.run_all_tabular_models \
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_all_tabular_models \
   --models logistic_regression svm mlp xgboost catboost lightgbm ft_transformer \
   --feature-sets strict_main_input
 ```
@@ -232,7 +296,7 @@ PYTHONPATH=./src python -m isic2024_multimodal.cli.run_all_tabular_models \
 GPU paper-facing candidate run:
 
 ```bash
-PYTHONPATH=./src python -m isic2024_multimodal.cli.run_all_tabular_models \
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_all_tabular_models \
   --models xgboost catboost lightgbm ft_transformer ft_transformer_external \
   --feature-sets strict_main_input \
   --devices 0
@@ -241,14 +305,23 @@ PYTHONPATH=./src python -m isic2024_multimodal.cli.run_all_tabular_models \
 All-model runner:
 
 ```bash
-PYTHONPATH=./src python -m isic2024_multimodal.cli.run_all_tabular_models \
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_all_tabular_models \
   --feature-sets strict_main_input
+```
+
+All nested folds:
+
+```bash
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_all_tabular_models \
+  --models logistic_regression \
+  --feature-sets strict_main_input \
+  --all-folds
 ```
 
 Unit tests:
 
 ```bash
-PYTHONPATH=./src python -m pytest tests
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m pytest tests
 ```
 
 ## Output Evidence
@@ -258,6 +331,11 @@ Each summary records:
 ```text
 model_name
 hyperparameters
+requested_device
+resolved_device
+effective_device
+device_fallback_reason
+estimator_backend
 split_source
 nested_split_csv
 outer_fold
