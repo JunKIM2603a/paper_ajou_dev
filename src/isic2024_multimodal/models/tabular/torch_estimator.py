@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+import time
 from typing import Any
 
 import numpy as np
+
+from isic2024_multimodal.utils.progress import estimate_remaining_seconds, format_progress_duration
+
+
+EPOCH_HEARTBEAT_SECONDS = 60.0
 
 
 class _LinearBinaryModel:
@@ -107,6 +113,14 @@ class TorchTabularEstimator:
         features = self._transform(X, fit=True)
         targets = np.asarray(y, dtype=np.float32)
         input_dim = int(features.shape[1])
+        max_epochs = self._max_epochs()
+        patience = self._patience()
+        _log(
+            "fit start "
+            f"model={self.model_name} rows={len(targets)} features={input_dim} "
+            f"batch_size={self._train_batch_size()} max_epochs={max_epochs} "
+            f"patience={patience} device={self.device}"
+        )
 
         torch_device = torch.device(self.device)
         feature_tensor = torch.as_tensor(features, dtype=torch.float32)
@@ -134,9 +148,12 @@ class TorchTabularEstimator:
         best_loss = float("inf")
         best_state = None
         stale_epochs = 0
-        patience = self._patience()
+        fit_started = time.time()
+        last_log = fit_started
+        completed_epochs = 0
 
-        for _epoch in range(self._max_epochs()):
+        for epoch in range(1, max_epochs + 1):
+            epoch_started = time.time()
             self.model.train()
             epoch_loss = 0.0
             seen_rows = 0
@@ -159,6 +176,7 @@ class TorchTabularEstimator:
                 seen_rows += batch_size
 
             current_loss = epoch_loss / max(seen_rows, 1)
+            completed_epochs = epoch
             if current_loss + 1e-6 < best_loss:
                 best_loss = current_loss
                 best_state = {
@@ -169,11 +187,40 @@ class TorchTabularEstimator:
             else:
                 stale_epochs += 1
                 if stale_epochs >= patience:
+                    _log(
+                        "early stop "
+                        f"model={self.model_name} epoch={epoch}/{max_epochs} "
+                        f"loss={current_loss:.6f} best_loss={best_loss:.6f} "
+                        f"stale_epochs={stale_epochs}/{patience}"
+                    )
                     break
+            now = time.time()
+            if (
+                epoch == 1
+                or epoch == max_epochs
+                or now - last_log >= EPOCH_HEARTBEAT_SECONDS
+                or epoch % max(1, min(10, max_epochs // 5 or 1)) == 0
+            ):
+                eta_seconds = estimate_remaining_seconds(now - fit_started, epoch, max_epochs)
+                _log(
+                    "epoch progress "
+                    f"model={self.model_name} epoch={epoch}/{max_epochs} "
+                    f"loss={current_loss:.6f} best_loss={best_loss:.6f} "
+                    f"stale_epochs={stale_epochs}/{patience} "
+                    f"epoch_duration={format_progress_duration(now - epoch_started)} "
+                    f"elapsed={format_progress_duration(now - fit_started)} "
+                    f"eta={format_progress_duration(eta_seconds)}"
+                )
+                last_log = now
 
         if best_state is not None:
             self.model.load_state_dict(best_state)
         self.model.eval()
+        _log(
+            "fit done "
+            f"model={self.model_name} epochs={completed_epochs}/{max_epochs} "
+            f"best_loss={best_loss:.6f} elapsed={format_progress_duration(time.time() - fit_started)}"
+        )
         return self
 
     def predict(self, X):
@@ -283,3 +330,7 @@ class TorchTabularEstimator:
 
     def _svm_c_scale(self) -> float:
         return max(float(self.hyperparameters.get("C", 1.0)), 1e-6)
+
+
+def _log(message: str) -> None:
+    print(f"[torch_tabular {time.strftime('%Y-%m-%d %H:%M:%S')}] {message}", flush=True)

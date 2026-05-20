@@ -14,6 +14,12 @@ from pathlib import Path
 from isic2024_multimodal.evaluation.metrics import PRIMARY_PAUC_METRIC
 from isic2024_multimodal.training.reproducibility import DEFAULT_SEED
 from isic2024_multimodal.utils.device import resolve_device_list
+from isic2024_multimodal.utils.progress import (
+    estimate_remaining_seconds,
+    format_eta,
+    format_progress_duration,
+    progress_index_label,
+)
 from isic2024_multimodal.utils.runtime_env import (
     DEFAULT_MLFLOW_FILE_TRACKING_URI,
     DEFAULT_MLFLOW_SQLITE_TRACKING_URI,
@@ -24,14 +30,28 @@ from isic2024_multimodal.utils.runtime_env import (
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = PACKAGE_ROOT.parent
 REPO_ROOT = SRC_ROOT.parent
+PROGRESS_HEARTBEAT_SECONDS = 60.0
 
 
 @dataclass
 class RunningJob:
     device: int
-    config_path: Path
+    plan_item: "ImageJobPlanItem"
     process: subprocess.Popen
     started_at: float
+
+
+@dataclass(frozen=True)
+class ImageJobPlanItem:
+    job_index: int
+    total_jobs: int
+    model_index: int
+    total_models: int
+    config_path: Path
+
+    @property
+    def model_name(self) -> str:
+        return self.config_path.parent.name
 
 
 def make_run_group_id(prefix: str = "image_all") -> str:
@@ -102,11 +122,9 @@ def main() -> None:
     command_status = {"value": "failed"}
 
     def log_command_end() -> None:
-        print(
-            f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] [run_all_image_models] "
+        log_event(
             f"End status={command_status['value']} run_group_id={args.run_group_id} "
-            f"duration={time.time() - command_start:.1f}s",
-            flush=True,
+            f"duration={format_progress_duration(time.time() - command_start)}"
         )
 
     atexit.register(log_command_end)
@@ -121,20 +139,15 @@ def main() -> None:
     if not config_paths:
         raise RuntimeError(f"No model config files found under {base_dir}.")
 
-    print(
-        f"[run_all_models] requested_devices={args.devices or 'auto'} device_policy={args.device_policy}",
-        flush=True,
-    )
+    log_event(f"requested_devices={args.devices or 'auto'} device_policy={args.device_policy}")
     device_resolution = resolve_device_list(args.devices, device_policy=args.device_policy)
     args.resolved_devices = device_resolution.resolved_devices
     args.device_fallback_reason = device_resolution.fallback_reason
-    print(
-        "[run_all_models] "
+    log_event(
         f"resolved_devices={args.resolved_devices or 'cpu'} "
         f"cuda_available={device_resolution.cuda_available} "
         f"visible_device_count={device_resolution.visible_device_count} "
-        f"fallback={args.device_fallback_reason or 'none'}",
-        flush=True,
+        f"fallback={args.device_fallback_reason or 'none'}"
     )
 
     if args.resolved_devices:
@@ -146,7 +159,7 @@ def main() -> None:
     failures.extend(report_failures)
 
     if failures:
-        print("[run_all_models] Completed with failures:")
+        log_event("Completed with failures:")
         for failure in failures:
             print(f"  - {failure['model']} (returncode={failure['returncode']})")
         raise SystemExit(1)
@@ -156,54 +169,169 @@ def main() -> None:
 def run_sequential(config_paths: list[Path], args: argparse.Namespace) -> list[dict[str, str | int]]:
     failures: list[dict[str, str | int]] = []
     env = build_subprocess_env()
-    for config_path in config_paths:
-        command = build_command(config_path, args, device=None)
-        print(f"[run_all_models] Running {config_path.parent.name}")
+    plan = build_image_job_plan(config_paths)
+    completed_jobs = 0
+    suite_start = time.time()
+    for item in plan:
+        command = build_command(item.config_path, args, device=None)
+        job_start = time.time()
+        log_event(
+            "Start "
+            f"{format_image_job_progress(item)} device=cpu "
+            f"completed_jobs={completed_jobs} pending_jobs={item.total_jobs - item.job_index + 1} "
+            f"elapsed={format_progress_duration(time.time() - suite_start)} "
+            f"eta={format_eta(elapsed_seconds=time.time() - suite_start, completed_count=completed_jobs, total_count=item.total_jobs)}"
+        )
         result = subprocess.run(command, check=False, cwd=REPO_ROOT, env=env)
+        completed_jobs += 1
+        log_event(
+            "Finished "
+            f"{format_image_job_progress(item)} device=cpu returncode={result.returncode} "
+            f"duration={format_progress_duration(time.time() - job_start)} "
+            f"completed_jobs={completed_jobs}/{item.total_jobs} "
+            f"elapsed={format_progress_duration(time.time() - suite_start)} "
+            f"eta={format_eta(elapsed_seconds=time.time() - suite_start, completed_count=completed_jobs, total_count=item.total_jobs)}"
+        )
         if result.returncode != 0:
-            failures.append({"model": config_path.parent.name, "returncode": result.returncode})
-            print(f"[run_all_models] Model failed: {config_path.parent.name} (returncode={result.returncode})")
+            failures.append({"model": item.model_name, "returncode": result.returncode})
+            log_event(
+                f"Model failed model_index={progress_index_label(item.model_index, item.total_models)} "
+                f"model={item.model_name} returncode={result.returncode}"
+            )
     return failures
 
 
 def run_parallel(config_paths: list[Path], args: argparse.Namespace) -> list[dict[str, str | int]]:
     failures: list[dict[str, str | int]] = []
-    pending = deque(config_paths)
+    plan = build_image_job_plan(config_paths)
+    pending = deque(plan)
     active: dict[int, RunningJob] = {}
     devices = list(args.resolved_devices or [])
+    completed_job_indices: set[int] = set()
+    suite_start = time.time()
+    last_heartbeat = 0.0
 
     while pending or active:
         for device in devices:
             if device in active or not pending:
                 continue
-            config_path = pending.popleft()
-            command = build_command(config_path, args, device=device)
+            item = pending.popleft()
+            command = build_command(item.config_path, args, device=device)
             env = build_subprocess_env(device=device)
             started_at = time.time()
-            print(f"[run_all_models] Launching {config_path.parent.name} on GPU {device}")
+            log_event(
+                "Start "
+                f"{format_image_job_progress(item)} gpu={device} "
+                f"active_jobs={len(active) + 1} pending_jobs={len(pending)} "
+                f"elapsed={format_progress_duration(time.time() - suite_start)} "
+                f"eta={format_eta(elapsed_seconds=time.time() - suite_start, completed_count=len(completed_job_indices), total_count=item.total_jobs)}"
+            )
             process = subprocess.Popen(command, env=env, cwd=REPO_ROOT)
-            active[device] = RunningJob(device=device, config_path=config_path, process=process, started_at=started_at)
+            active[device] = RunningJob(device=device, plan_item=item, process=process, started_at=started_at)
 
         completed_devices: list[int] = []
         for device, job in active.items():
             returncode = job.process.poll()
             if returncode is None:
                 continue
-            print(
-                f"[run_all_models] Finished {job.config_path.parent.name} on GPU {device} "
-                f"(returncode={returncode}, duration={time.time() - job.started_at:.1f}s)"
+            item = job.plan_item
+            completed_job_indices.add(item.job_index)
+            log_event(
+                "Finished "
+                f"{format_image_job_progress(item)} gpu={device} returncode={returncode} "
+                f"duration={format_progress_duration(time.time() - job.started_at)} "
+                f"completed_jobs={len(completed_job_indices)}/{item.total_jobs} "
+                f"elapsed={format_progress_duration(time.time() - suite_start)} "
+                f"eta={format_eta(elapsed_seconds=time.time() - suite_start, completed_count=len(completed_job_indices), total_count=item.total_jobs)}"
             )
             if returncode != 0:
-                failures.append({"model": job.config_path.parent.name, "returncode": returncode})
+                failures.append({"model": item.model_name, "returncode": returncode})
             completed_devices.append(device)
 
         for device in completed_devices:
             del active[device]
 
+        now = time.time()
+        if active and now - last_heartbeat >= PROGRESS_HEARTBEAT_SECONDS:
+            log_image_parallel_heartbeat(
+                plan=plan,
+                active=active,
+                completed_job_indices=completed_job_indices,
+                pending_count=len(pending),
+                suite_start=suite_start,
+            )
+            last_heartbeat = now
+
         if active:
             time.sleep(2)
 
     return failures
+
+
+def current_timestamp() -> str:
+    return time.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def log_event(message: str) -> None:
+    print(f"[{current_timestamp()}] [run_all_image_models] {message}", flush=True)
+
+
+def build_image_job_plan(config_paths: list[Path]) -> list[ImageJobPlanItem]:
+    total_jobs = len(config_paths)
+    return [
+        ImageJobPlanItem(
+            job_index=index,
+            total_jobs=total_jobs,
+            model_index=index,
+            total_models=total_jobs,
+            config_path=config_path,
+        )
+        for index, config_path in enumerate(config_paths, start=1)
+    ]
+
+
+def format_image_job_progress(item: ImageJobPlanItem) -> str:
+    return (
+        f"Progress job={progress_index_label(item.job_index, item.total_jobs)} "
+        f"model={progress_index_label(item.model_index, item.total_models)} {item.model_name}"
+    )
+
+
+def log_image_parallel_heartbeat(
+    *,
+    plan: list[ImageJobPlanItem],
+    active: dict[int, RunningJob],
+    completed_job_indices: set[int],
+    pending_count: int,
+    suite_start: float,
+) -> None:
+    elapsed = time.time() - suite_start
+    completed_models = [
+        item.model_name for item in plan if item.job_index in completed_job_indices
+    ]
+    active_models = [job.plan_item.model_name for job in active.values()]
+    pending_models = [
+        item.model_name
+        for item in plan
+        if item.job_index not in completed_job_indices and item.model_name not in active_models
+    ]
+    log_event(
+        "Heartbeat "
+        f"completed_jobs={len(completed_job_indices)}/{len(plan)} active_jobs={len(active)} pending_jobs={pending_count} "
+        f"completed_models={','.join(completed_models) or 'none'} "
+        f"active_models={','.join(active_models) or 'none'} "
+        f"pending_models={','.join(pending_models) or 'none'} "
+        f"elapsed={format_progress_duration(elapsed)} "
+        f"eta={format_progress_duration(estimate_remaining_seconds(elapsed, len(completed_job_indices), len(plan)))}"
+    )
+    for device, job in sorted(active.items()):
+        item = job.plan_item
+        log_event(
+            f"GPU {device} active model={item.model_name} "
+            f"model_index={progress_index_label(item.model_index, item.total_models)} "
+            f"job={progress_index_label(item.job_index, item.total_jobs)} "
+            f"elapsed={format_progress_duration(time.time() - job.started_at)}"
+        )
 
 
 def filter_config_paths(
@@ -356,8 +484,13 @@ def generate_reports(args: argparse.Namespace) -> list[dict[str, str | int]]:
     env = build_subprocess_env()
     for spec in report_specs:
         spec["output"].parent.mkdir(parents=True, exist_ok=True)
-        print(f"[run_all_models] Generating {spec['name']} -> {spec['output']}")
+        report_start = time.time()
+        log_event(f"Start report={spec['name']} output={spec['output']}")
         result = subprocess.run(spec["command"], check=False, cwd=REPO_ROOT, env=env)
+        log_event(
+            f"Finished report={spec['name']} output={spec['output']} returncode={result.returncode} "
+            f"duration={format_progress_duration(time.time() - report_start)}"
+        )
         if result.returncode != 0:
             failures.append({"model": spec["name"], "returncode": result.returncode})
     return failures

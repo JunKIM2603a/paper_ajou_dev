@@ -14,6 +14,12 @@ from pathlib import Path
 from isic2024_multimodal.evaluation.metrics import PRIMARY_PAUC_METRIC
 from isic2024_multimodal.training.reproducibility import DEFAULT_SEED
 from isic2024_multimodal.utils.device import resolve_device_list
+from isic2024_multimodal.utils.progress import (
+    estimate_remaining_seconds,
+    format_eta,
+    format_progress_duration,
+    progress_index_label,
+)
 from isic2024_multimodal.utils.runtime_env import (
     DEFAULT_MLFLOW_FILE_TRACKING_URI,
     DEFAULT_MLFLOW_SQLITE_TRACKING_URI,
@@ -35,6 +41,7 @@ DEFAULT_MODELS = [
     "ft_transformer_external",
 ]
 DEFAULT_FEATURE_SETS = ["strict_base", "strict_fe", "strict_main_input"]
+PROGRESS_HEARTBEAT_SECONDS = 60.0
 
 
 def make_run_group_id(prefix: str = "tabular_all") -> str:
@@ -59,10 +66,21 @@ class FoldSelection:
 @dataclass
 class RunningJob:
     device: int
-    model_name: str
-    fold: FoldSelection
+    plan_item: "JobPlanItem"
     process: subprocess.Popen
     started_at: float
+
+
+@dataclass(frozen=True)
+class JobPlanItem:
+    job_index: int
+    total_jobs: int
+    model_index: int
+    total_models: int
+    fold_index: int
+    total_folds: int
+    model_name: str
+    fold: FoldSelection
 
 
 def parse_args() -> argparse.Namespace:
@@ -203,41 +221,64 @@ def log_event(message: str) -> None:
 def run_sequential(args: argparse.Namespace, *, fold_selections: list[FoldSelection]) -> list[dict[str, str | int]]:
     failures: list[dict[str, str | int]] = []
     env = build_subprocess_env()
-    for fold in fold_selections:
-        for model_name in args.models:
-            command = build_command(model_name, args, device=None, fold=fold)
-            model_start = time.time()
-            log_event(f"Start model={model_name} fold={fold.label} device=cpu")
-            result = subprocess.run(command, check=False, cwd=REPO_ROOT, env=env)
-            log_event(
-                f"Finished model={model_name} fold={fold.label} device=cpu returncode={result.returncode} "
-                f"duration={format_duration(time.time() - model_start)}"
-            )
-            if result.returncode != 0:
-                failures.append({"model": f"{model_name}:{fold.label}", "returncode": result.returncode})
+    plan = build_job_plan(args.models, fold_selections=fold_selections)
+    completed_durations: list[float] = []
+    suite_start = time.time()
+    for item in plan:
+        command = build_command(item.model_name, args, device=None, fold=item.fold)
+        model_start = time.time()
+        log_event(
+            "Start "
+            f"{format_job_progress(item)} device=cpu "
+            f"completed_jobs={len(completed_durations)} pending_jobs={item.total_jobs - item.job_index + 1} "
+            f"elapsed={format_progress_duration(time.time() - suite_start)} "
+            f"eta={format_eta(elapsed_seconds=time.time() - suite_start, completed_count=len(completed_durations), total_count=item.total_jobs)}"
+        )
+        result = subprocess.run(command, check=False, cwd=REPO_ROOT, env=env)
+        completed_durations.append(time.time() - model_start)
+        log_event(
+            "Finished "
+            f"{format_job_progress(item)} device=cpu returncode={result.returncode} "
+            f"duration={format_progress_duration(completed_durations[-1])} "
+            f"completed_jobs={len(completed_durations)}/{item.total_jobs} "
+            f"elapsed={format_progress_duration(time.time() - suite_start)} "
+            f"eta={format_eta(elapsed_seconds=time.time() - suite_start, completed_count=len(completed_durations), total_count=item.total_jobs)}"
+        )
+        if result.returncode != 0:
+            failures.append({"model": f"{item.model_name}:{item.fold.label}", "returncode": result.returncode})
     return failures
 
 
 def run_parallel(args: argparse.Namespace, *, fold_selections: list[FoldSelection]) -> list[dict[str, str | int]]:
     failures: list[dict[str, str | int]] = []
-    pending = deque((fold, model_name) for fold in fold_selections for model_name in args.models)
+    plan = build_job_plan(args.models, fold_selections=fold_selections)
+    pending = deque(plan)
     active: dict[int, RunningJob] = {}
     devices = list(args.resolved_devices or [])
+    completed_job_indices: set[int] = set()
+    completed_durations: list[float] = []
+    suite_start = time.time()
+    last_heartbeat = 0.0
 
     while pending or active:
         for device in devices:
             if device in active or not pending:
                 continue
-            fold, model_name = pending.popleft()
-            command = build_command(model_name, args, device=device, fold=fold)
+            item = pending.popleft()
+            command = build_command(item.model_name, args, device=device, fold=item.fold)
             env = build_subprocess_env(device=device)
             started_at = time.time()
-            log_event(f"Start model={model_name} fold={fold.label} gpu={device}")
+            log_event(
+                "Start "
+                f"{format_job_progress(item)} gpu={device} "
+                f"active_jobs={len(active) + 1} pending_jobs={len(pending)} "
+                f"elapsed={format_progress_duration(time.time() - suite_start)} "
+                f"eta={format_eta(elapsed_seconds=time.time() - suite_start, completed_count=len(completed_job_indices), total_count=item.total_jobs)}"
+            )
             process = subprocess.Popen(command, cwd=REPO_ROOT, env=env)
             active[device] = RunningJob(
                 device=device,
-                model_name=model_name,
-                fold=fold,
+                plan_item=item,
                 process=process,
                 started_at=started_at,
             )
@@ -247,21 +288,128 @@ def run_parallel(args: argparse.Namespace, *, fold_selections: list[FoldSelectio
             returncode = job.process.poll()
             if returncode is None:
                 continue
+            duration = time.time() - job.started_at
+            item = job.plan_item
+            completed_job_indices.add(item.job_index)
+            completed_durations.append(duration)
             log_event(
-                f"Finished model={job.model_name} fold={job.fold.label} gpu={device} returncode={returncode} "
-                f"duration={format_duration(time.time() - job.started_at)}"
+                "Finished "
+                f"{format_job_progress(item)} gpu={device} returncode={returncode} "
+                f"duration={format_progress_duration(duration)} "
+                f"completed_jobs={len(completed_job_indices)}/{item.total_jobs} "
+                f"elapsed={format_progress_duration(time.time() - suite_start)} "
+                f"eta={format_eta(elapsed_seconds=time.time() - suite_start, completed_count=len(completed_job_indices), total_count=item.total_jobs)}"
             )
             if returncode != 0:
-                failures.append({"model": f"{job.model_name}:{job.fold.label}", "returncode": returncode})
+                failures.append({"model": f"{item.model_name}:{item.fold.label}", "returncode": returncode})
             completed_devices.append(device)
 
         for device in completed_devices:
             del active[device]
 
+        now = time.time()
+        if active and now - last_heartbeat >= PROGRESS_HEARTBEAT_SECONDS:
+            log_parallel_heartbeat(
+                plan=plan,
+                active=active,
+                completed_job_indices=completed_job_indices,
+                pending_count=len(pending),
+                suite_start=suite_start,
+            )
+            last_heartbeat = now
+
         if active:
             time.sleep(2)
 
     return failures
+
+
+def build_job_plan(model_names: list[str], *, fold_selections: list[FoldSelection]) -> list[JobPlanItem]:
+    total_models = len(model_names)
+    total_folds = len(fold_selections)
+    total_jobs = total_models * total_folds
+    items: list[JobPlanItem] = []
+    job_index = 0
+    for fold_index, fold in enumerate(fold_selections, start=1):
+        for model_index, model_name in enumerate(model_names, start=1):
+            job_index += 1
+            items.append(
+                JobPlanItem(
+                    job_index=job_index,
+                    total_jobs=total_jobs,
+                    model_index=model_index,
+                    total_models=total_models,
+                    fold_index=fold_index,
+                    total_folds=total_folds,
+                    model_name=model_name,
+                    fold=fold,
+                )
+            )
+    return items
+
+
+def format_job_progress(item: JobPlanItem) -> str:
+    return (
+        f"Progress job={progress_index_label(item.job_index, item.total_jobs)} "
+        f"model={progress_index_label(item.model_index, item.total_models)} {item.model_name} "
+        f"fold={progress_index_label(item.fold_index, item.total_folds)} {item.fold.label}"
+    )
+
+
+def log_parallel_heartbeat(
+    *,
+    plan: list[JobPlanItem],
+    active: dict[int, RunningJob],
+    completed_job_indices: set[int],
+    pending_count: int,
+    suite_start: float,
+) -> None:
+    elapsed = time.time() - suite_start
+    active_items = [job.plan_item for job in active.values()]
+    states = summarize_model_states(plan, completed_job_indices=completed_job_indices, active_items=active_items)
+    log_event(
+        "Heartbeat "
+        f"completed_jobs={len(completed_job_indices)}/{len(plan)} active_jobs={len(active)} pending_jobs={pending_count} "
+        f"completed_models={states['completed_models']} active_models={states['active_models']} "
+        f"pending_models={states['pending_models']} elapsed={format_progress_duration(elapsed)} "
+        f"eta={format_progress_duration(estimate_remaining_seconds(elapsed, len(completed_job_indices), len(plan)))}"
+    )
+    for device, job in sorted(active.items()):
+        item = job.plan_item
+        log_event(
+            f"GPU {device} active model={item.model_name} "
+            f"model_index={progress_index_label(item.model_index, item.total_models)} "
+            f"fold={item.fold.label} job={progress_index_label(item.job_index, item.total_jobs)} "
+            f"elapsed={format_progress_duration(time.time() - job.started_at)}"
+        )
+
+
+def summarize_model_states(
+    plan: list[JobPlanItem],
+    *,
+    completed_job_indices: set[int],
+    active_items: list[JobPlanItem],
+) -> dict[str, str]:
+    model_names = []
+    for item in plan:
+        if item.model_name not in model_names:
+            model_names.append(item.model_name)
+    active_models = {item.model_name for item in active_items}
+    completed_models = {
+        model_name
+        for model_name in model_names
+        if all(item.job_index in completed_job_indices for item in plan if item.model_name == model_name)
+    }
+    pending_models = {
+        item.model_name
+        for item in plan
+        if item.job_index not in completed_job_indices and item.model_name not in active_models
+    }
+    return {
+        "completed_models": ",".join(model for model in model_names if model in completed_models) or "none",
+        "active_models": ",".join(model for model in model_names if model in active_models) or "none",
+        "pending_models": ",".join(model for model in model_names if model in pending_models) or "none",
+    }
 
 
 def run_preflights(

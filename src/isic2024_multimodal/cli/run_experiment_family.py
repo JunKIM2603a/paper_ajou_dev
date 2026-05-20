@@ -20,6 +20,7 @@ from isic2024_multimodal.experiments.families import (
     write_json,
 )
 from isic2024_multimodal.experiments.registry import write_family_selection
+from isic2024_multimodal.utils.progress import format_progress_duration
 from isic2024_multimodal.utils.runtime_env import (
     DEFAULT_MLFLOW_FILE_TRACKING_URI,
     DEFAULT_MLFLOW_SQLITE_TRACKING_URI,
@@ -119,6 +120,10 @@ def main() -> None:
         return
 
     started = time.time()
+    log_event(
+        f"Start family={args.family} run_group_id={args.run_group_id} "
+        f"dataset_id={dataset_spec.dataset_id} output_root={paths.output_root}"
+    )
     result = subprocess.run(command, cwd=REPO_ROOT, env=build_subprocess_env(), check=False)
     status.update(
         {
@@ -142,6 +147,11 @@ def main() -> None:
         )
         status["selection"] = selection
     write_json(paths.status_path, status)
+    log_event(
+        f"Finished family={args.family} run_group_id={args.run_group_id} "
+        f"returncode={result.returncode} status_path={paths.status_path} "
+        f"duration={format_progress_duration(status['duration_seconds'])}"
+    )
     if result.returncode != 0:
         raise SystemExit(result.returncode)
 
@@ -169,6 +179,10 @@ def build_run_manifest(
         "device_policy": args.device_policy,
         "created_at": current_timestamp(),
     }
+
+
+def log_event(message: str) -> None:
+    print(f"[{current_timestamp()}] [run_experiment_family] {message}", flush=True)
 
 
 def build_preflight_summary(manifest: dict[str, Any]) -> dict[str, Any]:

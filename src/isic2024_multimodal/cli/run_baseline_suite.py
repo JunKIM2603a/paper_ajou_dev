@@ -10,6 +10,7 @@ from pathlib import Path
 
 from isic2024_multimodal.cli.run_experiment_family import build_subprocess_env
 from isic2024_multimodal.experiments.families import EXPERIMENT_FAMILIES
+from isic2024_multimodal.utils.progress import format_eta, format_progress_duration, progress_index_label
 from isic2024_multimodal.utils.runtime_env import ensure_expected_conda_env, load_project_env
 
 
@@ -135,9 +136,17 @@ def run_suite_commands(
 ) -> list[dict[str, str | int | float]]:
     env = build_subprocess_env()
     results: list[dict[str, str | int | float]] = []
-    for entry in family_commands:
+    suite_start = time.time()
+    total_families = len(family_commands)
+    for family_index, entry in enumerate(family_commands, start=1):
         started = time.time()
-        print(f"[run_baseline_suite] Running family={entry.family}", flush=True)
+        print(
+            f"[run_baseline_suite] Start family={progress_index_label(family_index, total_families)} "
+            f"{entry.family} completed_families={len(results)} "
+            f"elapsed={format_progress_duration(time.time() - suite_start)} "
+            f"eta={format_eta(elapsed_seconds=time.time() - suite_start, completed_count=len(results), total_count=total_families)}",
+            flush=True,
+        )
         result = subprocess.run(entry.command, cwd=REPO_ROOT, env=env, check=False)
         elapsed = time.time() - started
         results.append(
@@ -146,6 +155,14 @@ def run_suite_commands(
                 "returncode": int(result.returncode),
                 "duration_seconds": elapsed,
             }
+        )
+        print(
+            f"[run_baseline_suite] Finished family={progress_index_label(family_index, total_families)} "
+            f"{entry.family} returncode={result.returncode} "
+            f"duration={format_progress_duration(elapsed)} completed_families={len(results)}/{total_families} "
+            f"elapsed={format_progress_duration(time.time() - suite_start)} "
+            f"eta={format_eta(elapsed_seconds=time.time() - suite_start, completed_count=len(results), total_count=total_families)}",
+            flush=True,
         )
         if result.returncode != 0 and not continue_on_failure:
             break

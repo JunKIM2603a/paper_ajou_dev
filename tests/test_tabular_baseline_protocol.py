@@ -10,6 +10,7 @@ from isic2024_multimodal.baselines.tabular.baselines import build_lightgbm_estim
 from isic2024_multimodal.cli.run_all_tabular_models import (
     FoldSelection,
     build_command,
+    build_job_plan,
     build_preflight_command,
     resolve_nested_fold_selections,
 )
@@ -33,6 +34,12 @@ from isic2024_multimodal.features.tabular_missing import (
 )
 from isic2024_multimodal.reporting.mlflow_report import build_filter_string
 from isic2024_multimodal.utils import device as device_utils
+from isic2024_multimodal.utils.progress import (
+    estimate_remaining_seconds,
+    format_eta,
+    format_progress_duration,
+    progress_index_label,
+)
 
 
 def write_split_csvs(tmp_path):
@@ -454,6 +461,30 @@ def test_run_all_tabular_discovers_all_nested_fold_pairs(tmp_path) -> None:
         "outer_01_inner_00",
         "outer_01_inner_01",
     ]
+
+
+def test_progress_helpers_format_eta_and_index_labels() -> None:
+    assert format_progress_duration(None) == "unknown"
+    assert format_progress_duration(65) == "1m 5s"
+    assert progress_index_label(3, 20) == "3/20"
+    assert estimate_remaining_seconds(elapsed_seconds=100, completed_count=4, total_count=10) == 150
+    assert format_eta(elapsed_seconds=100, completed_count=4, total_count=10) == "2m 30s"
+
+
+def test_run_all_tabular_job_plan_tracks_model_fold_and_job_indices() -> None:
+    folds = [
+        FoldSelection(outer_fold=0, inner_fold=0),
+        FoldSelection(outer_fold=0, inner_fold=1),
+    ]
+
+    plan = build_job_plan(["xgboost", "catboost"], fold_selections=folds)
+
+    assert [item.job_index for item in plan] == [1, 2, 3, 4]
+    assert [item.total_jobs for item in plan] == [4, 4, 4, 4]
+    assert [item.model_index for item in plan] == [1, 2, 1, 2]
+    assert [item.total_models for item in plan] == [2, 2, 2, 2]
+    assert [item.fold_index for item in plan] == [1, 1, 2, 2]
+    assert [item.total_folds for item in plan] == [2, 2, 2, 2]
 
 
 def test_run_all_tabular_all_folds_command_scopes_fold_output(tmp_path) -> None:

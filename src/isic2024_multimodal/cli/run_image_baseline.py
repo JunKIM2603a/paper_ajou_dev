@@ -25,6 +25,16 @@ from isic2024_multimodal.utils.runtime_env import ensure_expected_conda_env, get
 DEFAULT_NESTED_SPLIT_CSV = "data/splits/isic2024_official_train_nested_5x4_seed42.csv"
 DEFAULT_HOLDOUT_SPLIT_CSV = "data/splits/isic2024_train_validation_test_split_seed42.csv"
 DEFAULT_CV_SPLIT_CSV = "data/splits/isic2024_train_validation_5fold_seed42.csv"
+METRIC_LOG_KEYS = [
+    (PRIMARY_PAUC_METRIC, "pauc"),
+    ("auc_roc", "auc"),
+    ("average_precision", "ap"),
+    ("f1_score", "f1"),
+    ("balanced_accuracy", "bacc"),
+    ("precision", "precision"),
+    ("recall", "recall"),
+    ("threshold", "threshold"),
+]
 
 
 def parse_args() -> argparse.Namespace:
@@ -230,7 +240,11 @@ def main() -> None:
     splits["val"] = _limit_samples(splits["val"], args.max_val_samples, seed=seed + 1)
     splits["test"] = _limit_samples(splits["test"], args.max_test_samples, seed=seed + 2)
     _log(
-        f"splits ready: train={len(splits['train'])}, val={len(splits['val'])}, test={len(splits['test'])}"
+        "splits ready: "
+        f"train={format_image_split_summary(splits['train'])}, "
+        f"val={format_image_split_summary(splits['val'])}, "
+        f"test={format_image_split_summary(splits['test'])}, "
+        f"patient_overlap={json.dumps(split_protocol_audit['patient_overlap_audit'], sort_keys=True)}"
     )
     if args.preflight_only:
         print(
@@ -422,7 +436,7 @@ def main() -> None:
             trial_started_at = current_timestamp()
             _log(
                 f"trial {execution_order}/{len(planned_trials)} start: {run_name} "
-                f"(search_space_index={trial_index})"
+                f"(search_space_index={trial_index}) model={model_name} output_dir={output_dir}"
             )
             _log(f"trial seed={trial_seed}")
             _log(f"trial hyperparameters={json.dumps(hyperparameters, ensure_ascii=False)}")
@@ -548,6 +562,13 @@ def main() -> None:
                         },
                     )
                     _log(f"trial complete: {run_name}")
+                    _log(
+                        f"trial metrics: {run_name} "
+                        f"best_val=({format_metric_summary(summary['best_validation_metrics'])}) "
+                        f"test=({format_metric_summary(summary['test_metrics'])}) "
+                        f"best_epoch={summary['best_epoch']} "
+                        f"selected_threshold={summary.get('selected_threshold')}"
+                    )
 
                     for metric_name, metric_value in summary["test_metrics"].items():
                         mlflow.log_metric(f"test_{metric_name}", float(metric_value))
@@ -570,6 +591,11 @@ def main() -> None:
                             "trial_seed": trial_seed,
                         }
                         best_run_name = run_name
+                        _log(
+                            f"best-so-far trial={execution_order}/{len(planned_trials)} "
+                            f"run_name={run_name} validation_score={score:.6f} "
+                            f"best_val=({format_metric_summary(summary['best_validation_metrics'])})"
+                        )
                 except Exception as exc:
                     output_dir.mkdir(parents=True, exist_ok=True)
                     error_path = output_dir / "error.txt"
@@ -602,7 +628,10 @@ def main() -> None:
                     mlflow.set_tag("trial_status", "failed")
                     mlflow.set_tag("failure_type", type(exc).__name__)
                     mlflow.log_artifact(str(error_path))
-                    _log(f"trial failed: {run_name} ({type(exc).__name__}: {exc})")
+                    _log(
+                        f"trial failed: {run_name} trial={execution_order}/{len(planned_trials)} "
+                        f"model={model_name} exception={type(exc).__name__}: {exc} traceback_path={error_path}"
+                    )
                 finally:
                     if model is not None:
                         del model
@@ -636,6 +665,11 @@ def main() -> None:
                 "best_summary": best_result["summary"],
             },
             "best_result.json",
+        )
+        _log(
+            f"model complete model={model_name} best_child_run_name={best_run_name} "
+            f"run_group_id={args.run_group_id} output_root={Path(args.output_root).resolve()} "
+            f"best_test=({format_metric_summary(best_result['summary']['test_metrics'])})"
         )
 
     print(json.dumps({"parent_run_id": parent_run.info.run_id, "best_child_run_name": best_run_name}, indent=2))
@@ -677,6 +711,32 @@ def select_trial_score(summary: dict[str, Any]) -> float:
         if score == score:
             return score
     return float("-inf")
+
+
+def format_metric_summary(metrics: dict[str, Any]) -> str:
+    parts: list[str] = []
+    for metric_name, display_name in METRIC_LOG_KEYS:
+        if metric_name not in metrics:
+            continue
+        try:
+            value = float(metrics[metric_name])
+        except (TypeError, ValueError):
+            continue
+        if value != value:
+            parts.append(f"{display_name}=nan")
+        else:
+            parts.append(f"{display_name}={value:.6f}")
+    return " ".join(parts) if parts else "none"
+
+
+def format_image_split_summary(samples: list[Any]) -> str:
+    patients = {
+        str(getattr(sample, "metadata", {}).get("patient_id", ""))
+        for sample in samples
+        if str(getattr(sample, "metadata", {}).get("patient_id", ""))
+    }
+    positives = sum(int(getattr(sample, "label", 0)) for sample in samples)
+    return f"rows={len(samples)} pos={positives} patients={len(patients)}"
 
 
 def image_preprocessing_contract(

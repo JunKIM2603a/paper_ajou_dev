@@ -15,6 +15,10 @@ from isic2024_multimodal.evaluation.metrics import (
     select_threshold_by_f1,
     thresholded_binary_classification_metrics,
 )
+from isic2024_multimodal.utils.progress import estimate_remaining_seconds
+
+
+BATCH_HEARTBEAT_SECONDS = 60.0
 
 
 def run_training(
@@ -74,11 +78,24 @@ def run_training(
     for epoch in range(1, epochs + 1):
         epoch_started = time.time()
         _log(f"epoch {epoch}/{epochs}: train start")
-        train_loss = _train_one_epoch(model, dataloaders["train"], criterion, optimizer, device)
+        train_loss = _train_one_epoch(
+            model,
+            dataloaders["train"],
+            criterion,
+            optimizer,
+            device,
+            epoch=epoch,
+            epochs=epochs,
+        )
         _log(f"epoch {epoch}/{epochs}: train done, loss={train_loss:.6f}")
         scheduler.step()
         _log(f"epoch {epoch}/{epochs}: validation start")
-        val_labels, val_probabilities = collect_model_outputs(model, dataloaders["val"], device)
+        val_labels, val_probabilities = collect_model_outputs(
+            model,
+            dataloaders["val"],
+            device,
+            stage_name=f"epoch {epoch}/{epochs} validation",
+        )
         val_threshold = select_threshold_by_f1(val_labels, val_probabilities)
         val_metrics = evaluate_outputs(
             val_labels,
@@ -137,7 +154,12 @@ def run_training(
         model.load_state_dict(best_state)
 
     _log("best validation evaluation start")
-    best_val_labels, best_val_probabilities = collect_model_outputs(model, dataloaders["val"], device)
+    best_val_labels, best_val_probabilities = collect_model_outputs(
+        model,
+        dataloaders["val"],
+        device,
+        stage_name="best validation",
+    )
     selected_threshold = select_threshold_by_f1(best_val_labels, best_val_probabilities)
     best_validation_metrics = evaluate_outputs(
         best_val_labels,
@@ -148,7 +170,12 @@ def run_training(
     _log(f"selected threshold from validation_f1: {selected_threshold:.6f}")
 
     _log("test evaluation start")
-    test_labels, test_probabilities = collect_model_outputs(model, dataloaders["test"], device)
+    test_labels, test_probabilities = collect_model_outputs(
+        model,
+        dataloaders["test"],
+        device,
+        stage_name="test evaluation",
+    )
     test_metrics = evaluate_outputs(
         test_labels,
         test_probabilities,
@@ -186,17 +213,26 @@ def run_training(
 
 
 # malignant 확률을 모은 뒤 validation에서 선택한 threshold로 threshold-dependent metric을 계산한다.
-def collect_model_outputs(model: nn.Module, dataloader: DataLoader, device: str) -> tuple[list[int], list[float]]:
+def collect_model_outputs(
+    model: nn.Module,
+    dataloader: DataLoader,
+    device: str,
+    *,
+    stage_name: str = "evaluation",
+) -> tuple[list[int], list[float]]:
     model.eval()
     labels: list[int] = []
     probabilities: list[float] = []
     logged_first_batch = False
+    total_batches = len(dataloader)
+    started = time.time()
+    last_heartbeat = started
 
     with torch.no_grad():
-        for inputs, targets in dataloader:
+        for batch_index, (inputs, targets) in enumerate(dataloader, start=1):
             if not logged_first_batch:
                 _log(
-                    "evaluation first batch: "
+                    f"{stage_name} first batch: "
                     f"batch_size={inputs.size(0)}, image_shape={tuple(inputs.shape)}, device={device}"
                 )
                 logged_first_batch = True
@@ -207,6 +243,15 @@ def collect_model_outputs(model: nn.Module, dataloader: DataLoader, device: str)
 
             labels.extend(targets.cpu().tolist())
             probabilities.extend(probs.cpu().tolist())
+            now = time.time()
+            if batch_index == total_batches or now - last_heartbeat >= BATCH_HEARTBEAT_SECONDS:
+                elapsed = now - started
+                eta_seconds = estimate_remaining_seconds(elapsed, batch_index, total_batches)
+                _log(
+                    f"{stage_name}: batch {batch_index}/{total_batches} "
+                    f"elapsed={format_duration(elapsed)} eta={format_duration(eta_seconds)}"
+                )
+                last_heartbeat = now
 
     return labels, probabilities
 
@@ -233,13 +278,19 @@ def _train_one_epoch(
     criterion: nn.Module,
     optimizer: torch.optim.Optimizer,
     device: str,
+    *,
+    epoch: int,
+    epochs: int,
 ) -> float:
     model.train()
     total_loss = 0.0
     total_items = 0
     logged_first_batch = False
+    total_batches = len(dataloader)
+    started = time.time()
+    last_heartbeat = started
 
-    for inputs, targets in dataloader:
+    for batch_index, (inputs, targets) in enumerate(dataloader, start=1):
         if not logged_first_batch:
             _log(
                 "train first batch: "
@@ -258,6 +309,17 @@ def _train_one_epoch(
         batch_size = inputs.size(0)
         total_loss += loss.item() * batch_size
         total_items += batch_size
+        now = time.time()
+        if batch_index == total_batches or now - last_heartbeat >= BATCH_HEARTBEAT_SECONDS:
+            elapsed = now - started
+            eta_seconds = estimate_remaining_seconds(elapsed, batch_index, total_batches)
+            average_loss = total_loss / max(total_items, 1)
+            _log(
+                f"epoch {epoch}/{epochs}: batch {batch_index}/{total_batches} "
+                f"loss={average_loss:.6f} elapsed={format_duration(elapsed)} "
+                f"eta={format_duration(eta_seconds)}"
+            )
+            last_heartbeat = now
 
     return total_loss / max(total_items, 1)
 
@@ -287,7 +349,6 @@ def format_duration(seconds: float | int | None) -> str:
 def _log(message: str) -> None:
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
     print(f"[trainer {timestamp}] {message}", flush=True)
-
 
 
 

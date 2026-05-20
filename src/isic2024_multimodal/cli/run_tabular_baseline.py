@@ -5,10 +5,15 @@ import atexit
 import gc
 import json
 import time
+import traceback
 from pathlib import Path
 from typing import Any
 
 from isic2024_multimodal.utils.device import resolve_device
+from isic2024_multimodal.utils.progress import (
+    format_progress_duration,
+    progress_index_label,
+)
 from isic2024_multimodal.utils.runtime_env import ensure_expected_conda_env, get_default_mlflow_tracking_uri
 
 DEFAULT_DATASET_ROOT = "data/raw/isic_2024_challenge"
@@ -21,6 +26,16 @@ STRICT_MAIN_INPUT = "strict_main_input"
 DEFAULT_NESTED_SPLIT_CSV = "data/splits/isic2024_official_train_nested_5x4_seed42.csv"
 DEFAULT_HOLDOUT_SPLIT_CSV = "data/splits/isic2024_train_validation_test_split_seed42.csv"
 DEFAULT_CV_SPLIT_CSV = "data/splits/isic2024_train_validation_5fold_seed42.csv"
+METRIC_LOG_KEYS = [
+    (PRIMARY_PAUC_METRIC, "pauc"),
+    ("auc_roc", "auc"),
+    ("average_precision", "ap"),
+    ("f1_score", "f1"),
+    ("balanced_accuracy", "bacc"),
+    ("precision", "precision"),
+    ("recall", "recall"),
+    ("threshold", "threshold"),
+]
 
 
 def make_run_group_id(prefix: str = "tabular") -> str:
@@ -236,7 +251,12 @@ def main() -> None:
     mlflow.set_tracking_uri(args.tracking_uri)
     mlflow.set_experiment(args.experiment_name)
 
-    for spec in get_model_specs(args.models):
+    model_specs = get_model_specs(args.models)
+    total_models = len(model_specs)
+    feature_set_order = sorted(available_feature_sets)
+    total_feature_sets = len(feature_set_order)
+
+    for model_index, spec in enumerate(model_specs, start=1):
         model_start = time.time()
         parent_run_name = sanitize_run_name(spec.name)
         model_effective_device = effective_tabular_device(spec.name, args.device)
@@ -248,7 +268,8 @@ def main() -> None:
         best_result = None
         best_run_name = None
         log_event(
-            f"Start model={spec.name} requested_device={args.requested_device} "
+            f"Start model={progress_index_label(model_index, total_models)} {spec.name} "
+            f"requested_device={args.requested_device} "
             f"resolved_device={args.device} effective_device={model_effective_device} trials={len(combinations)}"
         )
 
@@ -313,6 +334,7 @@ def main() -> None:
                 hyperparameters["seed"] = trial_seed
                 feature_set_name = normalize_feature_set_name(hyperparameters["feature_set"])
                 hyperparameters["feature_set"] = feature_set_name
+                feature_set_index = feature_set_order.index(feature_set_name) + 1 if feature_set_name in feature_set_order else 0
                 if feature_set_name not in available_feature_sets:
                     print(
                         f"[run_tabular_baselines] Skipping {spec.name} / {feature_set_name} "
@@ -337,33 +359,59 @@ def main() -> None:
                 output_dir.mkdir(parents=True, exist_ok=True)
                 trial_start = time.time()
                 log_event(
-                    f"Start trial model={spec.name} trial={index}/{len(combinations)} "
-                    f"feature_set={feature_set_name}"
+                    f"Start trial model={progress_index_label(model_index, total_models)} {spec.name} "
+                    f"trial={progress_index_label(index, len(combinations))} "
+                    f"feature_set={progress_index_label(feature_set_index, total_feature_sets)} {feature_set_name} "
+                    f"stage=prepare output_dir={output_dir}"
                 )
-                summary = train_and_evaluate(
-                    frame=split_frame,
-                    sample_ids=sample_ids,
-                    split_definition=split_definition,
-                    target_column=target_column,
-                    model_name=spec.name,
-                    hyperparameters=hyperparameters,
-                    output_dir=output_dir,
-                    device=args.device,
-                    requested_device=args.requested_device,
-                    device_fallback_reason=args.device_fallback_reason,
-                    run_group_id=args.run_group_id,
-                    dataset_id=args.dataset_id,
-                    dataset_spec_path=args.dataset_spec,
-                    model_family=args.model_family,
-                    include_test=False,
-                    max_train_rows=args.max_train_rows,
-                    max_val_rows=args.max_val_rows,
-                    max_test_rows=args.max_test_rows,
-                )
+                try:
+                    summary = train_and_evaluate(
+                        frame=split_frame,
+                        sample_ids=sample_ids,
+                        split_definition=split_definition,
+                        target_column=target_column,
+                        model_name=spec.name,
+                        hyperparameters=hyperparameters,
+                        output_dir=output_dir,
+                        device=args.device,
+                        requested_device=args.requested_device,
+                        device_fallback_reason=args.device_fallback_reason,
+                        run_group_id=args.run_group_id,
+                        dataset_id=args.dataset_id,
+                        dataset_spec_path=args.dataset_spec,
+                        model_family=args.model_family,
+                        include_test=False,
+                        max_train_rows=args.max_train_rows,
+                        max_val_rows=args.max_val_rows,
+                        max_test_rows=args.max_test_rows,
+                        progress_context={
+                            "model_index": model_index,
+                            "total_models": total_models,
+                            "model_name": spec.name,
+                            "trial_index": index,
+                            "total_trials": len(combinations),
+                            "feature_set_index": feature_set_index,
+                            "total_feature_sets": total_feature_sets,
+                            "feature_set_name": feature_set_name,
+                            "run_kind": "trial",
+                        },
+                    )
+                except Exception as exc:
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    error_path = output_dir / "error.txt"
+                    error_path.write_text(traceback.format_exc(), encoding="utf-8")
+                    log_event(
+                        f"Failed trial model={progress_index_label(model_index, total_models)} {spec.name} "
+                        f"trial={progress_index_label(index, len(combinations))} "
+                        f"feature_set={feature_set_name} exception={type(exc).__name__}: {exc} "
+                        f"traceback_path={error_path}"
+                    )
+                    raise
                 log_event(
-                    f"Finished trial model={spec.name} trial={index}/{len(combinations)} "
-                    f"feature_set={feature_set_name} val_{PRIMARY_PAUC_METRIC}="
-                    f"{summary['metrics']['val'][PRIMARY_PAUC_METRIC]:.6f} "
+                    f"Finished trial model={progress_index_label(model_index, total_models)} {spec.name} "
+                    f"trial={progress_index_label(index, len(combinations))} "
+                    f"feature_set={progress_index_label(feature_set_index, total_feature_sets)} {feature_set_name} "
+                    f"val_metrics=({format_metric_summary(summary['metrics']['val'])}) "
                     f"duration={format_duration(time.time() - trial_start)}"
                 )
 
@@ -420,6 +468,12 @@ def main() -> None:
                         "features": features,
                     }
                     best_run_name = trial_run_name
+                    log_event(
+                        f"Best-so-far model={progress_index_label(model_index, total_models)} {spec.name} "
+                        f"trial={progress_index_label(index, len(combinations))} "
+                        f"feature_set={feature_set_name} val_score={score:.6f} "
+                        f"val_metrics=({format_metric_summary(summary['metrics']['val'])})"
+                    )
 
             if best_result is None:
                 raise RuntimeError(f"No successful tabular trials completed for {spec.name}")
@@ -434,31 +488,55 @@ def main() -> None:
             final_output_dir = Path(args.output_root) / parent_run_name / "best_final_test"
             final_start = time.time()
             log_event(
-                f"Start final_test model={spec.name} best_feature_set={best_feature_set_name}"
+                f"Start final_test model={progress_index_label(model_index, total_models)} {spec.name} "
+                f"best_feature_set={best_feature_set_name} output_dir={final_output_dir}"
             )
-            best_final_summary = train_and_evaluate(
-                frame=best_split_frame,
-                sample_ids=sample_ids,
-                split_definition=split_definition,
-                target_column=target_column,
-                model_name=spec.name,
-                hyperparameters=best_result["hyperparameters"],
-                output_dir=final_output_dir,
-                device=args.device,
-                requested_device=args.requested_device,
-                device_fallback_reason=args.device_fallback_reason,
-                run_group_id=args.run_group_id,
-                dataset_id=args.dataset_id,
-                dataset_spec_path=args.dataset_spec,
-                model_family=args.model_family,
-                include_test=True,
-                max_train_rows=args.max_train_rows,
-                max_val_rows=args.max_val_rows,
-                max_test_rows=args.max_test_rows,
-            )
+            try:
+                best_final_summary = train_and_evaluate(
+                    frame=best_split_frame,
+                    sample_ids=sample_ids,
+                    split_definition=split_definition,
+                    target_column=target_column,
+                    model_name=spec.name,
+                    hyperparameters=best_result["hyperparameters"],
+                    output_dir=final_output_dir,
+                    device=args.device,
+                    requested_device=args.requested_device,
+                    device_fallback_reason=args.device_fallback_reason,
+                    run_group_id=args.run_group_id,
+                    dataset_id=args.dataset_id,
+                    dataset_spec_path=args.dataset_spec,
+                    model_family=args.model_family,
+                    include_test=True,
+                    max_train_rows=args.max_train_rows,
+                    max_val_rows=args.max_val_rows,
+                    max_test_rows=args.max_test_rows,
+                    progress_context={
+                        "model_index": model_index,
+                        "total_models": total_models,
+                        "model_name": spec.name,
+                        "feature_set_index": feature_set_order.index(best_feature_set_name) + 1
+                        if best_feature_set_name in feature_set_order
+                        else 0,
+                        "total_feature_sets": total_feature_sets,
+                        "feature_set_name": best_feature_set_name,
+                        "run_kind": "final_test",
+                    },
+                )
+            except Exception as exc:
+                final_output_dir.mkdir(parents=True, exist_ok=True)
+                error_path = final_output_dir / "error.txt"
+                error_path.write_text(traceback.format_exc(), encoding="utf-8")
+                log_event(
+                    f"Failed final_test model={progress_index_label(model_index, total_models)} {spec.name} "
+                    f"best_feature_set={best_feature_set_name} exception={type(exc).__name__}: {exc} "
+                    f"traceback_path={error_path}"
+                )
+                raise
             log_event(
-                f"Finished final_test model={spec.name} test_{PRIMARY_PAUC_METRIC}="
-                f"{best_final_summary['metrics']['test'][PRIMARY_PAUC_METRIC]:.6f} "
+                f"Finished final_test model={progress_index_label(model_index, total_models)} {spec.name} "
+                f"test_metrics=({format_metric_summary(best_final_summary['metrics']['test'])}) "
+                f"summary_json={final_output_dir / 'summary.json'} "
                 f"duration={format_duration(time.time() - final_start)}"
             )
 
@@ -494,8 +572,9 @@ def main() -> None:
             for timing_name, timing_value in best_final_summary["timing_seconds"].items():
                 mlflow.log_metric(f"best_timing_{timing_name}", float(timing_value))
         log_event(
-            f"Finished model={spec.name} best_feature_set={best_result['feature_set_name']} "
-            f"duration={format_duration(time.time() - model_start)}"
+            f"Finished model={progress_index_label(model_index, total_models)} {spec.name} "
+            f"best_feature_set={best_result['feature_set_name']} run_group_id={args.run_group_id} "
+            f"output_root={Path(args.output_root).resolve()} duration={format_duration(time.time() - model_start)}"
         )
 
     command_status["value"] = "ok"
@@ -681,6 +760,51 @@ def select_trial_score(summary: dict[str, Any]) -> float:
     return float(score)
 
 
+def format_metric_summary(metrics: dict[str, Any]) -> str:
+    parts: list[str] = []
+    for metric_name, display_name in METRIC_LOG_KEYS:
+        if metric_name not in metrics:
+            continue
+        try:
+            value = float(metrics[metric_name])
+        except (TypeError, ValueError):
+            continue
+        if value != value:
+            parts.append(f"{display_name}=nan")
+        else:
+            parts.append(f"{display_name}={value:.6f}")
+    return " ".join(parts) if parts else "none"
+
+
+def format_tabular_progress_context(context: dict[str, Any]) -> str:
+    parts: list[str] = []
+    if "model_index" in context and "total_models" in context:
+        parts.append(
+            f"model={progress_index_label(int(context['model_index']), int(context['total_models']))} "
+            f"{context.get('model_name', '')}".rstrip()
+        )
+    elif context.get("model_name"):
+        parts.append(f"model={context['model_name']}")
+    if "trial_index" in context and "total_trials" in context:
+        parts.append(f"trial={progress_index_label(int(context['trial_index']), int(context['total_trials']))}")
+    if "feature_set_index" in context and "total_feature_sets" in context:
+        parts.append(
+            f"feature_set={progress_index_label(int(context['feature_set_index']), int(context['total_feature_sets']))} "
+            f"{context.get('feature_set_name', '')}".rstrip()
+        )
+    elif context.get("feature_set_name"):
+        parts.append(f"feature_set={context['feature_set_name']}")
+    if context.get("run_kind"):
+        parts.append(f"run={context['run_kind']}")
+    return " ".join(parts)
+
+
+def log_tabular_stage(context: dict[str, Any], stage: str, message: str = "") -> None:
+    prefix = format_tabular_progress_context(context)
+    suffix = f" {message}" if message else ""
+    log_event(f"Model progress {prefix} stage={stage}{suffix}")
+
+
 def tabular_estimator_backend(model_name: str, *, resolved_device: str, effective_device: str) -> str:
     if model_name in {"logistic_regression", "svm", "mlp"}:
         return "repo_torch" if str(effective_device).startswith("cuda") else "sklearn"
@@ -728,6 +852,7 @@ def train_and_evaluate(
     max_train_rows: int | None = None,
     max_val_rows: int | None = None,
     max_test_rows: int | None = None,
+    progress_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     from isic2024_multimodal.baselines.tabular.baselines import effective_tabular_device
     from isic2024_multimodal.features.tabular_missing import missing_value_policy_summary
@@ -735,6 +860,10 @@ def train_and_evaluate(
     start = time.time()
     started_at = current_timestamp()
     timings: dict[str, float] = {}
+    progress_context = progress_context or {
+        "model_name": model_name,
+        "run_kind": "train_and_evaluate",
+    }
     stage_start = time.time()
     output_dir.mkdir(parents=True, exist_ok=True)
     seed = int(hyperparameters["seed"])
@@ -746,6 +875,7 @@ def train_and_evaluate(
 
     try:
         stage_start = time.time()
+        log_tabular_stage(progress_context, "prepare_splits_start", f"output_dir={output_dir}")
         X = frame.drop(columns=[target_column]).copy()
         y = frame[target_column].astype(float).astype(int)
 
@@ -771,8 +901,33 @@ def train_and_evaluate(
 
         numeric_columns, categorical_columns = split_feature_types(X_train)
         record_timing(timings, "prepare_splits_seconds", stage_start)
+        test_positive_count = int(y_test.sum() if include_test else y.loc[test_mask].sum())
+        log_tabular_stage(
+            progress_context,
+            "prepare_splits_done",
+            (
+                f"train_rows={len(X_train)} train_pos={int(y_train.sum())} "
+                f"locked_train_patients={split_definition['num_train_patients']} "
+                f"val_rows={len(X_val)} val_pos={int(y_val.sum())} "
+                f"locked_val_patients={split_definition['num_val_patients']} "
+                f"test_rows={len(X_test) if include_test else split_definition['num_test_rows']} "
+                f"test_pos={test_positive_count} locked_test_patients={split_definition['num_test_patients']} "
+                f"features={len(numeric_columns) + len(categorical_columns)} "
+                f"numeric={len(numeric_columns)} categorical={len(categorical_columns)} "
+                f"patient_overlap={json.dumps(split_definition['overlap_checks'], sort_keys=True)} "
+                f"duration={format_progress_duration(timings['prepare_splits_seconds'])}"
+            ),
+        )
 
         stage_start = time.time()
+        log_tabular_stage(
+            progress_context,
+            "build_estimator_start",
+            (
+                f"effective_device={effective_device} estimator_backend="
+                f"{tabular_estimator_backend(model_name, resolved_device=device, effective_device=effective_device)}"
+            ),
+        )
         estimator = build_estimator(
             model_name=model_name,
             hyperparameters=hyperparameters,
@@ -783,24 +938,67 @@ def train_and_evaluate(
             device=estimator_device,
         )
         record_timing(timings, "build_estimator_seconds", stage_start)
+        log_tabular_stage(
+            progress_context,
+            "build_estimator_done",
+            f"duration={format_progress_duration(timings['build_estimator_seconds'])}",
+        )
 
         stage_start = time.time()
+        log_tabular_stage(
+            progress_context,
+            "fit_start",
+            f"train_rows={len(X_train)} train_pos={int(y_train.sum())} seed={seed}",
+        )
         estimator.fit(X_train, y_train)
         record_timing(timings, "fit_seconds", stage_start)
+        log_tabular_stage(
+            progress_context,
+            "fit_done",
+            f"duration={format_progress_duration(timings['fit_seconds'])}",
+        )
         runtime_parameters = estimator.runtime_params() if hasattr(estimator, "runtime_params") else {}
 
         stage_start = time.time()
+        log_tabular_stage(progress_context, "select_threshold_start", f"val_rows={len(X_val)}")
         val_labels, val_probabilities = predict_probabilities(estimator, X_val, y_val)
         selected_threshold = select_threshold_by_f1(val_labels, val_probabilities)
         record_timing(timings, "select_threshold_seconds", stage_start)
+        log_tabular_stage(
+            progress_context,
+            "select_threshold_done",
+            (
+                f"threshold={selected_threshold:.6f} "
+                f"threshold_source={threshold_source_for_split(split_definition)} "
+                f"duration={format_progress_duration(timings['select_threshold_seconds'])}"
+            ),
+        )
 
         stage_start = time.time()
+        log_tabular_stage(progress_context, "evaluate_train_start", f"train_rows={len(X_train)}")
         train_metrics = evaluate_predictions(estimator, X_train, y_train, threshold=selected_threshold)
         record_timing(timings, "evaluate_train_seconds", stage_start)
+        log_tabular_stage(
+            progress_context,
+            "evaluate_train_done",
+            (
+                f"metrics=({format_metric_summary(train_metrics)}) "
+                f"duration={format_progress_duration(timings['evaluate_train_seconds'])}"
+            ),
+        )
 
         stage_start = time.time()
+        log_tabular_stage(progress_context, "evaluate_val_start", f"val_rows={len(X_val)}")
         val_metrics = evaluate_predictions(estimator, X_val, y_val, threshold=selected_threshold)
         record_timing(timings, "evaluate_val_seconds", stage_start)
+        log_tabular_stage(
+            progress_context,
+            "evaluate_val_done",
+            (
+                f"metrics=({format_metric_summary(val_metrics)}) "
+                f"duration={format_progress_duration(timings['evaluate_val_seconds'])}"
+            ),
+        )
 
         metrics = {
             "train": train_metrics,
@@ -808,8 +1006,17 @@ def train_and_evaluate(
         }
         if include_test:
             stage_start = time.time()
+            log_tabular_stage(progress_context, "evaluate_test_start", f"test_rows={len(X_test)}")
             metrics["test"] = evaluate_predictions(estimator, X_test, y_test, threshold=selected_threshold)
             record_timing(timings, "evaluate_test_seconds", stage_start)
+            log_tabular_stage(
+                progress_context,
+                "evaluate_test_done",
+                (
+                    f"metrics=({format_metric_summary(metrics['test'])}) "
+                    f"duration={format_progress_duration(timings['evaluate_test_seconds'])}"
+                ),
+            )
         duration_seconds = time.time() - start
         timings["total_seconds"] = round(duration_seconds, 6)
 
@@ -885,7 +1092,13 @@ def train_and_evaluate(
             "duration_seconds": duration_seconds,
             "timing_seconds": timings,
         }
+        log_tabular_stage(progress_context, "write_summary_start", f"summary_json={output_dir / 'summary.json'}")
         (output_dir / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+        log_tabular_stage(
+            progress_context,
+            "write_summary_done",
+            f"summary_json={output_dir / 'summary.json'} total_duration={format_progress_duration(duration_seconds)}",
+        )
         return summary
     finally:
         estimator = None
