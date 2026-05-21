@@ -10,7 +10,7 @@ lesion image + ordinary inference-time tabular metadata -> malignant probability
 
 자세한 문서 길잡이는 [docs/README.md](docs/README.md)를 먼저 본다.
 
-## Critical Protocol Rules
+## 핵심 프로토콜 규칙
 
 - 모든 paper-facing 실험은 patient-level split을 사용한다.
 - 같은 `patient_id`가 train, validation, test partition 사이에 겹치면 안 된다.
@@ -19,7 +19,7 @@ lesion image + ordinary inference-time tabular metadata -> malignant probability
 - `outer_test`는 최종 평가 전용이며 선택 과정에 사용하지 않는다.
 - `iddx_full`은 validation, test, inference dataloader가 요구하면 안 된다.
 
-## Repository Map
+## 저장소 구조
 
 ```text
 src/isic2024_multimodal/          # Python package, CLI, model/training/evaluation code
@@ -35,7 +35,7 @@ data/splits/                      # generated split artifacts, ignored by Git
 docs/                             # protocol, reproducibility, plans, references, reports
 ```
 
-## Start Here
+## 시작하기
 
 모든 명령은 `paper` conda 환경과 `PYTHONPATH=./src`를 기준으로 실행한다.
 
@@ -56,7 +56,7 @@ conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python
 
 상세 설명: [docs/eda/isic2024_strict_input_export.md](docs/eda/isic2024_strict_input_export.md)
 
-### 2. Protocol Test
+### 2. 프로토콜 테스트
 
 ```bash
 conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m pytest \
@@ -66,7 +66,7 @@ conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python
 
 전체 운영 재현 순서: [docs/reproducibility.md](docs/reproducibility.md)
 
-### 3. Tabular Baseline Smoke Run
+### 3. Tabular baseline smoke run
 
 Family runner를 우선 사용한다. 이 경로는 suite config, dataset spec, output/table 경로, registry를 함께 맞춘다.
 
@@ -79,16 +79,16 @@ conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python
   --devices 0
 ```
 
-Tabular baseline operating notes:
+Tabular baseline 운영 메모:
 
 - GPU/CPU: 기본은 GPU 우선 `auto`이고, CUDA 초기화가 실패하면 CPU로 fallback한다. All-model runner에서 CPU를 강제하려면 `--device-policy cpu`, 단일 runner에서 CPU를 강제하려면 `--device cpu`를 사용한다.
-- Safe reset: tabular family만 초기화할 때는 `run_experiment_family --family tabular_baselines --reset-family-output`을 사용한다. 이 경로는 raw data, split artifact, registry를 삭제하지 않는다.
-- output/table evidence: 큰 산출물은 `experiments/outputs/tabular_baselines/<run_group_id>/`, 작은 결과표는 `experiments/tables/tabular_baselines/<run_group_id>/`, selection registry는 `experiments/registry/selections/`에 둔다.
+- 안전한 초기화: tabular family만 초기화할 때는 `run_experiment_family --family tabular_baselines --reset-family-output`을 사용한다. 이 경로는 raw data, split artifact, registry를 삭제하지 않는다.
+- 산출물/표 근거: 큰 산출물은 `experiments/outputs/tabular_baselines/<run_group_id>/`, 작은 결과표는 `experiments/tables/tabular_baselines/<run_group_id>/`, selection registry는 `experiments/registry/selections/`에 둔다.
 - All-folds/nested summary: `--all-folds`는 5x4 nested split에서 20개 실행을 만들고, 아래 `summarize_nested_cv_results` 명령으로 validation-selected nested summary를 만든다.
 
 세부 모델별 backend와 protocol 설명은 [docs/eda/isic2024_tabular_baselines.md](docs/eda/isic2024_tabular_baselines.md)에 둔다.
 
-### 4. Current Nested CV Summary
+### 4. 현재 nested CV 요약
 
 현재 baseline runner는 `(outer_fold, inner_fold)` 하나를 실행 단위로 사용한다.
 
@@ -116,20 +116,20 @@ conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python
 
 이 결과는 `validation-selected nested summary`다. 논문 final model 확정 후에는 outer fold별 best hyperparameter를 확정하고, full `cv_train`에서 train-only preprocessing과 model을 다시 fit한 뒤, `outer_test`에서 한 번 평가하는 paper-final refit 절차가 별도로 필요하다.
 
-## Where To Read More
+## 더 읽을 문서
 
 | 문서 | 역할 |
 |---|---|
 | [docs/README.md](docs/README.md) | 문서 전체 길잡이 |
-| [docs/reproducibility.md](docs/reproducibility.md) | 새 환경에서 protocol을 재현하는 순서 |
+| [docs/reproducibility.md](docs/reproducibility.md) | 새 환경에서 프로토콜을 재현하는 순서 |
 | [docs/eda/isic2024_strict_input_export.md](docs/eda/isic2024_strict_input_export.md) | strict input, `iddx_full` sidecar, nested split export |
-| [docs/eda/isic2024_tabular_baselines.md](docs/eda/isic2024_tabular_baselines.md) | tabular baseline 실행, missing policy, nested CV summary |
-| [docs/plan/2026-05-14_after_5th_meeting/isic2024_strict_input_data_protocol_presentation_20260514.md](docs/plan/2026-05-14_after_5th_meeting/isic2024_strict_input_data_protocol_presentation_20260514.md) | strict input data protocol 발표 요약 |
+| [docs/eda/isic2024_tabular_baselines.md](docs/eda/isic2024_tabular_baselines.md) | tabular baseline 실행, 결측치 정책, nested CV summary |
+| [docs/plan/2026-05-14_after_5th_meeting/isic2024_strict_input_data_protocol_presentation_20260514.md](docs/plan/2026-05-14_after_5th_meeting/isic2024_strict_input_data_protocol_presentation_20260514.md) | strict input 데이터 프로토콜 발표 요약 |
 | [docs/weekly_report/2026-05-14/](docs/weekly_report/2026-05-14/) | 관련 연구와 진행 메모 |
 
-## Version Control
+## 버전 관리
 
-Track:
+Git에 올리는 것:
 
 ```text
 source code
@@ -139,7 +139,7 @@ small evidence files
 small result tables under experiments/tables/
 ```
 
-Do not track:
+Git에 올리지 않는 것:
 
 ```text
 raw data

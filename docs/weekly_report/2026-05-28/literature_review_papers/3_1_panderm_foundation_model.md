@@ -147,6 +147,9 @@ AUROC, AUPR, weighted F1, balanced accuracy, sensitivity, lesion detection count
 ## 평가 결과
 
 여러 downstream task에서 SOTA 수준의 성능을 보고한다. early melanoma reader study에서는 평균 임상의보다 높은 정확도를 보였고, human-AI 협업에서 추가 향상을 보고했다. TBP screening에서는 sensitivity 0.893과 불필요한 dermoscopy 약 60.8% 감소를 보고한다.
+학습 효율성 (Computational Efficiency): 단순히 성능만 좋은 것이 아니라, 기존의 대표적인 자체 지도 학습 방법론(DINOv2, MAE 등)보다 훨씬 적은 학습 횟수(200 epoch 만에 최적 성능 도달)로 학습이 가능하다는 점이 기술적 강점
+전이 및 예후 예측의 독창성:
+단순 진단을 넘어, 진단 시점의 확대경 이미지(Dermoscopy)만으로 향후 전이 가능성이나 생존율(Kaplan-Meier 분석 등)을 예측할 수 있다는 점은 기존 피부과 AI 모델들과 차별화
 
 ## ISIC2024 연구 시사점
 

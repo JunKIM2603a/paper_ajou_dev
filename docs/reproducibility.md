@@ -1,6 +1,6 @@
-# ISIC2024 Reproducibility Guide
+# ISIC2024 재현 가이드
 
-이 문서는 새 컴퓨터에서 repository를 clone한 뒤, 현재 ISIC2024 논문 실험 protocol을 같은 기준으로 재현하기 위한 실행 순서와 검증 기준을 정리한다.
+이 문서는 새 컴퓨터에서 repository를 clone한 뒤, 현재 ISIC2024 논문 실험 프로토콜을 같은 기준으로 재현하기 위한 실행 순서와 검증 기준을 정리한다.
 
 기본 연구 방향은 다음으로 고정한다.
 
@@ -10,20 +10,20 @@ lesion image + ordinary inference-time tabular metadata -> malignant probability
 
 `iddx_full`은 기본 inference input이 아니다. `iddx_full` 또는 diagnosis text를 사용하는 실험은 반드시 training-only candidate 또는 analysis-only evidence로 분리한다.
 
-## 1. Reproducibility Contract
+## 1. 재현 계약
 
 Paper-facing 실험은 아래 조건을 모두 만족해야 한다.
 
-| item | required rule |
+| 항목 | 필수 규칙 |
 |---|---|
 | split | patient-level nested CV |
-| preprocessing | fold-local train-only fit |
-| model selection | `inner_validation` only |
-| threshold selection | `inner_validation` only |
-| final evaluation | `outer_test` only |
-| inference input | image + ordinary tabular metadata only |
-| privileged fields | no test-time dependency |
-| required audit | patient overlap, fold distribution, metric source |
+| preprocessing | fold별 train-only fit |
+| model selection | `inner_validation`만 사용 |
+| threshold selection | `inner_validation`만 사용 |
+| final evaluation | `outer_test`만 사용 |
+| inference input | image + ordinary tabular metadata만 사용 |
+| privileged fields | test-time 의존성 없음 |
+| required audit | patient overlap, fold distribution, metric source 기록 |
 
 결과 summary에는 최소한 다음 metadata가 있어야 한다.
 
@@ -40,7 +40,7 @@ seed
 metric function
 ```
 
-## 2. Reference Starting Point
+## 2. 기준 시작점
 
 먼저 아래 노트북을 확인한다.
 
@@ -58,7 +58,7 @@ notebooks/isic_2024/isic2024_strict_input_export_audit_20260514.ipynb
 
 이 노트북은 생성된 CSV를 읽어서 strict input column, `iddx_full` exclusion, nested split role, patient overlap, fold distribution을 확인한다.
 
-## 3. Data And Environment
+## 3. 데이터와 환경
 
 Repository와 conda 환경을 준비한다.
 
@@ -92,13 +92,13 @@ Raw directory는 read-only로 취급한다. 생성물은 `data/processed/`, `dat
 conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m <module>
 ```
 
-## 4. Nested Split Definition
+## 4. Nested split 정의
 
 기본 split은 patient-level Triple Stratified Nested CV다.
 
 ```text
-outer folds: 5
-inner folds: 4
+outer fold 수: 5
+inner fold 수: 4
 seed: 42
 artifact: data/splits/isic2024_official_train_nested_5x4_seed42.csv
 ```
@@ -117,17 +117,17 @@ split_role
 
 Split role은 세 값만 허용한다.
 
-| split_role | meaning | allowed use |
+| split_role | 의미 | 허용되는 사용 |
 |---|---|---|
-| `inner_train` | current outer train pool 안의 training partition | preprocessing fit, model fit, class weight, sampler |
-| `inner_validation` | current outer train pool 안의 validation partition | model choice, hyperparameter, early stopping, threshold, calibration selection |
-| `outer_test` | current outer fold의 final evaluation partition | final evaluation only |
+| `inner_train` | 현재 outer train pool 안의 학습 partition | preprocessing fit, model fit, class weight, sampler |
+| `inner_validation` | 현재 outer train pool 안의 validation partition | model choice, hyperparameter, early stopping, threshold, calibration selection |
+| `outer_test` | 현재 outer fold의 최종 평가 partition | 최종 평가 전용 |
 
 `outer_test`는 model choice, hyperparameter search, early stopping, threshold selection, calibration fitting, preprocessing fitting에 사용할 수 없다.
 
 핵심 용어는 다음과 같다.
 
-| term | meaning |
+| 용어 | 의미 |
 |---|---|
 | `official_train_pool` | ISIC2024 `train-metadata.csv` 전체 |
 | `cv_test_fold` | outer fold id이며 `outer_test`와 같은 의미 |
@@ -136,9 +136,9 @@ Split role은 세 값만 허용한다.
 | `inner_validation` | selection 전용 partition |
 | `outer_test` | 최종 평가 전용 partition |
 
-## 5. Reproduction Steps
+## 5. 재현 절차
 
-### 5.1 Export Strict Inputs And Splits
+### 5.1 Strict input과 split 생성
 
 Strict input, train-only `iddx_full` sidecar, nested split artifact를 생성한다.
 
@@ -169,9 +169,9 @@ split_role values limited to inner_train, inner_validation, outer_test
 fold distribution and malignant count recorded
 ```
 
-### 5.2 Run Export Audit Notebook
+### 5.2 Export audit 노트북 실행
 
-아래 노트북을 실행해서 generated artifacts를 검토한다.
+아래 노트북을 실행해서 생성된 artifact를 검토한다.
 
 ```text
 notebooks/isic_2024/isic2024_strict_input_export_audit_20260514.ipynb
@@ -179,11 +179,11 @@ notebooks/isic_2024/isic2024_strict_input_export_audit_20260514.ipynb
 
 이 단계는 paper-facing baseline 실행 전 protocol sanity check로 취급한다.
 
-### 5.3 Run Baseline Suites With One Command
+### 5.3 한 명령으로 baseline suite 실행
 
 구현된 baseline family를 한 번에 시험하려면 `run_baseline_suite`를 사용한다. 기본 실행 대상은 현재 구현된 `tabular_baselines`와 `image_baselines`다.
 
-Command preview:
+명령 미리보기:
 
 ```bash
 conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_baseline_suite \
@@ -191,7 +191,7 @@ conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python
   --dry-run
 ```
 
-Suite preflight summary:
+Suite preflight 요약:
 
 ```bash
 conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_baseline_suite \
@@ -199,7 +199,7 @@ conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python
   --preflight-only
 ```
 
-Quick smoke run:
+빠른 smoke run:
 
 ```bash
 conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_baseline_suite \
@@ -207,7 +207,7 @@ conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python
   --devices 0
 ```
 
-Full suite run:
+전체 suite 실행:
 
 ```bash
 conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_baseline_suite \
@@ -226,7 +226,7 @@ image_baselines   -> experiments/configs/suites/image_baselines.json
 
 현재 wrapper는 각 suite config의 dataset spec에 기록된 fold selection을 따른다. 논문용 전체 nested fold tabular 결과가 필요하면 아래 tabular family 명령의 `--all-folds` 흐름을 사용한다.
 
-### 5.4 Run Tabular Baseline
+### 5.4 Tabular baseline 실행
 
 Preflight로 selected fold의 split, feature set, leakage guard를 먼저 확인한다.
 
@@ -277,7 +277,7 @@ ft_transformer_external
 
 각 실행은 `inner_train`으로 trial을 학습하고, `inner_validation`으로 best hyperparameter와 threshold를 선택한 뒤, 같은 `inner_train`으로 best 설정을 다시 학습하고 `outer_test`를 평가한다.
 
-### 5.5 Summarize Nested CV Results
+### 5.5 Nested CV 결과 요약
 
 현재 nested summary는 `summarize_nested_cv_results`로 수행한다. 이 도구는 20개 실행의 `summary.json`을 읽고 validation metric 기준으로 outer fold별 대표 실행을 골라 validation-selected nested summary를 만든다.
 
@@ -295,19 +295,19 @@ experiments/tables/tabular_baselines/<run_group_id>/nested_cv/
 
 생성되는 Git-friendly 산출물은 다음과 같다.
 
-| file | role |
+| 파일 | 역할 |
 |---|---|
-| `nested_cv_all_candidates.csv` | all candidate `(outer_fold, inner_fold, model)` summaries |
-| `nested_cv_outer_selection.csv` | validation-selected representative run per outer fold |
-| `nested_cv_metric_summary.csv` | mean/std/min/max for selected outer-fold test metrics |
-| `nested_cv_summary.md` | short human-readable summary |
+| `nested_cv_all_candidates.csv` | 모든 후보 `(outer_fold, inner_fold, model)` 요약 |
+| `nested_cv_outer_selection.csv` | outer fold별 validation-selected 대표 실행 |
+| `nested_cv_metric_summary.csv` | 선택된 outer fold test metric의 mean/std/min/max |
+| `nested_cv_summary.md` | 사람이 읽기 쉬운 짧은 요약 |
 | `nested_cv_summary.json` | machine-readable manifest |
 
 Outer test metric이 높은 run을 골라 대표 실행으로 선택하면 paper-valid selection이 아니다. 대표 실행은 validation metric 기준으로만 선택한다.
 
 Full `cv_train` refit orchestration은 아직 없다. Final paper model 확정 후 별도 단계로 추가해야 한다.
 
-### 5.6 Run Image Baseline
+### 5.6 Image baseline 실행
 
 Image runner도 tabular runner와 같은 nested split artifact를 읽어야 한다. Image manifest는 `isic_id`로 split artifact에 join된다.
 
@@ -333,7 +333,7 @@ conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python
   --inner-fold 0
 ```
 
-### 5.7 Run Multimodal Baseline
+### 5.7 Multimodal baseline 실행
 
 현재 multimodal runner는 scaffold 상태다. 구현 시에도 같은 nested split artifact를 읽고, inference input은 image + ordinary tabular metadata만 사용해야 한다.
 
@@ -344,7 +344,7 @@ conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python
   --inner-fold 0
 ```
 
-## 6. Required Verification
+## 6. 필수 검증
 
 Split 생성 직후:
 
@@ -352,13 +352,13 @@ Split 생성 직후:
 conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m pytest tests/test_strict_input_export.py
 ```
 
-Tabular protocol:
+Tabular 프로토콜:
 
 ```bash
 conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m pytest tests/test_tabular_baseline_protocol.py
 ```
 
-전체 관련 smoke verification:
+전체 관련 smoke 검증:
 
 ```bash
 conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m pytest \
@@ -367,37 +367,37 @@ conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python
   tests/test_experiment_operations.py
 ```
 
-## 7. Audit Points
+## 7. 감사 항목
 
-Split generation outer audit:
+Split 생성 outer 감사:
 
 ```text
 export_strict_input_dataset.py records outer balance score and role distribution after outer 5-fold assignment.
 ```
 
-Split generation inner audit:
+Split 생성 inner 감사:
 
 ```text
 For each outer fold, export_strict_input_dataset.py builds inner 4-fold assignments inside cv_train and records inner balance score plus overlap audit.
 ```
 
-Runner preflight audit:
+Runner preflight 감사:
 
 ```text
 Tabular/Image/Multimodal runners must read the same nested split artifact and verify patient overlap for the selected (outer_fold, inner_fold).
 ```
 
-Result summary audit:
+결과 summary 감사:
 
 ```text
 Each result summary must record split_protocol, outer_fold, inner_fold, threshold_source, patient_overlap_audit, and triple_balance_audit.
 ```
 
-## 8. Privileged Signal Rule
+## 8. Privileged signal 규칙
 
 `iddx_full_train_only` is candidate-only train-side signal.
 
-Allowed:
+허용:
 
 ```text
 training-only auxiliary target
@@ -406,7 +406,7 @@ training-only representation alignment signal
 analysis-only interpretability evidence
 ```
 
-Disallowed:
+금지:
 
 ```text
 ordinary tabular input
@@ -415,13 +415,13 @@ threshold selection input
 full-data text vectorizer input
 ```
 
-Paper-facing default inference input is always:
+Paper-facing 기본 inference input은 항상 다음과 같다.
 
 ```text
 lesion image + ordinary inference-time tabular metadata
 ```
 
-## 9. Paper-Valid Checklist
+## 9. Paper-valid 체크리스트
 
 Before treating a result as paper-facing, confirm:
 

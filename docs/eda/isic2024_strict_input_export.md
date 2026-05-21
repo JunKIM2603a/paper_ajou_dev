@@ -2,7 +2,7 @@
 
 이 문서는 ISIC2024 `strict_input` feature table, train-only `iddx_full` sidecar, patient-level Triple Stratified Nested CV split artifact를 생성하고 검증하는 방법을 정리한다.
 
-## Purpose
+## 목적
 
 논문 재현의 시작점은 다음 노트북이다.
 
@@ -20,7 +20,7 @@ image + ordinary inference-time tabular metadata -> malignant probability
 
 `iddx_full`은 ordinary inference-time input이 아니다. 후보 실험에서만 train-only privileged supervision signal로 사용할 수 있으므로 strict model input table과 분리한다.
 
-## Main Files
+## 주요 파일
 
 `src/isic2024_multimodal/cli/export_strict_input_dataset.py`
 
@@ -48,7 +48,7 @@ image + ordinary inference-time tabular metadata -> malignant probability
 - dataset을 생성하지 않는다.
 - row count, patient overlap, outer/inner fold 분포, malignant count, iddx exclusion을 사람이 확인하는 보고서 역할을 한다.
 
-## Commands
+## 실행 명령
 
 프로젝트 환경에서 `ISIC2024_EXPECTED_CONDA_ENV=paper`와 `PYTHONPATH=./src`를 유지한다.
 
@@ -81,33 +81,33 @@ conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python
 conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m pytest tests/test_strict_input_export.py
 ```
 
-## Output Contracts
+## 산출물 계약
 
 `data/processed/isic2024_strict_model_input.csv`
 
-- Contains: `isic_id`, `patient_id`, `lesion_id`, `target`, 39 strict input columns.
-- Excludes: `iddx_full`, `iddx_1`-`iddx_5`, `mel_mitotic_index`, `mel_thick_mm`, `tbp_lv_dnn_lesion_confidence`, `attribution`, `copyright_license`, `image_type`.
-- Role: ordinary inference-time tabular input table.
+- 포함: `isic_id`, `patient_id`, `lesion_id`, `target`, strict input column 39개.
+- 제외: `iddx_full`, `iddx_1`-`iddx_5`, `mel_mitotic_index`, `mel_thick_mm`, `tbp_lv_dnn_lesion_confidence`, `attribution`, `copyright_license`, `image_type`.
+- 역할: ordinary inference-time tabular input table.
 
 `data/processed/isic2024_iddx_full_train_only_sidecar.csv`
 
-- Contains: `isic_id`, `patient_id`, `lesion_id`, `target`, `iddx_full_train_only`.
-- Role: train-only privileged supervision candidate sidecar.
-- This file must not be required by validation, test, or inference dataloaders.
+- 포함: `isic_id`, `patient_id`, `lesion_id`, `target`, `iddx_full_train_only`.
+- 역할: train-only privileged supervision candidate sidecar.
+- validation, test, inference dataloader가 이 파일을 요구하면 안 된다.
 
 `data/splits/isic2024_official_train_nested_5x4_seed42.csv`
 
-- Contains at minimum: `isic_id`, `patient_id`, `lesion_id`, `outer_fold`, `cv_test_fold`, `inner_fold`, `split_role`.
+- 최소 포함: `isic_id`, `patient_id`, `lesion_id`, `outer_fold`, `cv_test_fold`, `inner_fold`, `split_role`.
 - `cv_test_fold` is the same value as `outer_fold`.
 - `split_role` is one of `outer_test`, `inner_train`, `inner_validation`.
 - For a selected `(outer_fold, inner_fold)` pair, every `isic_id` has exactly one role row.
-- `outer_test` is final evaluation only.
-- `inner_validation` is for model choice, hyperparameter selection, early stopping, threshold selection, and calibration.
-- `inner_train` is the only partition used to fit preprocessing, class weights, samplers, and model parameters.
+- `outer_test`는 최종 평가 전용이다.
+- `inner_validation`은 model choice, hyperparameter selection, early stopping, threshold selection, calibration에 사용한다.
+- `inner_train`은 preprocessing, class weight, sampler, model parameter를 fit하는 유일한 partition이다.
 
-## Leakage Controls
+## 누수 방지 장치
 
-The CLI fails if critical controls fail.
+중요한 제어 조건이 실패하면 CLI도 실패한다.
 
 - `cv_train` and `outer_test` patients must be disjoint for every outer fold.
 - `inner_train`, `inner_validation`, and `outer_test` patients must be mutually disjoint for every selected nested split.
@@ -119,15 +119,15 @@ Train-only preprocessing belongs in later model training code and must be fit in
 
 The export summary may record missingness evidence for strict input features, identifiers, and excluded privileged/reference columns. This evidence is descriptive only. The export CLI must not impute missing values, because imputation parameters must be learned separately inside each training fold.
 
-## Current Seed 42 Evidence
+## Seed 42 현재 근거
 
-The generated summary file records the export evidence:
+생성된 summary 파일은 export 근거를 기록한다.
 
 ```text
 experiments/evidence/validation_protocol/isic2024_strict_input_export_summary_seed42.json
 ```
 
-For the current seed-42 export, the required checks are:
+현재 seed 42 export에서 필요한 확인 항목은 다음과 같다.
 
 ```text
 rows: 401059
@@ -144,4 +144,4 @@ iddx_full_excluded_from_strict_input: true
 diagnosis_reference_columns_excluded_from_strict_input: true
 ```
 
-Because `data/processed/**` and `data/splits/**` are ignored by Git, the generated CSVs are local artifacts. The source code, audit notebook, tests, and small summary evidence are the tracked reproducibility material.
+`data/processed/**`와 `data/splits/**`는 Git에서 제외되므로 생성된 CSV는 local artifact다. Source code, audit notebook, test, 작은 summary evidence가 Git으로 추적되는 재현 자료다.

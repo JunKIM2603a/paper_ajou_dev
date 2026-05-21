@@ -6,9 +6,9 @@
 
 | 문서 | 언제 보는가 |
 |---|---|
-| [reproducibility.md](reproducibility.md) | 새 환경에서 strict input, split, baseline을 재현할 때 |
+| [reproducibility.md](reproducibility.md) | 새 환경에서 strict input, split, baseline 실행을 재현할 때 |
 | [eda/isic2024_strict_input_export.md](eda/isic2024_strict_input_export.md) | strict input, `iddx_full` sidecar, nested split export 계약을 확인할 때 |
-| [eda/isic2024_tabular_baselines.md](eda/isic2024_tabular_baselines.md) | tabular baseline, missing value policy, GPU/CPU 실행, nested CV summary를 확인할 때 |
+| [eda/isic2024_tabular_baselines.md](eda/isic2024_tabular_baselines.md) | tabular baseline, 결측치 정책, GPU/CPU 실행, nested CV summary를 확인할 때 |
 | [plan/2026-05-14_after_5th_meeting/isic2024_strict_input_data_protocol_presentation_20260514.md](plan/2026-05-14_after_5th_meeting/isic2024_strict_input_data_protocol_presentation_20260514.md) | strict input 데이터 처리 내용을 발표용으로 설명할 때 |
 | [weekly_report/2026-05-14/](weekly_report/2026-05-14/) | 관련 연구와 진행 메모를 확인할 때 |
 

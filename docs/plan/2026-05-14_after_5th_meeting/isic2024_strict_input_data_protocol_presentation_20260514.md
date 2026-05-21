@@ -42,7 +42,7 @@ image + ordinary inference-time tabular metadata -> malignant probability
 
 `iddx_full`은 baseline 입력이 아니다. 필요한 경우에도 train-only privileged supervision candidate sidecar로만 분리해서 관리한다.
 
-## 3. Split Protocol
+## 3. 분할 프로토콜
 
 기본 split은 patient-level Triple Stratified Nested CV다.
 
@@ -83,7 +83,7 @@ patient별 전체 row 수를 5개 구간으로 나눈다. ISIC2024는 patient마
 
 ```text
 triple_stratum = has_malignant | positive_row_bin | sample_count_bin
-example: 1|pos=one|size=4
+예시: 1|pos=one|size=4
 ```
 
 3. 같은 `triple_stratum`에 속한 patient들을 seed 42로 섞는다.
@@ -107,7 +107,7 @@ example: 1|pos=one|size=4
 
 Outer 5-fold의 `outer_test` 분포는 아래처럼 거의 같은 row 수와 positive 비율을 유지한다.
 
-| outer fold | patients | rows | positive rows | positive rate (%) | malignant patients | sample bins | triple strata |
+| outer fold | patient 수 | row 수 | positive row 수 | positive 비율 (%) | malignant patient 수 | sample bin 수 | triple strata 수 |
 |---:|---:|---:|---:|---:|---:|---:|---:|
 | 0 | 214 | 80,212 | 78 | 0.09724 | 52 | 5 | 14 |
 | 1 | 212 | 80,212 | 78 | 0.09724 | 52 | 5 | 14 |
@@ -257,7 +257,7 @@ Feature type별 처리는 다음처럼 고정한다.
 | outer folds | 5 |
 | inner folds | 4 |
 
-## 5. Baseline으로 넘기는 산출물
+## 5. Baseline runner로 넘기는 산출물
 
 baseline runner가 읽어야 할 산출물은 아래와 같다.
 
@@ -265,7 +265,7 @@ baseline runner가 읽어야 할 산출물은 아래와 같다.
 |---|---|
 | `data/processed/isic2024_strict_model_input.csv` | ordinary metadata baseline input |
 | `data/processed/isic2024_iddx_full_train_only_sidecar.csv` | candidate-only train-side signal |
-| `data/splits/isic2024_official_train_nested_5x4_seed42.csv` | shared nested CV split artifact |
+| `data/splits/isic2024_official_train_nested_5x4_seed42.csv` | 공유 nested CV split artifact |
 | `experiments/evidence/validation_protocol/isic2024_strict_input_export_summary_seed42.json` | split/input audit evidence |
 
 따라서 이후 baseline 시험은 모두 같은 split artifact와 같은 strict input 계약을 사용해야 한다.
