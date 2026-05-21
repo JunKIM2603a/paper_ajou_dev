@@ -6,7 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from isic2024_multimodal.cli.run_image_baseline import patient_balanced_sample_weights, select_trial_score
+from isic2024_multimodal.cli.run_image_baseline import (
+    _cleanup_torch_state,
+    patient_balanced_sample_weights,
+    select_trial_score,
+)
 from isic2024_multimodal.cli.run_all_image_models import build_command as build_image_command
 from isic2024_multimodal.cli.run_baseline_suite import build_suite_commands
 from isic2024_multimodal.cli.image_baseline_status import (
@@ -535,6 +539,21 @@ def test_run_all_image_models_cpu_policy_passes_cpu_device(tmp_path) -> None:
 
     assert command[command.index("--device") + 1] == "cpu"
     assert command[command.index("--batch-size-override") + 1] == "8"
+
+
+def test_cuda_cleanup_warning_does_not_raise(monkeypatch, capsys) -> None:
+    import torch
+
+    def fail_cleanup() -> None:
+        raise RuntimeError("simulated cleanup failure")
+
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "empty_cache", fail_cleanup)
+    monkeypatch.setattr(torch.cuda, "ipc_collect", lambda: None, raising=False)
+
+    _cleanup_torch_state("cuda")
+
+    assert "cuda cleanup warning: torch.cuda.empty_cache failed" in capsys.readouterr().out
 
 
 def test_image_status_classifies_not_started_and_checkpoint_missing(tmp_path) -> None:

@@ -921,9 +921,17 @@ def _cleanup_torch_state(device: str) -> None:
     gc.collect()
     import torch
 
-    if device.startswith("cuda") and torch.cuda.is_available():
-        torch.cuda.empty_cache()
-        torch.cuda.ipc_collect()
+    if not device.startswith("cuda") or not torch.cuda.is_available():
+        return
+
+    for step_name, cleanup_step in (
+        ("empty_cache", torch.cuda.empty_cache),
+        ("ipc_collect", torch.cuda.ipc_collect),
+    ):
+        try:
+            cleanup_step()
+        except RuntimeError as exc:
+            _log(f"cuda cleanup warning: torch.cuda.{step_name} failed: {exc}")
 
 
 def _validate_runtime_device(device: str, *, requested_device: str | None = None) -> None:
