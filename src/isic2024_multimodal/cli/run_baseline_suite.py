@@ -51,6 +51,12 @@ def parse_args() -> argparse.Namespace:
         help="Passed through to each family runner.",
     )
     parser.add_argument("--smoke", action="store_true", help="Use smoke caps from each suite config.")
+    parser.add_argument(
+        "--batch-size-override",
+        type=int,
+        default=None,
+        help="Image-only batch size override passed through to image_baselines.",
+    )
     parser.add_argument("--preflight-only", action="store_true", help="Write each family preflight summary only.")
     parser.add_argument("--resume", action="store_true", help="Skip a family if its previous status is ok.")
     parser.add_argument("--reset-family-output", action="store_true", help="Reset each selected family output/table root.")
@@ -117,6 +123,9 @@ def build_family_command(family: str, args: argparse.Namespace) -> list[str]:
     if args.devices:
         command.append("--devices")
         command.extend(str(device) for device in args.devices)
+    batch_size_override = getattr(args, "batch_size_override", None)
+    if family == "image_baselines" and batch_size_override is not None:
+        command.extend(["--batch-size-override", str(batch_size_override)])
     for attr, flag in (
         ("smoke", "--smoke"),
         ("preflight_only", "--preflight-only"),

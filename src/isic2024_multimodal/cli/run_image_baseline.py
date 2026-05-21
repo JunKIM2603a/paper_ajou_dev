@@ -111,6 +111,12 @@ def parse_args() -> argparse.Namespace:
         help="Cap the number of test samples after the split is created.",
     )
     parser.add_argument(
+        "--batch-size-override",
+        type=int,
+        default=None,
+        help="Override dataset.batch_size without editing the model config.",
+    )
+    parser.add_argument(
         "--disable-pretrained",
         action="store_true",
         help="Disable pretrained/model hub weights for smoke testing or offline runs.",
@@ -170,6 +176,11 @@ def main() -> None:
     if args.epochs_override is not None:
         config.setdefault("search_space", {})
         config["search_space"]["epochs"] = [int(args.epochs_override)]
+    config.setdefault("dataset", {})
+    if args.batch_size_override is not None:
+        if args.batch_size_override <= 0:
+            raise ValueError("--batch-size-override must be a positive integer.")
+        config["dataset"]["batch_size"] = int(args.batch_size_override)
     model_name = config["model"]["display_name"]
     image_size = int(config["dataset"].get("image_size", 224))
     batch_size = int(config["dataset"].get("batch_size", 16))
@@ -180,7 +191,6 @@ def main() -> None:
     normalize_mean = preprocessing_contract["normalize_mean"]
     normalize_std = preprocessing_contract["normalize_std"]
     seed = int(args.seed if args.seed is not None else config["dataset"].get("seed", DEFAULT_SEED))
-    config.setdefault("dataset", {})
     config["dataset"]["seed"] = seed
     set_global_seed(seed)
     _log(
@@ -247,6 +257,8 @@ def main() -> None:
                     "holdout_split_csv": str(Path(args.holdout_split_csv).resolve()),
                     "cv_split_csv": str(Path(args.cv_split_csv).resolve()),
                     "cv_fold": args.cv_fold,
+                    "batch_size": batch_size,
+                    "batch_size_override": args.batch_size_override,
                     "split_rows": {name: len(items) for name, items in splits.items()},
                     "patient_overlap_audit": split_protocol_audit["patient_overlap_audit"],
                     "triple_balance_audit": split_protocol_audit["triple_balance_audit"],
@@ -379,6 +391,7 @@ def main() -> None:
                 "test_ratio": test_ratio,
                 "seed": seed,
                 "disable_pretrained": args.disable_pretrained,
+                "batch_size_override": args.batch_size_override,
                 "max_trials": args.max_trials,
                 "trial_indices": json.dumps(args.trial_indices) if args.trial_indices is not None else None,
                 "epochs_override": args.epochs_override,

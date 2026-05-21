@@ -524,6 +524,7 @@ def test_run_all_image_models_cpu_policy_passes_cpu_device(tmp_path) -> None:
         max_train_samples=None,
         max_val_samples=None,
         max_test_samples=None,
+        batch_size_override=8,
         disable_pretrained=False,
         device_policy="cpu",
         devices=None,
@@ -533,6 +534,7 @@ def test_run_all_image_models_cpu_policy_passes_cpu_device(tmp_path) -> None:
     command = build_image_command(config, args, device=None)
 
     assert command[command.index("--device") + 1] == "cpu"
+    assert command[command.index("--batch-size-override") + 1] == "8"
 
 
 def test_image_status_classifies_not_started_and_checkpoint_missing(tmp_path) -> None:

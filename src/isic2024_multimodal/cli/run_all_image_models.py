@@ -65,6 +65,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-train-samples", type=int, default=None)
     parser.add_argument("--max-val-samples", type=int, default=None)
     parser.add_argument("--max-test-samples", type=int, default=None)
+    parser.add_argument("--batch-size-override", type=int, default=None)
     parser.add_argument("--disable-pretrained", action="store_true")
     parser.add_argument("--devices", nargs="*", type=int, default=None, help="Visible GPU indices to run in parallel.")
     parser.add_argument(
@@ -278,6 +279,8 @@ def build_command(config_path: Path, args: argparse.Namespace, *, device: int | 
         command.extend(["--max-val-samples", str(args.max_val_samples)])
     if args.max_test_samples is not None:
         command.extend(["--max-test-samples", str(args.max_test_samples)])
+    if getattr(args, "batch_size_override", None) is not None:
+        command.extend(["--batch-size-override", str(args.batch_size_override)])
     if args.disable_pretrained:
         command.append("--disable-pretrained")
     return command

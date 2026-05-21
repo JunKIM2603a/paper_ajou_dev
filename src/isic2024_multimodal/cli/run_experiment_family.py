@@ -48,6 +48,7 @@ def parse_args() -> argparse.Namespace:
         help="Device policy for family runners. auto prefers CUDA and falls back to CPU; cpu forces CPU.",
     )
     parser.add_argument("--smoke", action="store_true")
+    parser.add_argument("--batch-size-override", type=int, default=None)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--preflight-only", action="store_true")
     parser.add_argument("--reset-family-output", action="store_true")
@@ -177,6 +178,7 @@ def build_run_manifest(
         "experiment_name": suite.get("experiment_name", EXPERIMENT_FAMILIES[args.family]),
         "devices": args.devices,
         "device_policy": args.device_policy,
+        "batch_size_override": args.batch_size_override,
         "created_at": current_timestamp(),
     }
 
@@ -325,6 +327,8 @@ def build_image_command(*, suite: dict[str, Any], dataset_spec, paths: FamilyPat
     append_list(command, "--exclude-models", suite.get("exclude_models"))
     append_devices(command, args.devices)
     append_smoke_caps(command, suite=suite, args=args, prefix="samples")
+    if getattr(args, "batch_size_override", None) is not None:
+        command.extend(["--batch-size-override", str(args.batch_size_override)])
     if args.skip_reports:
         command.append("--skip-reports")
     if suite.get("disable_pretrained"):
@@ -403,6 +407,7 @@ def append_smoke_caps(command: list[str], *, suite: dict[str, Any], args: argpar
             "max_test": "--max-test-samples",
             "epochs": "--epochs-override",
             "max_trials": "--max-trials",
+            "batch_size": "--batch-size-override",
         }
     for key, flag in mapping.items():
         if key in values and values[key] is not None:
