@@ -1,0 +1,30 @@
+{
+  "model": {
+    "display_name": "EfficientNetV2-S",
+    "backend": "timm",
+    "architecture": "tf_efficientnetv2_s.in21k_ft_in1k",
+    "architecture_candidates": [
+      "tf_efficientnetv2_s.in21k_ft_in1k",
+      "tf_efficientnetv2_s",
+      "efficientnetv2_rw_s.ra2_in1k",
+      "efficientnetv2_s.ra2_in1k"
+    ],
+    "pretrained": true,
+    "checkpoint_path": null
+  },
+  "dataset": {
+    "image_size": 224,
+    "batch_size": 64,
+    "num_workers": 0,
+    "validation_ratio": 0.2,
+    "seed": 42,
+    "sampler_strategy": "patient_balanced_weighted"
+  },
+  "search_space": {
+    "epochs": [25],
+    "learning_rate": [0.0002],
+    "weight_decay": [0.0001],
+    "optimizer": ["adamw"],
+    "loss": ["weighted_bce"]
+  }
+}

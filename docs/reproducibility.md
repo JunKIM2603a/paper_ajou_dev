@@ -321,7 +321,7 @@ conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python
   --inner-fold 0
 ```
 
-위 명령은 image baseline config 전체를 같은 `(outer_fold, inner_fold)`에서 실행한다. 특정 모델만 돌리고 싶을 때만 `--models resnet50 efficientnet_b0 ...`처럼 subset을 명시한다. 현재 image orchestrator는 tabular의 `--all-folds`처럼 모든 nested fold를 자동 반복하지 않으므로, paper-facing image fold-wise 결과는 fold 조합을 명시적으로 반복해서 만든다.
+위 명령은 image baseline config 전체를 같은 `(outer_fold, inner_fold)`에서 실행한다. 특정 모델만 돌리고 싶을 때만 `--models resnet50 efficientnetv2_s ...`처럼 subset을 명시한다. 현재 image orchestrator는 tabular의 `--all-folds`처럼 모든 nested fold를 자동 반복하지 않으므로, paper-facing image fold-wise 결과는 fold 조합을 명시적으로 반복해서 만든다.
 
 단일 image model만 실행하려면 아래처럼 개별 config를 지정한다.
 

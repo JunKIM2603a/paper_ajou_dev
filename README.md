@@ -79,7 +79,14 @@ conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python
   --devices 0
 ```
 
-모델별 GPU/CPU 정책, reset, report, all-folds 실행법은 [docs/eda/isic2024_tabular_baselines.md](docs/eda/isic2024_tabular_baselines.md)에 둔다.
+Tabular baseline operating notes:
+
+- GPU/CPU: 기본은 GPU 우선 `auto`이고, CUDA 초기화가 실패하면 CPU로 fallback한다. All-model runner에서 CPU를 강제하려면 `--device-policy cpu`, 단일 runner에서 CPU를 강제하려면 `--device cpu`를 사용한다.
+- Safe reset: tabular family만 초기화할 때는 `run_experiment_family --family tabular_baselines --reset-family-output`을 사용한다. 이 경로는 raw data, split artifact, registry를 삭제하지 않는다.
+- output/table evidence: 큰 산출물은 `experiments/outputs/tabular_baselines/<run_group_id>/`, 작은 결과표는 `experiments/tables/tabular_baselines/<run_group_id>/`, selection registry는 `experiments/registry/selections/`에 둔다.
+- All-folds/nested summary: `--all-folds`는 5x4 nested split에서 20개 실행을 만들고, 아래 `summarize_nested_cv_results` 명령으로 validation-selected nested summary를 만든다.
+
+세부 모델별 backend와 protocol 설명은 [docs/eda/isic2024_tabular_baselines.md](docs/eda/isic2024_tabular_baselines.md)에 둔다.
 
 ### 4. Current Nested CV Summary
 

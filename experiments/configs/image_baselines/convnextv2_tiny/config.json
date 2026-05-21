@@ -1,0 +1,29 @@
+{
+  "model": {
+    "display_name": "ConvNeXtV2-Tiny",
+    "backend": "timm",
+    "architecture": "convnextv2_tiny.fcmae_ft_in22k_in1k",
+    "architecture_candidates": [
+      "convnextv2_tiny.fcmae_ft_in22k_in1k",
+      "convnextv2_tiny.fcmae_ft_in1k",
+      "convnextv2_tiny"
+    ],
+    "pretrained": true,
+    "checkpoint_path": null
+  },
+  "dataset": {
+    "image_size": 224,
+    "batch_size": 64,
+    "num_workers": 0,
+    "validation_ratio": 0.2,
+    "seed": 42,
+    "sampler_strategy": "patient_balanced_weighted"
+  },
+  "search_space": {
+    "epochs": [25],
+    "learning_rate": [0.0002],
+    "weight_decay": [0.0005],
+    "optimizer": ["adamw"],
+    "loss": ["weighted_bce"]
+  }
+}

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from isic2024_multimodal.cli.run_image_baseline import select_trial_score
+from isic2024_multimodal.cli.run_image_baseline import patient_balanced_sample_weights, select_trial_score
 from isic2024_multimodal.cli.run_all_image_models import build_command as build_image_command
 from isic2024_multimodal.cli.run_baseline_suite import build_suite_commands
 from isic2024_multimodal.cli.image_baseline_status import (
@@ -27,10 +27,14 @@ from isic2024_multimodal.experiments.nested_cv_summary import (
 )
 from isic2024_multimodal.experiments.registry import read_selection_registry, write_family_selection
 from isic2024_multimodal.models.image.checkpoint_preflight import preflight_image_model_config
-from isic2024_multimodal.models.image.checkpoint_downloads import download_checkpoint, infer_model_key
 from isic2024_multimodal.reporting.mlflow_report import build_filter_string
-from isic2024_multimodal.training.trainer import format_duration
-from isic2024_multimodal.training.trainer import evaluate_outputs
+from isic2024_multimodal.training.trainer import (
+    build_image_binary_loss_config,
+    evaluate_outputs,
+    format_duration,
+    positive_class_probabilities,
+    train_only_pos_weight,
+)
 
 
 def write_json(path: Path, payload: dict) -> None:
@@ -344,11 +348,11 @@ def test_locked_image_split_uses_csv_membership(tmp_path) -> None:
 
 def test_image_checkpoint_preflight_fails_for_missing_required_checkpoint(tmp_path) -> None:
     config = {
-        "display_name": "CheXzero",
-        "backend": "open_clip",
-        "model_name": "ViT-B-32",
-        "pretrained": None,
-        "checkpoint_path": "checkpoints/CheXzero/missing.pt",
+        "display_name": "ResNet50",
+        "backend": "torchvision",
+        "architecture": "resnet50",
+        "weights": None,
+        "checkpoint_path": "checkpoints/resnet50/missing.pt",
     }
 
     with pytest.raises(FileNotFoundError, match="requires local checkpoint"):
@@ -358,7 +362,7 @@ def test_image_checkpoint_preflight_fails_for_missing_required_checkpoint(tmp_pa
 def test_image_checkpoint_preflight_allows_torchvision_hub_weights(tmp_path) -> None:
     report = preflight_image_model_config(
         {
-            "display_name": "ResNet-50",
+            "display_name": "ResNet50",
             "backend": "torchvision",
             "architecture": "resnet50",
             "weights": "DEFAULT",
@@ -372,21 +376,13 @@ def test_image_checkpoint_preflight_allows_torchvision_hub_weights(tmp_path) -> 
     assert "no manual local checkpoint required" in report["notes"][0]
 
 
-def test_image_checkpoint_preflight_rejects_medclip_sam_checkpoint(tmp_path) -> None:
-    checkpoint = tmp_path / "checkpoints" / "MedCLIP" / "sam_vit_b_01ec64.pth"
-    checkpoint.parent.mkdir(parents=True)
-    import torch
-
-    torch.save({"state_dict": {"vision.weight": torch.ones(1)}}, checkpoint)
-
-    with pytest.raises(ValueError, match="SAM checkpoint"):
+def test_image_checkpoint_preflight_rejects_non_image_only_backend(tmp_path) -> None:
+    with pytest.raises(ValueError, match="Unsupported image-only backend"):
         preflight_image_model_config(
             {
-                "display_name": "MedCLIP",
-                "backend": "medclip",
-                "architecture": "vit",
-                "pretrained": False,
-                "checkpoint_path": "checkpoints/MedCLIP/sam_vit_b_01ec64.pth",
+                "display_name": "MONET",
+                "backend": "huggingface_clip",
+                "checkpoint_path": None,
             },
             repo_root=tmp_path,
         )
@@ -428,66 +424,82 @@ def test_image_trial_selection_score_never_falls_back_to_test_metrics() -> None:
 def test_image_suite_contains_requested_models_only() -> None:
     suite = json.loads(Path("experiments/configs/suites/image_baselines.json").read_text(encoding="utf-8"))
 
+    assert suite["dataset_spec"] == "experiments/configs/dataset_specs/image_preprocessed_v1.json"
     assert suite["models"] == [
-        "biomedclip",
-        "chexzero",
-        "deit_s",
-        "densenet121",
-        "dinov2_vit_s",
-        "efficientnet_b0",
-        "eyepacs",
-        "medclip",
         "resnet50",
-        "retfound",
-        "torchxrayvision",
-        "vit_b_16",
+        "efficientnetv2_s",
+        "convnextv2_tiny",
+        "eva02_s",
+        "vit_b",
+        "edgenext_s",
     ]
-    assert "ham10000" not in suite["models"]
+    assert "efficientnet_b0" not in suite["models"]
     assert "monet" not in suite["models"]
+    assert "biomedclip" not in suite["models"]
 
 
-def test_image_download_registry_skips_models_without_manual_checkpoint(tmp_path) -> None:
-    report = download_checkpoint("resnet50", repo_root=tmp_path)
+def test_selected_image_configs_are_pretrained_image_only_configs() -> None:
+    suite = json.loads(Path("experiments/configs/suites/image_baselines.json").read_text(encoding="utf-8"))
+    config_root = Path("experiments/configs/image_baselines")
+    supported_backends = {"torchvision", "timm"}
+    forbidden = {"iddx_full", "diagnosis", "diagnosis_text", "pathology_text"}
 
-    assert report["status"] == "skipped"
+    for model_key in suite["models"]:
+        config = json.loads((config_root / model_key / "config.json").read_text(encoding="utf-8"))
+        model = config["model"]
+        dataset = config["dataset"]
+        serialized = json.dumps(config)
+        assert model["backend"] in supported_backends
+        assert model.get("checkpoint_path") is None
+        assert model.get("weights") == "DEFAULT" or model.get("pretrained") is True
+        assert dataset["sampler_strategy"] == "patient_balanced_weighted"
+        assert "weighted_bce" in config["search_space"]["loss"]
+        assert not any(column in serialized for column in forbidden)
 
 
-def test_image_download_model_key_inference_for_required_checkpoints() -> None:
-    assert infer_model_key({"display_name": "CheXzero"}) == "chexzero"
-    assert infer_model_key({"display_name": "EyePACS"}) == "eyepacs"
-    assert infer_model_key({"display_name": "MedCLIP", "backend": "medclip"}) == "medclip"
-    assert infer_model_key({"display_name": "RETFound"}) == "retfound"
+def test_patient_balanced_sampler_weights_are_train_only_patient_normalized() -> None:
+    samples = [
+        types.SimpleNamespace(label=1, isic_id="A", group_id="P1", metadata={"patient_id": "P1"}),
+        types.SimpleNamespace(label=1, isic_id="B", group_id="P1", metadata={"patient_id": "P1"}),
+        types.SimpleNamespace(label=1, isic_id="C", group_id="P2", metadata={"patient_id": "P2"}),
+        types.SimpleNamespace(label=0, isic_id="D", group_id="P3", metadata={"patient_id": "P3"}),
+        types.SimpleNamespace(label=0, isic_id="E", group_id="P3", metadata={"patient_id": "P3"}),
+        types.SimpleNamespace(label=0, isic_id="F", group_id="P4", metadata={"patient_id": "P4"}),
+    ]
+
+    weights = patient_balanced_sample_weights(samples)
+
+    assert sum(weight for sample, weight in zip(samples, weights) if sample.label == 1) == pytest.approx(0.5)
+    assert sum(weight for sample, weight in zip(samples, weights) if sample.label == 0) == pytest.approx(0.5)
+    assert weights[0] + weights[1] == pytest.approx(weights[2])
+    assert weights[3] + weights[4] == pytest.approx(weights[5])
 
 
-def test_run_all_image_models_passes_auto_download_flag(tmp_path) -> None:
-    config = tmp_path / "resnet50" / "config.json"
-    config.parent.mkdir(parents=True)
-    config.write_text("{}", encoding="utf-8")
-    args = types.SimpleNamespace(
-        dataset_root="data/raw/isic_2024_challenge",
-        output_root="experiments/outputs/image_baselines",
-        tracking_uri="file:experiments/logs/mlruns",
-        experiment_name="ISIC2024-Image-Baselines",
-        run_group_id="unit_group",
-        dataset_id="image_preprocessed_v1",
-        dataset_spec="experiments/configs/dataset_specs/image_preprocessed_v1.json",
-        model_family="image_baselines",
-        holdout_split_csv="data/splits/isic2024_train_validation_test_split_seed42.csv",
-        cv_split_csv="data/splits/isic2024_train_validation_5fold_seed42.csv",
-        cv_fold=0,
-        seed=42,
-        max_trials=1,
-        epochs_override=1,
-        max_train_samples=10,
-        max_val_samples=10,
-        max_test_samples=10,
-        disable_pretrained=False,
-        auto_download_checkpoints=True,
-    )
+def test_image_binary_loss_uses_train_only_pos_weight() -> None:
+    assert train_only_pos_weight([0, 0, 0, 1]) == 3.0
 
-    command = build_image_command(config, args, device=None)
+    class TinyDataset:
+        samples = [
+            types.SimpleNamespace(label=0),
+            types.SimpleNamespace(label=0),
+            types.SimpleNamespace(label=1),
+        ]
 
-    assert "--auto-download-checkpoints" in command
+    loader = types.SimpleNamespace(dataset=TinyDataset())
+    loss_config = build_image_binary_loss_config(loader, hyperparameters={"loss": "weighted_bce"}, device="cpu")
+
+    assert loss_config["loss_name"] == "weighted_bce"
+    assert loss_config["train_positive_count"] == 1
+    assert loss_config["train_negative_count"] == 2
+    assert loss_config["pos_weight"] == 2.0
+
+
+def test_image_one_logit_probabilities_use_sigmoid() -> None:
+    import torch
+
+    probabilities = positive_class_probabilities(torch.tensor([[-2.0], [0.0], [2.0]]))
+
+    assert probabilities.tolist() == pytest.approx([0.1192029, 0.5, 0.8807970])
 
 
 def test_run_all_image_models_cpu_policy_passes_cpu_device(tmp_path) -> None:
@@ -513,7 +525,6 @@ def test_run_all_image_models_cpu_policy_passes_cpu_device(tmp_path) -> None:
         max_val_samples=None,
         max_test_samples=None,
         disable_pretrained=False,
-        auto_download_checkpoints=False,
         device_policy="cpu",
         devices=None,
         resolved_devices=[],
@@ -537,31 +548,30 @@ def test_image_status_classifies_not_started_and_checkpoint_missing(tmp_path) ->
     )
     missing_status = checkpoint_status_for_model(
         {
-            "display_name": "CheXzero",
-            "backend": "open_clip",
-            "checkpoint_path": "checkpoints/CheXzero/missing.pt",
+            "display_name": "ResNet50Custom",
+            "backend": "torchvision",
+            "architecture": "resnet50",
+            "checkpoint_path": "checkpoints/resnet50/missing.pt",
         },
         repo_root=tmp_path,
     )
 
     assert classify_model_status(hub_status, {}) == "not_started"
     assert classify_model_status(missing_status, {}) == "checkpoint_missing"
-    assert missing_status["status"] == "downloadable"
+    assert missing_status["status"] == "missing"
 
 
 def test_image_status_classifies_preflight_failed(tmp_path) -> None:
-    checkpoint = tmp_path / "checkpoints" / "MedCLIP" / "sam_vit_b_01ec64.pth"
+    checkpoint = tmp_path / "checkpoints" / "MONET" / "dummy.pt"
     checkpoint.parent.mkdir(parents=True)
     import torch
 
     torch.save({"state_dict": {"vision.weight": torch.ones(1)}}, checkpoint)
     status = checkpoint_status_for_model(
         {
-            "display_name": "MedCLIP",
-            "backend": "medclip",
-            "architecture": "vit",
-            "pretrained": False,
-            "checkpoint_path": "checkpoints/MedCLIP/sam_vit_b_01ec64.pth",
+            "display_name": "MONET",
+            "backend": "huggingface_clip",
+            "checkpoint_path": "checkpoints/MONET/dummy.pt",
         },
         repo_root=tmp_path,
     )
@@ -606,7 +616,7 @@ def test_image_status_builds_records_from_suite(tmp_path) -> None:
         suite_path,
         {
             "config_root": str(config_root),
-            "models": ["resnet50", "chexzero"],
+            "models": ["resnet50", "resnet_missing"],
         },
     )
     write_json(
@@ -622,12 +632,13 @@ def test_image_status_builds_records_from_suite(tmp_path) -> None:
         },
     )
     write_json(
-        config_root / "chexzero" / "config.json",
+        config_root / "resnet_missing" / "config.json",
         {
             "model": {
-                "display_name": "CheXzero",
-                "backend": "open_clip",
-                "checkpoint_path": "checkpoints/CheXzero/missing.pt",
+                "display_name": "ResNet50Custom",
+                "backend": "torchvision",
+                "architecture": "resnet50",
+                "checkpoint_path": "checkpoints/resnet50/missing.pt",
             }
         },
     )
@@ -637,8 +648,8 @@ def test_image_status_builds_records_from_suite(tmp_path) -> None:
 
     assert by_model["resnet50"]["status"] == "not_started"
     assert by_model["resnet50"]["checkpoint_status"] == "hub/cache"
-    assert by_model["chexzero"]["status"] == "checkpoint_missing"
-    assert by_model["chexzero"]["checkpoint_status"] == "downloadable"
+    assert by_model["resnet_missing"]["status"] == "checkpoint_missing"
+    assert by_model["resnet_missing"]["checkpoint_status"] == "missing"
 
 
 def test_eta_duration_formatting() -> None:

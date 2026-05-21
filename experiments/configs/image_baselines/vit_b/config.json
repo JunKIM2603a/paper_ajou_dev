@@ -1,23 +1,23 @@
 {
   "model": {
-    "display_name": "ResNet50",
+    "display_name": "ViT-B",
     "backend": "torchvision",
-    "architecture": "resnet50",
+    "architecture": "vit_b_16",
     "weights": "DEFAULT",
     "checkpoint_path": null
   },
   "dataset": {
     "image_size": 224,
-    "batch_size": 64,
+    "batch_size": 32,
     "num_workers": 0,
     "validation_ratio": 0.2,
     "seed": 42,
     "sampler_strategy": "patient_balanced_weighted"
   },
   "search_space": {
-    "epochs": [20],
-    "learning_rate": [0.0003],
-    "weight_decay": [0.0001],
+    "epochs": [25],
+    "learning_rate": [0.00005],
+    "weight_decay": [0.05],
     "optimizer": ["adamw"],
     "loss": ["weighted_bce"]
   }

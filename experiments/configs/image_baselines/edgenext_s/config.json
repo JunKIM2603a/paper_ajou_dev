@@ -1,0 +1,32 @@
+{
+  "model": {
+    "display_name": "EdgeNeXt-S",
+    "backend": "timm",
+    "architecture": "edgenext_small.usi_in1k",
+    "architecture_candidates": [
+      "edgenext_small.usi_in1k",
+      "edgenext_small.in1k",
+      "edgenext_small",
+      "edgenext_small_rw",
+      "edgenext_x_small.in1k",
+      "edgenext_x_small"
+    ],
+    "pretrained": true,
+    "checkpoint_path": null
+  },
+  "dataset": {
+    "image_size": 224,
+    "batch_size": 64,
+    "num_workers": 0,
+    "validation_ratio": 0.2,
+    "seed": 42,
+    "sampler_strategy": "patient_balanced_weighted"
+  },
+  "search_space": {
+    "epochs": [25],
+    "learning_rate": [0.0002],
+    "weight_decay": [0.0005],
+    "optimizer": ["adamw"],
+    "loss": ["weighted_bce"]
+  }
+}

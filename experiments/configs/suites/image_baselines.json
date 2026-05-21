@@ -4,18 +4,12 @@
   "dataset_spec": "experiments/configs/dataset_specs/image_preprocessed_v1.json",
   "config_root": "experiments/configs/image_baselines",
   "models": [
-    "biomedclip",
-    "chexzero",
-    "deit_s",
-    "densenet121",
-    "dinov2_vit_s",
-    "efficientnet_b0",
-    "eyepacs",
-    "medclip",
     "resnet50",
-    "retfound",
-    "torchxrayvision",
-    "vit_b_16"
+    "efficientnetv2_s",
+    "convnextv2_tiny",
+    "eva02_s",
+    "vit_b",
+    "edgenext_s"
   ],
   "smoke": {
     "max_trials": 1,

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
+import torch.nn.functional as F
 from torch import nn
 from torch.utils.data import DataLoader
 
@@ -15,10 +16,6 @@ from isic2024_multimodal.evaluation.metrics import (
     select_threshold_by_f1,
     thresholded_binary_classification_metrics,
 )
-from isic2024_multimodal.utils.progress import estimate_remaining_seconds
-
-
-BATCH_HEARTBEAT_SECONDS = 60.0
 
 
 def run_training(
@@ -34,14 +31,20 @@ def run_training(
     output_dir.mkdir(parents=True, exist_ok=True)
     _log(f"trial output dir: {output_dir}")
 
-    criterion = nn.CrossEntropyLoss()
     optimizer_name = hyperparameters.get("optimizer", "adamw").lower()
     learning_rate = float(hyperparameters.get("learning_rate", 1e-4))
     weight_decay = float(hyperparameters.get("weight_decay", 1e-4))
     epochs = int(hyperparameters.get("epochs", 5))
+    loss_config = build_image_binary_loss_config(
+        dataloaders["train"],
+        hyperparameters=hyperparameters,
+        device=device,
+    )
+    criterion = loss_config["criterion"]
     _log(
         "training setup: "
-        f"optimizer={optimizer_name}, lr={learning_rate}, weight_decay={weight_decay}, epochs={epochs}, device={device}"
+        f"optimizer={optimizer_name}, lr={learning_rate}, weight_decay={weight_decay}, epochs={epochs}, "
+        f"loss={loss_config['loss_name']}, pos_weight={loss_config['pos_weight']}, device={device}"
     )
     _log(
         "dataloader sizes: "
@@ -78,24 +81,11 @@ def run_training(
     for epoch in range(1, epochs + 1):
         epoch_started = time.time()
         _log(f"epoch {epoch}/{epochs}: train start")
-        train_loss = _train_one_epoch(
-            model,
-            dataloaders["train"],
-            criterion,
-            optimizer,
-            device,
-            epoch=epoch,
-            epochs=epochs,
-        )
+        train_loss = _train_one_epoch(model, dataloaders["train"], criterion, optimizer, device)
         _log(f"epoch {epoch}/{epochs}: train done, loss={train_loss:.6f}")
         scheduler.step()
         _log(f"epoch {epoch}/{epochs}: validation start")
-        val_labels, val_probabilities = collect_model_outputs(
-            model,
-            dataloaders["val"],
-            device,
-            stage_name=f"epoch {epoch}/{epochs} validation",
-        )
+        val_labels, val_probabilities = collect_model_outputs(model, dataloaders["val"], device)
         val_threshold = select_threshold_by_f1(val_labels, val_probabilities)
         val_metrics = evaluate_outputs(
             val_labels,
@@ -154,12 +144,7 @@ def run_training(
         model.load_state_dict(best_state)
 
     _log("best validation evaluation start")
-    best_val_labels, best_val_probabilities = collect_model_outputs(
-        model,
-        dataloaders["val"],
-        device,
-        stage_name="best validation",
-    )
+    best_val_labels, best_val_probabilities = collect_model_outputs(model, dataloaders["val"], device)
     selected_threshold = select_threshold_by_f1(best_val_labels, best_val_probabilities)
     best_validation_metrics = evaluate_outputs(
         best_val_labels,
@@ -170,12 +155,7 @@ def run_training(
     _log(f"selected threshold from validation_f1: {selected_threshold:.6f}")
 
     _log("test evaluation start")
-    test_labels, test_probabilities = collect_model_outputs(
-        model,
-        dataloaders["test"],
-        device,
-        stage_name="test evaluation",
-    )
+    test_labels, test_probabilities = collect_model_outputs(model, dataloaders["test"], device)
     test_metrics = evaluate_outputs(
         test_labels,
         test_probabilities,
@@ -200,6 +180,11 @@ def run_training(
         "threshold_source": "validation_f1",
         "selected_threshold": best_validation_threshold,
         "test_metrics": test_metrics,
+        "loss_config": {
+            key: value
+            for key, value in loss_config.items()
+            if key != "criterion"
+        },
         "duration_seconds": time.time() - started,
         "last_epoch_duration_seconds": history[-1].get("epoch_duration_seconds") if history else None,
         "last_estimated_remaining_seconds": history[-1].get("estimated_remaining_seconds") if history else None,
@@ -213,45 +198,27 @@ def run_training(
 
 
 # malignant 확률을 모은 뒤 validation에서 선택한 threshold로 threshold-dependent metric을 계산한다.
-def collect_model_outputs(
-    model: nn.Module,
-    dataloader: DataLoader,
-    device: str,
-    *,
-    stage_name: str = "evaluation",
-) -> tuple[list[int], list[float]]:
+def collect_model_outputs(model: nn.Module, dataloader: DataLoader, device: str) -> tuple[list[int], list[float]]:
     model.eval()
     labels: list[int] = []
     probabilities: list[float] = []
     logged_first_batch = False
-    total_batches = len(dataloader)
-    started = time.time()
-    last_heartbeat = started
 
     with torch.no_grad():
-        for batch_index, (inputs, targets) in enumerate(dataloader, start=1):
+        for inputs, targets in dataloader:
             if not logged_first_batch:
                 _log(
-                    f"{stage_name} first batch: "
+                    "evaluation first batch: "
                     f"batch_size={inputs.size(0)}, image_shape={tuple(inputs.shape)}, device={device}"
                 )
                 logged_first_batch = True
             inputs = inputs.to(device)
             targets = targets.to(device)
             logits = model(inputs)
-            probs = torch.softmax(logits, dim=1)[:, 1]
+            probs = positive_class_probabilities(logits)
 
             labels.extend(targets.cpu().tolist())
             probabilities.extend(probs.cpu().tolist())
-            now = time.time()
-            if batch_index == total_batches or now - last_heartbeat >= BATCH_HEARTBEAT_SECONDS:
-                elapsed = now - started
-                eta_seconds = estimate_remaining_seconds(elapsed, batch_index, total_batches)
-                _log(
-                    f"{stage_name}: batch {batch_index}/{total_batches} "
-                    f"elapsed={format_duration(elapsed)} eta={format_duration(eta_seconds)}"
-                )
-                last_heartbeat = now
 
     return labels, probabilities
 
@@ -278,19 +245,13 @@ def _train_one_epoch(
     criterion: nn.Module,
     optimizer: torch.optim.Optimizer,
     device: str,
-    *,
-    epoch: int,
-    epochs: int,
 ) -> float:
     model.train()
     total_loss = 0.0
     total_items = 0
     logged_first_batch = False
-    total_batches = len(dataloader)
-    started = time.time()
-    last_heartbeat = started
 
-    for batch_index, (inputs, targets) in enumerate(dataloader, start=1):
+    for inputs, targets in dataloader:
         if not logged_first_batch:
             _log(
                 "train first batch: "
@@ -302,26 +263,111 @@ def _train_one_epoch(
 
         optimizer.zero_grad(set_to_none=True)
         logits = model(inputs)
-        loss = criterion(logits, targets)
+        loss = criterion(binary_logits(logits), targets.float())
         loss.backward()
         optimizer.step()
 
         batch_size = inputs.size(0)
         total_loss += loss.item() * batch_size
         total_items += batch_size
-        now = time.time()
-        if batch_index == total_batches or now - last_heartbeat >= BATCH_HEARTBEAT_SECONDS:
-            elapsed = now - started
-            eta_seconds = estimate_remaining_seconds(elapsed, batch_index, total_batches)
-            average_loss = total_loss / max(total_items, 1)
-            _log(
-                f"epoch {epoch}/{epochs}: batch {batch_index}/{total_batches} "
-                f"loss={average_loss:.6f} elapsed={format_duration(elapsed)} "
-                f"eta={format_duration(eta_seconds)}"
-            )
-            last_heartbeat = now
 
     return total_loss / max(total_items, 1)
+
+
+def build_image_binary_loss_config(
+    train_dataloader: DataLoader,
+    *,
+    hyperparameters: dict[str, Any],
+    device: str,
+) -> dict[str, Any]:
+    loss_name = str(hyperparameters.get("loss", "weighted_bce")).lower()
+    labels = extract_binary_labels(train_dataloader.dataset)
+    pos_weight_value = None
+    pos_weight = None
+    if loss_name in {"weighted_bce", "focal_bce"}:
+        pos_weight_value = train_only_pos_weight(labels)
+        pos_weight = torch.tensor(pos_weight_value, dtype=torch.float32, device=device)
+
+    if loss_name in {"bce", "weighted_bce"}:
+        criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    elif loss_name == "focal_bce":
+        criterion = FocalBCEWithLogitsLoss(
+            gamma=float(hyperparameters.get("focal_gamma", 2.0)),
+            pos_weight=pos_weight,
+        )
+    else:
+        raise ValueError(f"Unsupported image binary loss: {loss_name}")
+
+    positives = sum(1 for label in labels if int(label) == 1)
+    negatives = len(labels) - positives
+    return {
+        "criterion": criterion,
+        "loss_name": loss_name,
+        "train_sample_count": len(labels),
+        "train_positive_count": positives,
+        "train_negative_count": negatives,
+        "pos_weight": pos_weight_value,
+        "focal_gamma": float(hyperparameters.get("focal_gamma", 2.0)) if loss_name == "focal_bce" else None,
+    }
+
+
+def extract_binary_labels(dataset: Any) -> list[int]:
+    samples = getattr(dataset, "samples", None)
+    if samples is not None:
+        return [int(getattr(sample, "label", 0)) for sample in samples]
+    labels = getattr(dataset, "labels", None)
+    if labels is not None:
+        return [int(label) for label in labels]
+    targets = getattr(dataset, "targets", None)
+    if targets is not None:
+        return [int(target) for target in targets]
+    raise ValueError("Cannot infer train labels for image binary loss from the train dataset.")
+
+
+def train_only_pos_weight(labels: list[int]) -> float:
+    positives = sum(1 for label in labels if int(label) == 1)
+    negatives = len(labels) - positives
+    if positives <= 0:
+        return 1.0
+    return float(negatives) / float(positives)
+
+
+class FocalBCEWithLogitsLoss(nn.Module):
+    def __init__(self, *, gamma: float = 2.0, pos_weight: torch.Tensor | None = None) -> None:
+        super().__init__()
+        self.gamma = float(gamma)
+        if pos_weight is not None:
+            self.register_buffer("pos_weight", pos_weight.detach().clone())
+        else:
+            self.pos_weight = None
+
+    def forward(self, logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        bce = F.binary_cross_entropy_with_logits(
+            logits,
+            targets,
+            pos_weight=self.pos_weight,
+            reduction="none",
+        )
+        probabilities = torch.sigmoid(logits)
+        targets = targets.to(dtype=logits.dtype)
+        pt = probabilities * targets + (1.0 - probabilities) * (1.0 - targets)
+        focal_weight = (1.0 - pt).pow(self.gamma)
+        return (focal_weight * bce).mean()
+
+
+def binary_logits(logits: torch.Tensor) -> torch.Tensor:
+    if logits.ndim == 1:
+        return logits
+    if logits.ndim == 2 and logits.shape[1] == 1:
+        return logits[:, 0]
+    raise RuntimeError(
+        "Image-only trainer expects one-logit binary model outputs with shape [batch] or [batch, 1]; "
+        f"got {tuple(logits.shape)}"
+    )
+
+
+def positive_class_probabilities(logits: torch.Tensor) -> torch.Tensor:
+    return torch.sigmoid(binary_logits(logits))
 
 
 def _write_history_csv(history: list[dict[str, Any]], path: Path) -> None:

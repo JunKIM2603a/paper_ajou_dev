@@ -1,0 +1,32 @@
+{
+  "model": {
+    "display_name": "EVA-02-S",
+    "backend": "timm",
+    "architecture": "eva02_small_patch14_224.mim_in22k",
+    "architecture_candidates": [
+      "eva02_small_patch14_224.mim_in22k_ft_in1k",
+      "eva02_small_patch14_224.mim_in22k",
+      "eva02_small_patch14_224",
+      "eva02_tiny_patch14_224.mim_in22k_ft_in1k",
+      "eva02_tiny_patch14_224.mim_in22k",
+      "eva02_tiny_patch14_224"
+    ],
+    "pretrained": true,
+    "checkpoint_path": null
+  },
+  "dataset": {
+    "image_size": 224,
+    "batch_size": 32,
+    "num_workers": 0,
+    "validation_ratio": 0.2,
+    "seed": 42,
+    "sampler_strategy": "patient_balanced_weighted"
+  },
+  "search_space": {
+    "epochs": [25],
+    "learning_rate": [0.00005],
+    "weight_decay": [0.05],
+    "optimizer": ["adamw"],
+    "loss": ["weighted_bce"]
+  }
+}

@@ -1,90 +1,81 @@
-# ISIC2024 Minimal Baseline Plan
+# ISIC2024 Current Baseline Operating Plan
 
-작성일: 2026-05-14
+작성일: 2026-05-21
 
 ## 1. 목적
 
-이 문서는 5차 미팅에서 논의한 baseline 범위를 다시 줄여서, 가장 simple 한 시작점을 고정한다.
-
-핵심 방향은 다음과 같다.
-
 ```text
-많은 모델 비교가 아니라, protocol 검증 + 최소 비교표 확보부터 시작한다.
+strict ordinary metadata와 lesion image baseline을 같은 patient-level nested CV protocol 아래에서 안정화한다.
 ```
 
-따라서 v0 baseline은 성능 최고 모델 탐색이 아니다. v0의 목적은 다음 질문에 답하는 것이다.
+현재 paper-facing baseline의 목적은 다음 질문에 답하는 것이다.
 
 ```text
-1. patient-level split과 metric 계산이 믿을 수 있는가?
-2. strict metadata만으로 최소 성능이 어느 정도인가?
-3. image만으로 최소 성능이 어느 정도인가?
-4. metadata + image의 가장 단순한 결합이 single-modal보다 나아지는가?
+1. strict input export, split artifact, metric 계산이 코드와 문서에서 일치하는가?
+2. strict_main_input tabular metadata만으로 어느 정도 성능이 나오는가?
+3. lesion image만으로 어느 정도 성능이 나오는가?
+4. image + tabular multimodal baseline을 구현하기 전에 필요한 shared protocol evidence가 준비되었는가?
 ```
 
-## 2. v0 Minimal Baseline 범위
+## 2. 현재 baseline 범위
 
-v0에 포함하는 것은 아래 5개만이다.
+현재 구현 기준의 baseline 범위는 아래와 같다.
 
-| 구분 | 이름 | 역할 | paper-facing 해석 |
-|---|---|---|---|
-| sanity | `metadata_dummy` | metadata split/metric 확인 | 성능 모델 아님 |
-| metadata | `metadata_logreg_balanced` | 첫 metadata actual baseline | v0 metadata 대표 |
-| sanity | `image_dummy` | image split/loader/metric 확인 | 성능 모델 아님 |
-| image | `image_resnet50_finetune` | 첫 image actual baseline | v0 image 대표 |
-| multimodal | `multimodal_concat` | strict metadata feature vector와 ResNet-50 image embedding concat | v0 fusion 대표 |
+| 구분 | 현재 상태 | paper-facing 해석 |
+|---|---|---|
+| strict export | `export_strict_input_dataset.py` | ordinary inference-time input 계약 생성 |
+| split | patient-level Triple Stratified Nested CV, 5 outer x 4 inner | 기본 paper protocol |
+| tabular current suite | `xgboost`, `catboost`, `lightgbm`, `ft_transformer`, `ft_transformer_external` | 현재 tabular baseline suite |
+| tabular supported standalone | `logistic_regression`, `svm`, `mlp` | 단일 runner에서 지원하지만 현재 suite에는 포함하지 않음 |
+| image current suite | `resnet50`, `efficientnetv2_s`, `convnextv2_tiny`, `eva02_s`, `vit_b`, `edgenext_s` | 현재 image baseline suite |
+| multimodal | `run_multimodal_experiment.py` scaffold | 아직 훈련 미구현, paper-facing 실행 대상 아님 |
 
-v0에서 말하는 가장 simple 한 것의 범위는 다음과 같다.
+현재 baseline에서 말하는 입력과 protocol은 다음과 같다.
 
 ```text
 input:
-  metadata: strict ordinary metadata only
+  tabular: strict_main_input ordinary metadata only
   image: lesion image only
-  multimodal: strict metadata features + ResNet-50 image embedding
+  multimodal future: lesion image + strict_main_input ordinary metadata
 
 split:
   patient-level Triple Stratified Nested CV
-  cv_test_fold == outer_test
-  outer test fold를 제외한 cv_train 내부에서 inner_train / inner_validation 사용
-  outer_test는 final reporting 전용
-
-model:
-  metadata: LogisticRegression(class_weight="balanced")
-  image: ImageNet pretrained ResNet-50 fine-tuning
-  fusion: concat feature vector + shallow LogisticRegression(class_weight="balanced")
+  outer_fold: final reporting fold
+  inner_fold: model selection and threshold selection fold
+  outer_test: final evaluation only
 
 threshold:
-  validation probabilities에서만 선택
+  inner validation probabilities에서만 선택
+  threshold_source = inner_validation_f1
 
 metrics:
-  pAUC@TPR>=0.80
+  pAUC above TPR 0.80
   AUC
+  Average Precision / PR-AUC
   F1
   precision
   recall
   balanced accuracy
-  Average Precision / PR-AUC
+  false positive count
+  false negative count
 ```
 
-## 3. v0에서 제외하는 것
+## 3. 현재 suite에서 제외되는 것
 
-아래 항목들은 baseline 후보로 유효하지만, v0에는 넣지 않는다.
+아래 항목은 현재 코드 기준의 기본 baseline suite가 아니다.
 
-| 항목 | 제외 이유 | 이후 단계 |
-|---|---|---|
-| `HistGradientBoostingClassifier` | metadata v0보다 한 단계 강한 sklearn boost baseline | v1 metadata 확장 |
-| XGBoost / LightGBM / CatBoost | 강한 GBDT baseline이지만 simple 시작점은 아님 | v1/v2 tabular strong baseline |
-| DenseNet / EfficientNet / ConvNeXt / ViT / DINOv2 | 여러 image backbone 비교가 되어 v0가 복잡해짐 | v1 image backbone 확장 |
-| Resize + Flatten + PCA + LogisticRegression | image signal 모델이라기보다 smoke check에 가까움 | 필요 시 debug-only |
-| frozen ResNet embedding + LogisticRegression | 좋은 중간 단계지만 v0 모델 수를 늘림 | v1 image/embedding baseline |
-| score stacking LogisticRegression | probability-level trainable fusion이며 v0 concat과 질문이 다름 | v1 score-level fusion |
-| multiple embedding concat variants | 여러 image embedding/backbone 비교가 되어 v0가 복잡해짐 | v2 multimodal fusion |
-| deep concat / gated fusion / attention fusion | 새로운 multimodal architecture에 해당 | v2/v3 research model |
-| imbalance ablation | weighted loss, sampler, focal loss 비교가 필요함 | baseline 안정화 이후 |
-| LUPI / `iddx_full` auxiliary | candidate-only 연구 아이디어이며 기본 project identity가 아님 | baselines 이후 research candidate |
+| 항목 | 현재 처리 |
+|---|---|
+| dummy classifier/image sanity baseline | 현재 baseline suite에 포함하지 않음 |
+| legacy sklearn tree/boost 후보 | 현재 tabular suite는 GBDT 3종과 FT-Transformer 계열로 고정 |
+| 과거 image backbone 후보 목록 | 현재 image suite의 6개 모델로 대체 |
+| 직접 concat fusion 계획 | 현재 runner가 미구현이므로 후속 구현 과제로 분리 |
+| relaxed/oracle feature set | ordinary inference-time baseline이 아니므로 paper-facing 기본 suite에서 제외 |
+| LUPI / `iddx_full` auxiliary | baselines 안정화 이후 candidate-only 연구로 분리 |
 
 ## 4. 데이터 처리 원칙
 
-v0는 기존 strict input export 계약을 그대로 따른다.
+현재 baseline은 strict input export 계약을 따른다.
 
 참조 문서:
 
@@ -97,173 +88,159 @@ docs/eda/isic2024_strict_input_export.md
 ```text
 raw train metadata/image
   -> strict input export
-  -> patient-level Triple Stratified Nested CV split
-  -> metadata-only baseline
-  -> image-only baseline
-  -> image embedding export
-  -> metadata feature + image embedding join by isic_id
-  -> concat fusion
+  -> iddx_full train-only sidecar export
+  -> patient-level Triple Stratified Nested CV split artifact
+  -> tabular current suite
+  -> nested CV summary
+  -> image current suite
+  -> multimodal implementation after unimodal baselines are stable
 ```
 
 원칙:
 
 1. Raw data는 `data/raw/isic_2024_challenge/`에서 읽기만 한다.
 2. Strict input table은 ordinary inference-time metadata만 포함한다.
-3. `iddx_full`, diagnosis text, pathology-derived text는 v0 input에 포함하지 않는다.
-4. `iddx_full_train_only` sidecar는 v0에서 사용하지 않는다.
-5. Metadata 결측치 처리, scaling, encoding은 fold train에서만 fit한다.
+3. `iddx_full`, diagnosis text, pathology-derived text는 ordinary model input에 포함하지 않는다.
+4. `iddx_full_train_only` sidecar는 기본 baseline에서 사용하지 않는다.
+5. 결측치 처리, scaling, encoding, class weight, sampler는 fold train에서만 fit 또는 산출한다.
 6. Validation/test에는 train-fitted transform만 적용한다.
-7. Image baseline은 metadata baseline과 같은 nested split CSV를 사용한다.
-8. Fusion은 `isic_id` 기준으로 strict metadata feature와 image embedding을 join한다.
-9. `outer_test`는 model choice, threshold selection, calibration, feature selection에 사용하지 않는다.
+7. Tabular와 image baseline은 같은 nested split artifact를 공유한다.
+8. Threshold와 model selection은 inner validation에서만 수행한다.
+9. `outer_test`는 final metric reporting 전용이며 tuning에 사용하지 않는다.
 
-## 5. v0 모델 정의
+## 5. 현재 구현 기준 모델 정의
 
-### 5.1 `metadata_dummy`
+### 5.1 Tabular current suite
 
-목적:
-
-```text
-metadata pipeline, patient split, metric implementation sanity check
-```
-
-모델:
+현재 suite config:
 
 ```text
-sklearn.dummy.DummyClassifier
+experiments/configs/suites/tabular_baselines.json
 ```
 
-해석:
+Dataset spec:
 
 ```text
-성능 비교 모델이 아니라 "아무것도 안 하는 기준선"이다.
+experiments/configs/dataset_specs/strict_main_input_v1.json
 ```
 
-### 5.2 `metadata_logreg_balanced`
-
-목적:
-
-```text
-strict metadata-only의 첫 actual baseline
-```
-
-입력:
+Feature set:
 
 ```text
 strict_main_input
 ```
 
-모델:
+현재 suite 모델:
 
 ```text
-LogisticRegression(class_weight="balanced")
+xgboost
+catboost
+lightgbm
+ft_transformer
+ft_transformer_external
 ```
 
-전처리:
+단일 tabular runner에서 추가로 지원하지만 current suite에는 포함하지 않는 모델:
 
 ```text
-numeric:
-  train median imputation
-  StandardScaler
-
-categorical:
-  constant "__missing__" imputation
-  OneHotEncoder(handle_unknown="ignore")
+logistic_regression
+svm
+mlp
 ```
 
 주의:
 
 ```text
-imputer, scaler, encoder는 fold train에서만 fit한다.
+ordinary tabular input에는 iddx_full, diagnosis/pathology text, oracle/target-derived feature가 들어가면 안 된다.
+tabular preprocessing은 fold train에서만 fit한다.
 ```
 
-### 5.3 `image_dummy`
+### 5.2 Image current suite
 
-목적:
+현재 suite config:
 
 ```text
-image manifest, image split, loader, metric sanity check
+experiments/configs/suites/image_baselines.json
 ```
 
-해석:
+Dataset spec:
 
 ```text
-성능 비교 모델이 아니라 image pipeline이 정상인지 확인하는 기준선이다.
+experiments/configs/dataset_specs/image_preprocessed_v1.json
 ```
 
-### 5.4 `image_resnet50_finetune`
-
-목적:
+현재 suite 모델:
 
 ```text
-image-only의 첫 actual baseline
+resnet50
+efficientnetv2_s
+convnextv2_tiny
+eva02_s
+vit_b
+edgenext_s
 ```
 
-입력:
+기본 config 위치:
 
 ```text
-lesion image only
+experiments/configs/image_baselines/<model_name>/config.json
 ```
 
-모델:
+주의:
 
 ```text
-ImageNet pretrained ResNet-50
-classification head replaced for binary classification
-fine-tuning
+image-only baseline은 lesion image만 inference input으로 사용한다.
+metadata/diagnosis text는 image model input으로 사용하지 않는다.
 ```
 
-기본 설정:
+### 5.3 Multimodal scaffold and roadmap
+
+현재 multimodal runner:
 
 ```text
-config: experiments/configs/image_baselines/resnet50/config.json
-image_size: 224
-pretrained weights: torchvision DEFAULT
-threshold_source: inner_validation_f1
+src/isic2024_multimodal/cli/run_multimodal_experiment.py
 ```
 
-v0에서는 ResNet-50 하나만 쓴다. DenseNet, EfficientNet, ViT 계열은 이후 확장으로 둔다.
-
-### 5.5 `multimodal_concat`
-
-목적:
+현재 상태:
 
 ```text
-metadata feature와 image embedding을 concat하는 가장 단순한 feature-level fusion이 single-modal보다 나아지는지 확인
+NotImplementedError("Multimodal training is not implemented yet. Use image and tabular baseline CLIs first.")
 ```
 
-입력:
+따라서 현재 multimodal config가 있더라도 paper-facing 실행 대상으로 보지 않는다. Multimodal baseline은 tabular/image baseline protocol과 결과 table이 안정화된 뒤, 같은 nested split artifact와 같은 metric function을 공유하도록 구현한다.
+
+`research.md` 기준 후속 구현 우선순위는 다음과 같다.
+
+| ID | 구조 | 역할 | 현재 처리 |
+|---|---|---|---|
+| `C-Late` | image ensemble + tabular stack + OOF meta-learner | 가장 강한 실전 기준선 | tabular/image suite 결과 안정화 뒤 우선 설계 |
+| `C-Early` | pooled image embedding + tabular encoder concat | 최소 neural fusion baseline | late fusion 설계 이후 구현 |
+| `C-Middle` | cross-attention 또는 FiLM/GMU conditioning | 대표 deep fusion 비교군 또는 제안법 비교군 | early fusion 이후 구현 |
+
+후속 multimodal 구현의 inference input은 다음으로 제한한다.
 
 ```text
-strict metadata feature vector
-ResNet-50 image embedding
+lesion image
+strict_main_input ordinary metadata
 ```
 
-결합:
+`iddx_full` 또는 diagnosis text는 multimodal inference input으로 사용할 수 없다.
 
-```text
-concat_feature = [metadata_feature_vector, image_embedding]
-fusion_classifier = LogisticRegression(class_weight="balanced").fit(concat_feature_train, y_train)
-multimodal_probability = fusion_classifier.predict_proba(concat_feature)[:, 1]
-```
+공통 구현 규칙:
 
-중요:
-
-```text
-probability stacking이 아니다.
-metadata feature와 image embedding을 직접 concat한다.
-fusion classifier, imputer, scaler는 fold train에서만 fit한다.
-validation/test에는 train-fitted fusion pipeline만 적용한다.
-```
-
-현재 `run_multimodal_experiment.py`는 미구현 상태이므로, v0 concat fusion은 image embedding과 strict metadata table을 입력으로 받는 작은 script/CLI가 필요하다.
+1. OOF 없는 stacking으로 meta-learner를 학습하지 않는다.
+2. Tabular/image OOF prediction은 같은 patient-level nested split artifact에서 만든다.
+3. Calibration은 train/inner-validation protocol 안에서만 fit한다.
+4. `outer_test`는 final evaluation 전용으로 유지한다.
+5. Patient-context, attribution, WB360 appearance metadata 의존도는 ablation으로 분리해 보고한다.
 
 ## 6. 실행 순서
 
 ### 6.1 Strict input export
 
 ```bash
-conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.export_strict_input_dataset
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src \
+  python -m isic2024_multimodal.cli.export_strict_input_dataset
 ```
 
 생성되는 주요 산출물:
@@ -275,105 +252,164 @@ data/splits/isic2024_official_train_nested_5x4_seed42.csv
 experiments/evidence/validation_protocol/isic2024_strict_input_export_summary_seed42.json
 ```
 
-### 6.2 Metadata baseline preflight
+### 6.2 Protocol tests
 
 ```bash
-conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_tabular_baseline \
-  --models logistic_regression \
-  --feature-sets strict_main_input \
-  --preflight-only
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src \
+  pytest tests/test_strict_input_export.py tests/test_tabular_baseline_protocol.py
 ```
 
-### 6.3 Metadata baseline run
+### 6.3 Tabular family preflight
 
 ```bash
-conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_tabular_baseline \
-  --models logistic_regression \
-  --feature-sets strict_main_input \
-  --run-group-id minimal_v0_metadata_logreg_balanced
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src \
+  python -m isic2024_multimodal.cli.run_experiment_family \
+    --family tabular_baselines \
+    --config experiments/configs/suites/tabular_baselines.json \
+    --run-group-id tabular_current_v1 \
+    --preflight-only
 ```
 
-주의:
+### 6.4 Tabular family run
 
-```text
-현재 repo의 logistic_regression builder는 class_weight="balanced"를 기본 적용한다.
-unweighted LogisticRegression은 v0에 포함하지 않는다.
-```
-
-### 6.4 Image baseline preflight
+Smoke run:
 
 ```bash
-conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_image_baseline \
-  --config experiments/configs/image_baselines/resnet50/config.json \
-  --preflight-only
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src \
+  python -m isic2024_multimodal.cli.run_experiment_family \
+    --family tabular_baselines \
+    --config experiments/configs/suites/tabular_baselines.json \
+    --run-group-id tabular_current_v1_smoke \
+    --smoke
 ```
 
-### 6.5 Image baseline run
+Full suite for the dataset spec fold:
 
 ```bash
-conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src python -m isic2024_multimodal.cli.run_image_baseline \
-  --config experiments/configs/image_baselines/resnet50/config.json \
-  --run-group-id minimal_v0_image_resnet50_finetune
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src \
+  python -m isic2024_multimodal.cli.run_experiment_family \
+    --family tabular_baselines \
+    --config experiments/configs/suites/tabular_baselines.json \
+    --run-group-id tabular_current_v1
 ```
 
-### 6.6 Simple fusion
+All nested folds with the current suite:
 
-필요 입력:
-
-```text
-isic_id
-target
-split
-strict metadata feature columns
-image_embedding columns
+```bash
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src \
+  python -m isic2024_multimodal.cli.run_all_tabular_models \
+    --models xgboost catboost lightgbm ft_transformer ft_transformer_external \
+    --feature-sets strict_main_input \
+    --split-protocol nested_cv \
+    --nested-split-csv data/splits/isic2024_official_train_nested_5x4_seed42.csv \
+    --all-folds \
+    --run-group-id tabular_current_v1_all_folds
 ```
 
-필요 산출:
+### 6.5 Nested CV summary
 
-```text
-isic_id
-target
-split
-concat model probability
-multimodal_probability
+```bash
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src \
+  python -m isic2024_multimodal.cli.summarize_nested_cv_results \
+    --family tabular_baselines \
+    --run-group-id tabular_current_v1_all_folds
 ```
 
-현재 상태:
+### 6.6 Image family preflight
 
-```text
-multimodal runner is not implemented.
-v0 concat fusion requires a small post-processing script/CLI.
+```bash
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src \
+  python -m isic2024_multimodal.cli.run_experiment_family \
+    --family image_baselines \
+    --config experiments/configs/suites/image_baselines.json \
+    --run-group-id image_current_v1 \
+    --preflight-only
 ```
 
-권장 위치:
+### 6.7 Image family run
 
-```text
-src/isic2024_multimodal/cli/run_minimal_concat_fusion.py
+Smoke run:
+
+```bash
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src \
+  python -m isic2024_multimodal.cli.run_experiment_family \
+    --family image_baselines \
+    --config experiments/configs/suites/image_baselines.json \
+    --run-group-id image_current_v1_smoke \
+    --smoke
 ```
 
-산출물 위치:
+Full suite for the dataset spec fold:
+
+```bash
+conda run -n paper env ISIC2024_EXPECTED_CONDA_ENV=paper PYTHONPATH=./src \
+  python -m isic2024_multimodal.cli.run_experiment_family \
+    --family image_baselines \
+    --config experiments/configs/suites/image_baselines.json \
+    --run-group-id image_current_v1
+```
+
+현재 image family runner는 suite config의 dataset spec fold를 실행한다. 전체 nested fold 결과가 필요하면 같은 split artifact를 기준으로 outer/inner fold별 실행을 명시적으로 분리해 기록한다.
+
+### 6.8 Multimodal follow-up
+
+현재 multimodal runner는 미구현 scaffold다. 아래 config/CLI는 후속 구현 범위 확인용이며, 현재 paper-facing 실행 대상으로 쓰지 않는다.
 
 ```text
-experiments/outputs/multimodal_baselines/minimal_v0_concat/
-experiments/tables/multimodal_baselines/minimal_v0_concat/
+experiments/configs/suites/multimodal_baselines.json
+src/isic2024_multimodal/cli/run_multimodal_experiment.py
+```
+
+후속 구현 순서:
+
+1. `C-Late`: 현재 tabular/image suite 결과를 활용해 OOF late fusion stack을 설계한다.
+2. `C-Early`: pooled image embedding과 tabular encoder representation을 concat하는 최소 neural fusion을 구현한다.
+3. `C-Middle`: cross-attention 또는 FiLM/GMU conditioning을 논문 제안법 또는 직접 비교군으로 구현한다.
+
+Multimodal ablation 후보:
+
+```text
+no patient-context
+with/without attribution
+no WB360/appearance metadata
+early vs middle vs late
+calibration on/off
 ```
 
 ## 7. 평가 기준
 
-모든 v0 결과는 같은 metric function과 같은 threshold protocol을 사용한다.
+모든 paper-facing baseline 결과는 같은 metric function과 같은 threshold protocol을 사용한다.
 
 필수 metric:
 
 ```text
-pAUC@TPR>=0.80
+pAUC above TPR 0.80
 AUC
 F1
 precision
 recall
 balanced accuracy
+```
+
+권장 metric:
+
+```text
 Average Precision / PR-AUC
 false positive count
 false negative count
+confusion matrix
+fold-wise score
+mean +/- std
+minimum fold score
+```
+
+Multimodal future reporting 후보:
+
+```text
+pAUC above TPR 0.88 sensitivity analysis
+calibration metrics such as Brier score and ECE
+Top-K retrieval sensitivity
+decision-curve net benefit
 ```
 
 Threshold-dependent metric은 validation에서 선택한 threshold만 사용한다.
@@ -388,117 +424,48 @@ Outer test fold는 final reporting 전용이다.
 outer_test는 threshold selection, model choice, calibration, feature selection에 사용하지 않는다.
 ```
 
-## 8. 추가 진행 범위
+## 8. 산출물 위치
 
-v0 결과가 정상적으로 나온 뒤 다음 순서로 확장한다.
-
-### v1: metadata 확장
+Run outputs:
 
 ```text
-HistGradientBoostingClassifier(class_weight="balanced")
-LightGBM / XGBoost / CatBoost
+experiments/outputs/tabular_baselines/
+experiments/outputs/image_baselines/
 ```
 
-목적:
+Paper-ready summary tables:
 
 ```text
-strict metadata에서 linear baseline보다 비선형 tabular model이 유리한지 확인
+experiments/tables/tabular_baselines/
+experiments/tables/image_baselines/
 ```
 
-### v1: image 확장
+Validation/protocol evidence:
 
 ```text
-DenseNet-121
-EfficientNet-B0
-frozen ResNet-50 embedding + LogisticRegression
+experiments/evidence/validation_protocol/
+experiments/evidence/eda/isic_2024/
 ```
 
-목적:
+## 9. 현재 baseline 완료 기준
 
-```text
-ResNet-50 하나의 결과가 image baseline을 대표하기 충분한지 확인
-```
+현재 baseline 안정화는 아래가 충족될 때 완료로 본다.
 
-### v1: fusion 확장
-
-```text
-score stacking: [metadata_probability, image_probability] -> LogisticRegression
-fixed probability average: 0.5 * metadata_probability + 0.5 * image_probability
-```
-
-조건:
-
-```text
-stacking train feature는 leakage-free OOF prediction으로 만들어야 한다.
-test prediction은 model choice 이후에만 평가한다.
-```
-
-### v2: multimodal architecture
-
-```text
-deep concat
-gated fusion
-attention fusion
-```
-
-목적:
-
-```text
-단순 score-level fusion보다 feature-level 또는 representation-level fusion이 나은지 확인
-```
-
-### v2/v3: imbalance ablation
-
-```text
-weighted CE
-pos_weight BCE
-focal loss
-balanced sampler
-positive oversampling
-validation-selected threshold variants
-```
-
-주의:
-
-```text
-class weights and samplers are computed from training data only.
-```
-
-### research candidate: LUPI / privileged supervision
-
-```text
-iddx_full auxiliary target
-privileged teacher
-diagnosis-text contrastive loss
-prototype alignment
-```
-
-주의:
-
-```text
-candidate-only
-not ordinary inference input
-must not be required by validation/test/inference dataloaders
-```
-
-## 9. v0 완료 기준
-
-v0 baseline은 아래가 모두 충족될 때 완료로 본다.
-
-1. `metadata_dummy`, `metadata_logreg_balanced`, `image_dummy`, `image_resnet50_finetune`, `multimodal_concat` 결과가 있다.
-2. 모든 결과가 같은 patient-level Triple Stratified Nested CV split을 사용한다.
+1. Strict input export가 현재 code/test와 일치한다.
+2. 모든 결과가 patient-level Triple Stratified Nested CV split을 사용한다.
 3. Patient overlap audit이 0이다.
 4. `iddx_full`과 diagnosis/reference columns가 ordinary input에 없다.
-5. Metadata preprocessing은 fold train에서만 fit된다.
-6. Threshold는 validation에서만 선택된다.
-7. Test data는 final metric reporting에만 쓰인다.
+5. Preprocessing, class weight, sampler는 fold train에서만 fit 또는 산출된다.
+6. Threshold는 inner validation에서만 선택된다.
+7. `outer_test`는 final metric reporting에만 쓰인다.
 8. Fold, seed, config path, split source, threshold source가 결과에 기록된다.
-9. Single-modal과 multimodal 결과가 같은 metric table format으로 정리된다.
+9. Tabular/image 결과가 같은 metric table contract로 정리된다.
+10. Multimodal 구현은 위 baseline evidence가 준비된 뒤 시작한다.
 
 ## 10. 한 줄 결론
 
-v0는 다음 한 문장으로 요약한다.
+현재 baseline 계획은 다음 한 문장으로 요약한다.
 
 ```text
-Strict metadata LogisticRegression, ResNet-50 image model, and feature-level concat fusion under the same patient-level protocol.
+strict_main_input tabular suite and six image backbones under the same patient-level 5x4 nested CV protocol, with multimodal kept as a follow-up scaffold until implemented.
 ```

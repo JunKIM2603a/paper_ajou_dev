@@ -46,8 +46,9 @@ class ImageClassificationDataset(Dataset):
                 [
                     transforms.Resize((image_size, image_size)),
                     transforms.RandomHorizontalFlip(),
-                    transforms.RandomRotation(degrees=10),
-                    transforms.ColorJitter(brightness=0.1, contrast=0.1),
+                    transforms.RandomVerticalFlip(),
+                    transforms.RandomAffine(degrees=15, scale=(0.9, 1.05)),
+                    transforms.ColorJitter(brightness=0.08, contrast=0.08, saturation=0.04, hue=0.02),
                     transforms.ToTensor(),
                     transforms.Normalize(mean=normalize_mean, std=normalize_std),
                 ]

@@ -6,11 +6,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-from isic2024_multimodal.models.image.checkpoint_downloads import (
-    CHECKPOINT_DOWNLOADS,
-    infer_model_key,
-    resolve_repo_path,
-)
 from isic2024_multimodal.models.image.checkpoint_preflight import preflight_image_model_config
 from isic2024_multimodal.utils.config_utils import load_json, sanitize_run_name
 
@@ -86,11 +81,7 @@ def build_status_records(
 
 
 def checkpoint_status_for_model(model_config: dict[str, Any], *, repo_root: str | Path) -> dict[str, Any]:
-    model_key = infer_model_key(model_config)
     checkpoint_path = model_config.get("checkpoint_path")
-    backend = str(model_config.get("backend", "")).lower()
-    notes = []
-
     if checkpoint_path:
         resolved = resolve_repo_path(checkpoint_path, repo_root=repo_root)
         if resolved.exists():
@@ -103,28 +94,16 @@ def checkpoint_status_for_model(model_config: dict[str, Any], *, repo_root: str 
                     "notes": f"{type(exc).__name__}: {exc}",
                 }
             return {"status": "exists", "path": str(resolved), "notes": "local checkpoint exists and preflight passed"}
-        spec = CHECKPOINT_DOWNLOADS.get(model_key)
-        if spec is not None:
-            notes.append(spec.notes)
-            if spec.source_type.startswith("google_drive"):
-                notes.append("download may fail due to Google Drive access/quota")
-            return {"status": "downloadable", "path": str(resolved), "notes": "; ".join(notes)}
-        return {"status": "missing", "path": str(resolved), "notes": "no registered downloader"}
-
-    if backend == "medclip" and bool(model_config.get("pretrained", True)):
-        pretrained_dir = model_config.get("pretrained_dir")
-        if pretrained_dir:
-            weights_path = resolve_repo_path(pretrained_dir, repo_root=repo_root) / "pytorch_model.bin"
-            if weights_path.exists():
-                return {"status": "exists", "path": str(weights_path), "notes": "official MedCLIP weights exist"}
-            spec = CHECKPOINT_DOWNLOADS.get("medclip")
-            return {
-                "status": "downloadable",
-                "path": str(weights_path),
-                "notes": spec.notes if spec else "official MedCLIP weights missing",
-            }
+        return {"status": "missing", "path": str(resolved), "notes": "no manual checkpoint downloader is used"}
 
     return {"status": "hub/cache", "path": "", "notes": "uses library/hub cache; no manual checkpoint path"}
+
+
+def resolve_repo_path(path: str | Path, *, repo_root: str | Path) -> Path:
+    value = Path(path)
+    if value.is_absolute():
+        return value
+    return Path(repo_root) / value
 
 
 def artifact_status_for_model(model_output_root: Path) -> dict[str, Any]:
