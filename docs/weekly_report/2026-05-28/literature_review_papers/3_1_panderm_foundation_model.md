@@ -115,30 +115,66 @@ PanDerm은 dermatology AI가 단일 dermoscopy classifier에서 3D-TBP, clinical
 
 ## 목표와 기여
 
-PanDerm이라는 범용 멀티모달 피부과 foundation model을 제안해 피부암 선별, 진단, 분할, 병변 변화 추적, 예후 예측을 하나의 표현 학습 모델로 지원한다. 특히 label이 희소한 dermatology task에서 self-supervised pretraining을 통해 downstream 성능과 label efficiency를 높이는 것이 핵심 기여이다.
+기여: 피부과를 넘어 다른 의료 분야에서도 **"전문화된 파운데이션 모델(Specialty-specific foundation model)"**이 어떻게 개발되고 검증되어야 하는지에 대한 표준 프레임워크를 제공
+1. 대규모 멀티모달 데이터셋 구축 및 학습
+    - 11개 기관에서 수집한 200만 개 이상의 이미지와 4가지 영상 양식(TBP, 임상, 확대경, 병리 사진)을 결합한 규모의 데이터셋 사용
+2. 강력한 범용성 및 데이터 효율성 (Label Efficiency) 증명
+    - 레이블이 있는 데이터를 10%만 사용하고도 28개의 벤치마크에서 모두 SOTA 달성
+3. 실질적인 임상적 유용성 입증 (Reader Studies)
+    - 조기 발견: 조기 흑색종 발견 성능에서 임상의를 10.2% 앞지름
+    - 협업 효과: 비전문의의 감별 진단 능력을 16.5% 향상
+4. 예후 및 생존 예측으로의 확장
+    - 단순한 현재 상태 진단을 넘어, 이미지 분석만으로 흑색종의 재발 및 전이 위험을 예측하고 생존 분석(Kaplan-MeierKaplan−MeierKaplan-MeierKaplan−Meier, CoxCoxCoxCox regressionregressionregressionregression)까지 연결하는 새로운 임상적 가능성을 제시
 
 ## Dataset 정보
 
-- Pretraining: 11개 기관, 4개 modality, 2,149,706개 unlabeled skin image
-- Modality: TBP tile, dermatopathology, clinical image, dermoscopy
+- 사전학습(Pretraining): 11개 기관, 4개 modality, 2,149,706개 unlabeled skin image
+- Modality
+    - 전신 사진 타일 (TBP tiles): 757,890개 (35.3%) - 3D 전신 촬영 장비(Vectra WB360)에서 추출된 개별 병변 이미지
+    - 피부 병리 타일 (Dermatopathology tiles): 537,047개 (25.4%) - 현미경을 통해 촬영된 조직 생검 이미지(WSI)의 패치
+    - 임상 사진 (Clinical images): 460,328개 (21.4%) - 일반 카메라나 스마트폰으로 촬영한 병변 및 주변부 사진
+    - 확대경 이미지 (Dermoscopic images): 384,441개 (17.9%) - 더모스코프를 사용하여 피부 표면과 하부 구조를 확대한 정밀 이미지
 - Downstream 평가: 28개 dataset
-- TBP screening 실험: malignant 216개와 benign 197,716개를 포함하는 극단적 imbalance setting
+- TBP screening 실험: malignant 216개와 benign 197,716개를 포함하는 극단적 imbalance setting. 32가지 
 
 ## Imbalance 처리
 
-명시적인 oversampling/undersampling보다 대규모 self-supervised pretraining과 label-efficient 학습으로 희소 positive label 문제를 완화한다. ISIC 2024와 유사하게 TBP screening에서는 malignant가 매우 적은 setting을 다루므로, ultra-rare malignant detection의 배경 근거로 활용할 수 있다.
+1. 자체 지도 학습 (Self-Supervised Pretraining): 200만 개의 방대한 이미지
+2. 멀티모달 정보 결합 (Metadata Fusion): 이미지 정보만으로는 판단이 어려운 희귀 사례나 불균형 문제를 임상 데이터(Metadata)와의 결합으로 보완
+3. 손실 함수 및 가중치 조절 (Loss Function):  클래스별 빈도 차이를 보정하기 위해 가중치 기반 무작위 샘플러(Weighted random sampler) 전략을 사용하여 학습 시 소수 클래스(예: 흑색종)가 충분히 노출되도록 함
+- TBP screening 실험: data argument including color and geometric transformations.
 
+```text
+unlabeled skin image
+   │
+   ├─ Student branch:
+   │     masked image → ViT-L encoder → visible patch latent
+   │                         │
+   │                         └→ mask regressor with cross-attention
+   │                                  → masked patch latent prediction
+   │
+   └─ Teacher branch:
+         unmasked image → frozen CLIP-Large image encoder
+                         → CLIP patch-level latent target
+
+loss = visible latent alignment
+     + masked latent alignment
+```
 ## Tabular model
 
-독립적인 tabular model을 핵심 구성으로 제안하지는 않는다. 다만 일부 TBP screening 실험에서 lesion measurement 또는 metadata를 image feature와 함께 사용해 image-only triage보다 임상적으로 유용한 screening 성능을 보고한다.
+Extra Tree Classifier 사용: 악성 여부 직접 예측
 
 ## Image model
+
 
 ViT-Large visual encoder를 중심으로 mask regressor와 CLIP-Large teacher를 사용한다. masked latent alignment와 visible latent alignment를 통해 dermatology image modality 간 공통 representation을 학습한다.
 
 ## Fusion 방식
 
-TBP tile, clinical image, dermoscopy, dermatopathology image modality를 공통 embedding space로 통합한다. 일부 downstream screening 실험에서는 TBP image representation과 measurement metadata를 결합한다.
+- image - risk prediction head(a single linear layer): classify lesions as high risk or low risk
+- image - UD(Ugly duckling) detection head: compares all lesions from the same patient to identify outliers. 병변의 맥락 정보*(lesion contextual information)를 활용해서 feature 추출하고, 추출된 특징은 UD detection head 에서 처리함. 이 모듈은 각 병변의 특징과 동일 환자의 모든 병변 평균 특징 간의 거리를 계산하고, 사분위 범위 방법을 사용하여 이상치 병변을 선택함.
+- metadata - Extra Tree Classifier: 악성 여부 직접 예측
+- 최종 스크리닝 결과는 세 가지 모듈의 예측 결과를 결합합니다. 병변이 악성일 가능성이 있다고 판단되는 경우는 어떤 모듈이라도 양성 예측을 내놓았을 때입니다. 우리는 포괄적인 정확도 평가를 위해 병변 수준과 환자 수준 모두에서 선별 성능을 평가합니다.
 
 ## 평가 지표
 
@@ -146,10 +182,10 @@ AUROC, AUPR, weighted F1, balanced accuracy, sensitivity, lesion detection count
 
 ## 평가 결과
 
-여러 downstream task에서 SOTA 수준의 성능을 보고한다. early melanoma reader study에서는 평균 임상의보다 높은 정확도를 보였고, human-AI 협업에서 추가 향상을 보고했다. TBP screening에서는 sensitivity 0.893과 불필요한 dermoscopy 약 60.8% 감소를 보고한다.
-학습 효율성 (Computational Efficiency): 단순히 성능만 좋은 것이 아니라, 기존의 대표적인 자체 지도 학습 방법론(DINOv2, MAE 등)보다 훨씬 적은 학습 횟수(200 epoch 만에 최적 성능 도달)로 학습이 가능하다는 점이 기술적 강점
-전이 및 예후 예측의 독창성:
-단순 진단을 넘어, 진단 시점의 확대경 이미지(Dermoscopy)만으로 향후 전이 가능성이나 생존율(Kaplan-Meier 분석 등)을 예측할 수 있다는 점은 기존 피부과 AI 모델들과 차별화
+- 여러 downstream task에서 SOTA 수준의 성능
+- early melanoma reader study에서는 평균 임상의보다 높은 정확도
+- human-AI 협업에서 추가 향상
+- TBP screening에서는 sensitivity 0.893 으로 2위 모델보다 4.2% 더 뛰어난 성능. 하지만 pAUC > 80% TPR 결과는 없음
 
 ## ISIC2024 연구 시사점
 
