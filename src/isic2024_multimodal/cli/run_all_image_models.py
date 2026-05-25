@@ -29,9 +29,36 @@ REPO_ROOT = SRC_ROOT.parent
 @dataclass
 class RunningJob:
     device: int
-    config_path: Path
+    plan_item: "JobPlanItem"
     process: subprocess.Popen
     started_at: float
+
+
+@dataclass(frozen=True)
+class FoldSelection:
+    outer_fold: int | None = None
+    inner_fold: int | None = None
+    cv_fold: int | None = None
+
+    @property
+    def label(self) -> str:
+        if self.outer_fold is not None and self.inner_fold is not None:
+            return f"outer_{self.outer_fold:02d}_inner_{self.inner_fold:02d}"
+        if self.cv_fold is not None:
+            return f"cv_{self.cv_fold:02d}"
+        return "single_fold"
+
+
+@dataclass(frozen=True)
+class JobPlanItem:
+    job_index: int
+    total_jobs: int
+    model_index: int
+    total_models: int
+    fold_index: int
+    total_folds: int
+    config_path: Path
+    fold: FoldSelection
 
 
 def make_run_group_id(prefix: str = "image_all") -> str:
@@ -59,6 +86,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--holdout-split-csv", default="data/splits/isic2024_train_validation_test_split_seed42.csv")
     parser.add_argument("--cv-split-csv", default="data/splits/isic2024_train_validation_5fold_seed42.csv")
     parser.add_argument("--cv-fold", type=int, default=0)
+    parser.add_argument(
+        "--all-folds",
+        "--all-nested-folds",
+        action="store_true",
+        dest="all_folds",
+        help=(
+            "Run every fold found in the split artifact. For nested_cv this runs every "
+            "(outer_fold, inner_fold) pair; for legacy_holdout this runs every cv_fold. "
+            "Fold outputs are written under <output-root>/<fold_label>/ to avoid overwrites."
+        ),
+    )
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--max-trials", type=int, default=None)
     parser.add_argument("--epochs-override", type=int, default=None)
@@ -136,11 +174,18 @@ def main() -> None:
         f"fallback={args.device_fallback_reason or 'none'}",
         flush=True,
     )
+    fold_selections = resolve_fold_selections(args)
+    print(
+        "[run_all_models] "
+        f"resolved_folds={','.join(fold.label for fold in fold_selections)} "
+        f"count={len(fold_selections)}",
+        flush=True,
+    )
 
     if args.resolved_devices:
-        failures = run_parallel(config_paths, args)
+        failures = run_parallel(config_paths, args, fold_selections=fold_selections)
     else:
-        failures = run_sequential(config_paths, args)
+        failures = run_sequential(config_paths, args, fold_selections=fold_selections)
 
     report_failures = [] if args.skip_reports else generate_reports(args)
     failures.extend(report_failures)
@@ -153,22 +198,41 @@ def main() -> None:
     command_status["value"] = "ok"
 
 
-def run_sequential(config_paths: list[Path], args: argparse.Namespace) -> list[dict[str, str | int]]:
+def run_sequential(
+    config_paths: list[Path],
+    args: argparse.Namespace,
+    *,
+    fold_selections: list[FoldSelection],
+) -> list[dict[str, str | int]]:
     failures: list[dict[str, str | int]] = []
     env = build_subprocess_env()
-    for config_path in config_paths:
-        command = build_command(config_path, args, device=None)
-        print(f"[run_all_models] Running {config_path.parent.name}")
+    plan = build_job_plan(config_paths, fold_selections=fold_selections)
+    for item in plan:
+        command = build_command(item.config_path, args, device=None, fold=item.fold)
+        print(f"[run_all_models] Running {format_job_progress(item)}")
         result = subprocess.run(command, check=False, cwd=REPO_ROOT, env=env)
         if result.returncode != 0:
-            failures.append({"model": config_path.parent.name, "returncode": result.returncode})
-            print(f"[run_all_models] Model failed: {config_path.parent.name} (returncode={result.returncode})")
+            failures.append(
+                {
+                    "model": f"{item.config_path.parent.name}:{item.fold.label}",
+                    "returncode": result.returncode,
+                }
+            )
+            print(
+                f"[run_all_models] Model failed: {item.config_path.parent.name} "
+                f"fold={item.fold.label} (returncode={result.returncode})"
+            )
     return failures
 
 
-def run_parallel(config_paths: list[Path], args: argparse.Namespace) -> list[dict[str, str | int]]:
+def run_parallel(
+    config_paths: list[Path],
+    args: argparse.Namespace,
+    *,
+    fold_selections: list[FoldSelection],
+) -> list[dict[str, str | int]]:
     failures: list[dict[str, str | int]] = []
-    pending = deque(config_paths)
+    pending = deque(build_job_plan(config_paths, fold_selections=fold_selections))
     active: dict[int, RunningJob] = {}
     devices = list(args.resolved_devices or [])
 
@@ -176,25 +240,31 @@ def run_parallel(config_paths: list[Path], args: argparse.Namespace) -> list[dic
         for device in devices:
             if device in active or not pending:
                 continue
-            config_path = pending.popleft()
-            command = build_command(config_path, args, device=device)
+            item = pending.popleft()
+            command = build_command(item.config_path, args, device=device, fold=item.fold)
             env = build_subprocess_env(device=device)
             started_at = time.time()
-            print(f"[run_all_models] Launching {config_path.parent.name} on GPU {device}")
+            print(f"[run_all_models] Launching {format_job_progress(item)} on GPU {device}")
             process = subprocess.Popen(command, env=env, cwd=REPO_ROOT)
-            active[device] = RunningJob(device=device, config_path=config_path, process=process, started_at=started_at)
+            active[device] = RunningJob(device=device, plan_item=item, process=process, started_at=started_at)
 
         completed_devices: list[int] = []
         for device, job in active.items():
             returncode = job.process.poll()
             if returncode is None:
                 continue
+            item = job.plan_item
             print(
-                f"[run_all_models] Finished {job.config_path.parent.name} on GPU {device} "
+                f"[run_all_models] Finished {format_job_progress(item)} on GPU {device} "
                 f"(returncode={returncode}, duration={time.time() - job.started_at:.1f}s)"
             )
             if returncode != 0:
-                failures.append({"model": job.config_path.parent.name, "returncode": returncode})
+                failures.append(
+                    {
+                        "model": f"{item.config_path.parent.name}:{item.fold.label}",
+                        "returncode": returncode,
+                    }
+                )
             completed_devices.append(device)
 
         for device in completed_devices:
@@ -204,6 +274,38 @@ def run_parallel(config_paths: list[Path], args: argparse.Namespace) -> list[dic
             time.sleep(2)
 
     return failures
+
+
+def build_job_plan(config_paths: list[Path], *, fold_selections: list[FoldSelection]) -> list[JobPlanItem]:
+    total_models = len(config_paths)
+    total_folds = len(fold_selections)
+    total_jobs = total_models * total_folds
+    items: list[JobPlanItem] = []
+    job_index = 0
+    for fold_index, fold in enumerate(fold_selections, start=1):
+        for model_index, config_path in enumerate(config_paths, start=1):
+            job_index += 1
+            items.append(
+                JobPlanItem(
+                    job_index=job_index,
+                    total_jobs=total_jobs,
+                    model_index=model_index,
+                    total_models=total_models,
+                    fold_index=fold_index,
+                    total_folds=total_folds,
+                    config_path=config_path,
+                    fold=fold,
+                )
+            )
+    return items
+
+
+def format_job_progress(item: JobPlanItem) -> str:
+    return (
+        f"job={item.job_index}/{item.total_jobs} "
+        f"model={item.model_index}/{item.total_models} {item.config_path.parent.name} "
+        f"fold={item.fold_index}/{item.total_folds} {item.fold.label}"
+    )
 
 
 def filter_config_paths(
@@ -222,11 +324,23 @@ def filter_config_paths(
     return selected
 
 
-def build_command(config_path: Path, args: argparse.Namespace, *, device: int | None) -> list[str]:
+def build_command(
+    config_path: Path,
+    args: argparse.Namespace,
+    *,
+    device: int | None,
+    fold: FoldSelection | None = None,
+) -> list[str]:
+    fold = fold or fold_from_args(args)
     split_protocol = getattr(args, "split_protocol", "nested_cv")
-    nested_split_csv = getattr(args, "nested_split_csv", "data/splits/isic2024_official_train_nested_5x4_seed42.csv")
-    outer_fold = getattr(args, "outer_fold", 0)
-    inner_fold = getattr(args, "inner_fold", 0)
+    nested_split_csv = getattr(
+        args,
+        "nested_split_csv",
+        "data/splits/isic2024_official_train_nested_5x4_seed42.csv",
+    )
+    outer_fold = fold.outer_fold if fold.outer_fold is not None else getattr(args, "outer_fold", 0)
+    inner_fold = fold.inner_fold if fold.inner_fold is not None else getattr(args, "inner_fold", 0)
+    cv_fold = fold.cv_fold if fold.cv_fold is not None else getattr(args, "cv_fold", 0)
     command = [
         sys.executable,
         "-m",
@@ -236,7 +350,7 @@ def build_command(config_path: Path, args: argparse.Namespace, *, device: int | 
         "--dataset-root",
         str(resolve_repo_path(args.dataset_root)),
         "--output-root",
-        str(resolve_repo_path(args.output_root)),
+        str(command_output_root(args, fold)),
         "--mlflow-tracking-uri",
         args.tracking_uri,
         "--experiment-name",
@@ -262,7 +376,7 @@ def build_command(config_path: Path, args: argparse.Namespace, *, device: int | 
         "--cv-split-csv",
         str(resolve_repo_path(args.cv_split_csv)),
         "--cv-fold",
-        str(args.cv_fold),
+        str(cv_fold),
         "--seed",
         str(args.seed),
     ]
@@ -284,6 +398,63 @@ def build_command(config_path: Path, args: argparse.Namespace, *, device: int | 
     if args.disable_pretrained:
         command.append("--disable-pretrained")
     return command
+
+
+def fold_from_args(args: argparse.Namespace) -> FoldSelection:
+    if getattr(args, "split_protocol", "nested_cv") == "nested_cv":
+        return FoldSelection(
+            outer_fold=int(getattr(args, "outer_fold", 0)),
+            inner_fold=int(getattr(args, "inner_fold", 0)),
+        )
+    return FoldSelection(cv_fold=int(getattr(args, "cv_fold", 0)))
+
+
+def command_output_root(args: argparse.Namespace, fold: FoldSelection) -> Path:
+    output_root = resolve_repo_path(args.output_root)
+    if getattr(args, "all_folds", False):
+        return output_root / fold.label
+    return output_root
+
+
+def resolve_fold_selections(args: argparse.Namespace) -> list[FoldSelection]:
+    if not getattr(args, "all_folds", False):
+        return [fold_from_args(args)]
+    if getattr(args, "split_protocol", "nested_cv") == "nested_cv":
+        return resolve_nested_fold_selections(args.nested_split_csv)
+    return resolve_legacy_cv_fold_selections(args.cv_split_csv)
+
+
+def resolve_nested_fold_selections(nested_split_csv: str | Path) -> list[FoldSelection]:
+    import pandas as pd
+
+    nested_path = resolve_repo_path(nested_split_csv)
+    if not nested_path.exists():
+        raise FileNotFoundError(f"Nested split CSV not found: {nested_path}")
+    split_frame = pd.read_csv(nested_path, usecols=["outer_fold", "inner_fold"], low_memory=False)
+    fold_pairs = (
+        split_frame[["outer_fold", "inner_fold"]]
+        .drop_duplicates()
+        .sort_values(["outer_fold", "inner_fold"])
+    )
+    if fold_pairs.empty:
+        raise RuntimeError(f"Nested split CSV has no fold pairs: {nested_path}")
+    return [
+        FoldSelection(outer_fold=int(row.outer_fold), inner_fold=int(row.inner_fold))
+        for row in fold_pairs.itertuples(index=False)
+    ]
+
+
+def resolve_legacy_cv_fold_selections(cv_split_csv: str | Path) -> list[FoldSelection]:
+    import pandas as pd
+
+    cv_path = resolve_repo_path(cv_split_csv)
+    if not cv_path.exists():
+        raise FileNotFoundError(f"CV split CSV not found: {cv_path}")
+    cv_frame = pd.read_csv(cv_path, usecols=["cv_validation_fold"], low_memory=False)
+    cv_folds = sorted(int(value) for value in cv_frame["cv_validation_fold"].dropna().unique().tolist())
+    if not cv_folds:
+        raise RuntimeError(f"CV split CSV has no cv_validation_fold values: {cv_path}")
+    return [FoldSelection(cv_fold=cv_fold) for cv_fold in cv_folds]
 
 
 def command_device_arg(args: argparse.Namespace, device: int | None) -> str | None:

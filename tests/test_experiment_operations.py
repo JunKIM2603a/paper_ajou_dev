@@ -11,7 +11,12 @@ from isic2024_multimodal.cli.run_image_baseline import (
     patient_balanced_sample_weights,
     select_trial_score,
 )
-from isic2024_multimodal.cli.run_all_image_models import build_command as build_image_command
+from isic2024_multimodal.cli.run_all_image_models import (
+    FoldSelection as ImageFoldSelection,
+    build_command as build_image_command,
+    build_job_plan as build_image_job_plan,
+    resolve_nested_fold_selections as resolve_image_nested_fold_selections,
+)
 from isic2024_multimodal.cli.run_baseline_suite import build_suite_commands
 from isic2024_multimodal.cli.image_baseline_status import (
     artifact_status_for_model,
@@ -539,6 +544,87 @@ def test_run_all_image_models_cpu_policy_passes_cpu_device(tmp_path) -> None:
 
     assert command[command.index("--device") + 1] == "cpu"
     assert command[command.index("--batch-size-override") + 1] == "8"
+
+
+def test_run_all_image_models_discovers_all_nested_fold_pairs(tmp_path) -> None:
+    nested_path = tmp_path / "nested.csv"
+    nested_path.write_text(
+        "isic_id,outer_fold,inner_fold\n"
+        "A,1,1\n"
+        "B,0,1\n"
+        "C,0,0\n"
+        "D,1,0\n"
+        "E,1,0\n",
+        encoding="utf-8",
+    )
+
+    folds = resolve_image_nested_fold_selections(nested_path)
+
+    assert [fold.label for fold in folds] == [
+        "outer_00_inner_00",
+        "outer_00_inner_01",
+        "outer_01_inner_00",
+        "outer_01_inner_01",
+    ]
+
+
+def test_run_all_image_models_all_folds_command_scopes_fold_output(tmp_path) -> None:
+    config = tmp_path / "resnet50" / "config.json"
+    config.parent.mkdir(parents=True)
+    config.write_text("{}", encoding="utf-8")
+    args = types.SimpleNamespace(
+        dataset_root="data/raw/isic_2024_challenge",
+        output_root=str(tmp_path / "image_outputs"),
+        tracking_uri="file:experiments/logs/mlruns",
+        experiment_name="ISIC2024-Image-Baselines",
+        run_group_id="unit_group",
+        dataset_id="image_preprocessed_v1",
+        dataset_spec="experiments/configs/dataset_specs/image_preprocessed_v1.json",
+        model_family="image_baselines",
+        split_protocol="nested_cv",
+        nested_split_csv="data/splits/isic2024_official_train_nested_5x4_seed42.csv",
+        outer_fold=0,
+        inner_fold=0,
+        holdout_split_csv="data/splits/isic2024_train_validation_test_split_seed42.csv",
+        cv_split_csv="data/splits/isic2024_train_validation_5fold_seed42.csv",
+        cv_fold=0,
+        seed=42,
+        max_trials=None,
+        epochs_override=None,
+        max_train_samples=None,
+        max_val_samples=None,
+        max_test_samples=None,
+        batch_size_override=8,
+        disable_pretrained=False,
+        device_policy="auto",
+        devices=None,
+        resolved_devices=[],
+        all_folds=True,
+    )
+    fold = ImageFoldSelection(outer_fold=3, inner_fold=2)
+
+    command = build_image_command(config, args, device=None, fold=fold)
+
+    assert command[command.index("--outer-fold") + 1] == "3"
+    assert command[command.index("--inner-fold") + 1] == "2"
+    assert command[command.index("--output-root") + 1].endswith("image_outputs/outer_03_inner_02")
+
+
+def test_run_all_image_models_job_plan_tracks_model_fold_and_job_indices(tmp_path) -> None:
+    configs = [tmp_path / "resnet50" / "config.json", tmp_path / "vit_b" / "config.json"]
+    folds = [
+        ImageFoldSelection(outer_fold=0, inner_fold=0),
+        ImageFoldSelection(outer_fold=0, inner_fold=1),
+    ]
+
+    plan = build_image_job_plan(configs, fold_selections=folds)
+
+    assert [item.job_index for item in plan] == [1, 2, 3, 4]
+    assert [item.total_jobs for item in plan] == [4, 4, 4, 4]
+    assert [item.model_index for item in plan] == [1, 2, 1, 2]
+    assert [item.total_models for item in plan] == [2, 2, 2, 2]
+    assert [item.fold_index for item in plan] == [1, 1, 2, 2]
+    assert [item.total_folds for item in plan] == [2, 2, 2, 2]
 
 
 def test_cuda_cleanup_warning_does_not_raise(monkeypatch, capsys) -> None:
