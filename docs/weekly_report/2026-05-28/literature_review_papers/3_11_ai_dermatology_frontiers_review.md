@@ -4,7 +4,7 @@
 
 출처: Intelligent Oncology, 2025  
 DOI: `10.1016/j.intonc.2025.03.002`  
-Google Scholar 인용: 확인 불가 (조회일: 2026-05-20, 자동 조회 중 Google Scholar reCAPTCHA 발생)  
+Google Scholar 인용: 12회 (조회일: 2026-05-26, `AI Dermatology: Reviewing the Frontiers of Skin Cancer Detection Technologies` 제목 기준)  
 PDF: [1-s2.0-S2950261625000196-main.pdf](../paper/1-s2.0-S2950261625000196-main.pdf)
 
 ## 주요 Figure 및 Table

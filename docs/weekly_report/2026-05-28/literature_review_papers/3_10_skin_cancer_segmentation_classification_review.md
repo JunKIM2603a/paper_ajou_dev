@@ -4,7 +4,7 @@
 
 출처: IEEE Access, 2025  
 DOI: `10.1109/ACCESS.2025.3569170`  
-Google Scholar 인용: 확인 불가 (조회일: 2026-05-20, 자동 조회 중 Google Scholar reCAPTCHA 발생)  
+Google Scholar 인용: 12회 (조회일: 2026-05-26, `Segmentation and Classification of Skin Cancer Diseases Based on Deep Learning: Challenges and Future Directions` 제목 기준)  
 PDF: [Segmentation_and_Classification_of_Skin_Cancer_Diseases_Based_on_Deep_Learning_Challenges_and_Future_Directions.pdf](../paper/Segmentation_and_Classification_of_Skin_Cancer_Diseases_Based_on_Deep_Learning_Challenges_and_Future_Directions.pdf)
 
 ## 주요 Figure 및 Table

@@ -4,7 +4,7 @@
 
 출처: arXiv, 2024  
 DOI: `10.48550/arXiv.2411.11943`  
-Google Scholar 인용: 확인 불가 (조회일: 2026-05-20, 자동 조회 중 Google Scholar reCAPTCHA 발생)  
+Google Scholar 인용: 14회 (조회일: 2026-05-26, `Medical Video Generation for Disease Progression Simulation` 제목 기준)  
 PDF: [2411.11943v1.pdf](../paper/2411.11943v1.pdf)
 
 ## 주요 Figure 및 Table

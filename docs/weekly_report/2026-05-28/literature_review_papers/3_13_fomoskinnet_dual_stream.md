@@ -4,7 +4,7 @@
 
 출처: IEEE Access, 2026  
 DOI: `10.1109/ACCESS.2026.3674219`  
-Google Scholar 인용: 확인 불가 (조회일: 2026-05-20, 자동 조회 중 Google Scholar reCAPTCHA 발생)  
+Google Scholar 인용: 0회 (조회일: 2026-05-26, `FoMoSkinNet: A Dual-Stream Deep Learning Model for Early Detection and Classification of Non-Dermoscopic Skin Lesions via Focal Modulation and Local Feature Integration` 제목 기준)  
 PDF: [FoMoSkinNet_A_Dual-Stream_Deep_Learning_Model_for_Early_Detection_and_Classification_of_Non-Dermoscopic_Skin_Lesions_via_Focal_Modulation_and_Local_Feature_Integration.pdf](../paper/FoMoSkinNet_A_Dual-Stream_Deep_Learning_Model_for_Early_Detection_and_Classification_of_Non-Dermoscopic_Skin_Lesions_via_Focal_Modulation_and_Local_Feature_Integration.pdf)
 
 ## 주요 Figure 및 Table

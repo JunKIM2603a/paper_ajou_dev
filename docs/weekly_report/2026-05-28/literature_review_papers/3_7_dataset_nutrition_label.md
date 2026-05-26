@@ -4,7 +4,7 @@
 
 출처: npj Digital Medicine, 2025  
 DOI: `10.1038/s41746-025-02125-9`  
-Google Scholar 인용: 확인 불가 (조회일: 2026-05-20, 자동 조회 중 Google Scholar reCAPTCHA 발생)  
+Google Scholar 인용: 3회 (조회일: 2026-05-26, `Improving dataset transparency in dermatologic Artificial Intelligence using a dataset nutrition label` 제목/DOI 기준)  
 PDF: [s41746-025-02125-9.pdf](../paper/s41746-025-02125-9.pdf)
 
 ## 주요 Figure 및 Table

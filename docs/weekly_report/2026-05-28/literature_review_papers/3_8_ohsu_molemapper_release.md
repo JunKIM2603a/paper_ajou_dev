@@ -4,7 +4,7 @@
 
 출처: Scientific Data, 2025  
 DOI: `10.1038/s41597-025-05552-1`  
-Google Scholar 인용: 확인 불가 (조회일: 2026-05-20, 자동 조회 중 Google Scholar reCAPTCHA 발생)  
+Google Scholar 인용: 0회 (조회일: 2026-05-26, `New Release of User-Captured Images from the Oregon Health & Science University Melanoma MoleMapper Project` 제목/DOI 기준)  
 PDF: [s41597-025-05552-1.pdf](../paper/s41597-025-05552-1.pdf)
 
 ## 주요 Figure 및 Table

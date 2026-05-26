@@ -4,7 +4,7 @@
 
 출처: Life, 2024  
 DOI: `10.3390/life14121602`  
-Google Scholar 인용: 확인 불가 (조회일: 2026-05-20, 자동 조회 중 Google Scholar reCAPTCHA 발생)  
+Google Scholar 인용: 15회 (조회일: 2026-05-26, `Artificial Intelligence in the Non-Invasive Detection of Melanoma` 제목/DOI 기준)  
 PDF: [life-14-01602-v2.pdf](../paper/life-14-01602-v2.pdf)
 
 ## 주요 Figure 및 Table

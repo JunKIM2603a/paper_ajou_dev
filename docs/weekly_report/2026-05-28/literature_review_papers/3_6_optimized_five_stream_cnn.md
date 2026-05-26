@@ -4,7 +4,7 @@
 
 출처: Scientific Reports, 2025  
 DOI: `10.1038/s41598-025-05675-w`  
-Google Scholar 인용: 확인 불가 (조회일: 2026-05-20, 자동 조회 중 Google Scholar reCAPTCHA 발생)  
+Google Scholar 인용: 0회 (조회일: 2026-05-26, `Automatic Melanoma Detection Using an Optimized Five-Stream Convolutional Neural Network` 제목/DOI 기준)  
 PDF: [s41598-025-05675-w.pdf](../paper/s41598-025-05675-w.pdf)
 
 ## 주요 Figure 및 Table
