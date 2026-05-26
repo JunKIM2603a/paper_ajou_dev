@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import atexit
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -61,6 +62,25 @@ class JobPlanItem:
     fold: FoldSelection
 
 
+@dataclass(frozen=True)
+class SystemSnapshot:
+    load1: float | None
+    load_ratio: float | None
+    cpu_count: int
+    mem_available_pct: float | None
+    swap_used_pct: float | None
+
+    def compact_summary(self) -> str:
+        load_text = "unknown" if self.load1 is None else f"{self.load1:.2f}"
+        ratio_text = "unknown" if self.load_ratio is None else f"{self.load_ratio:.2f}"
+        mem_text = "unknown" if self.mem_available_pct is None else f"{self.mem_available_pct:.1f}%"
+        swap_text = "unknown" if self.swap_used_pct is None else f"{self.swap_used_pct:.1f}%"
+        return (
+            f"load1={load_text}, load_ratio={ratio_text}, cpu_count={self.cpu_count}, "
+            f"mem_available={mem_text}, swap_used={swap_text}"
+        )
+
+
 def make_run_group_id(prefix: str = "image_all") -> str:
     return f"{prefix}_{time.strftime('%Y%m%d_%H%M%S')}"
 
@@ -104,6 +124,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-val-samples", type=int, default=None)
     parser.add_argument("--max-test-samples", type=int, default=None)
     parser.add_argument("--batch-size-override", type=int, default=None)
+    parser.add_argument("--num-workers-override", type=int, default=None)
     parser.add_argument("--disable-pretrained", action="store_true")
     parser.add_argument("--devices", nargs="*", type=int, default=None, help="Visible GPU indices to run in parallel.")
     parser.add_argument(
@@ -128,6 +149,41 @@ def parse_args() -> argparse.Namespace:
         "--skip-reports",
         action="store_true",
         help="Skip post-run MLflow CSV/HTML report generation.",
+    )
+    parser.add_argument(
+        "--system-guard",
+        action="store_true",
+        help="Stop active jobs if system load, memory, or swap indicates SSH responsiveness risk.",
+    )
+    parser.add_argument(
+        "--guard-check-interval",
+        type=float,
+        default=10.0,
+        help="Seconds between system guard checks while jobs are active.",
+    )
+    parser.add_argument(
+        "--guard-load-ratio-max",
+        type=float,
+        default=0.90,
+        help="Stop if 1-minute load average divided by CPU count exceeds this value.",
+    )
+    parser.add_argument(
+        "--guard-min-mem-available-pct",
+        type=float,
+        default=12.0,
+        help="Stop if available memory percentage falls below this value.",
+    )
+    parser.add_argument(
+        "--guard-max-swap-used-pct",
+        type=float,
+        default=5.0,
+        help="Stop if swap usage percentage exceeds this value.",
+    )
+    parser.add_argument(
+        "--guard-terminate-timeout",
+        type=float,
+        default=20.0,
+        help="Seconds to wait for guarded job termination before sending SIGKILL.",
     )
     return parser.parse_args()
 
@@ -235,45 +291,209 @@ def run_parallel(
     pending = deque(build_job_plan(config_paths, fold_selections=fold_selections))
     active: dict[int, RunningJob] = {}
     devices = list(args.resolved_devices or [])
+    last_guard_check = 0.0
+    previous_sigint_handler = signal.getsignal(signal.SIGINT)
 
-    while pending or active:
-        for device in devices:
-            if device in active or not pending:
-                continue
-            item = pending.popleft()
-            command = build_command(item.config_path, args, device=device, fold=item.fold)
-            env = build_subprocess_env(device=device)
-            started_at = time.time()
-            print(f"[run_all_models] Launching {format_job_progress(item)} on GPU {device}")
-            process = subprocess.Popen(command, env=env, cwd=REPO_ROOT)
-            active[device] = RunningJob(device=device, plan_item=item, process=process, started_at=started_at)
+    def handle_sigint(signum: int, frame: object) -> None:
+        print("[run_all_models] Interrupt received; stopping active image jobs.", flush=True)
+        stop_active_jobs(active, args, reason=f"signal_{signum}")
+        raise KeyboardInterrupt
 
-        completed_devices: list[int] = []
-        for device, job in active.items():
-            returncode = job.process.poll()
-            if returncode is None:
-                continue
-            item = job.plan_item
-            print(
-                f"[run_all_models] Finished {format_job_progress(item)} on GPU {device} "
-                f"(returncode={returncode}, duration={time.time() - job.started_at:.1f}s)"
-            )
-            if returncode != 0:
-                failures.append(
-                    {
-                        "model": f"{item.config_path.parent.name}:{item.fold.label}",
-                        "returncode": returncode,
-                    }
+    signal.signal(signal.SIGINT, handle_sigint)
+    try:
+        while pending or active:
+            if active and args.system_guard and time.time() - last_guard_check >= args.guard_check_interval:
+                last_guard_check = time.time()
+                guard_reason = system_guard_reason(args)
+                if guard_reason is not None:
+                    print(
+                        f"[run_all_models] System guard triggered: {guard_reason}. "
+                        "Stopping active image jobs to keep the server responsive.",
+                        flush=True,
+                    )
+                    failures.extend(stop_active_jobs(active, args, reason=guard_reason))
+                    pending.clear()
+                    break
+
+            for device in devices:
+                if device in active or not pending:
+                    continue
+                if args.system_guard:
+                    guard_reason = system_guard_reason(args)
+                    if guard_reason is not None:
+                        print(
+                            f"[run_all_models] System guard blocked new job launch: {guard_reason}",
+                            flush=True,
+                        )
+                        failures.append({"model": "system_guard", "returncode": -15, "reason": guard_reason})
+                        pending.clear()
+                        break
+                item = pending.popleft()
+                command = build_command(item.config_path, args, device=device, fold=item.fold)
+                env = build_subprocess_env(device=device)
+                started_at = time.time()
+                print(f"[run_all_models] Launching {format_job_progress(item)} on GPU {device}")
+                process = subprocess.Popen(command, env=env, cwd=REPO_ROOT, start_new_session=True)
+                active[device] = RunningJob(device=device, plan_item=item, process=process, started_at=started_at)
+
+            completed_devices: list[int] = []
+            for device, job in active.items():
+                returncode = job.process.poll()
+                if returncode is None:
+                    continue
+                item = job.plan_item
+                print(
+                    f"[run_all_models] Finished {format_job_progress(item)} on GPU {device} "
+                    f"(returncode={returncode}, duration={time.time() - job.started_at:.1f}s)"
                 )
-            completed_devices.append(device)
+                if returncode != 0:
+                    failures.append(
+                        {
+                            "model": f"{item.config_path.parent.name}:{item.fold.label}",
+                            "returncode": returncode,
+                        }
+                    )
+                completed_devices.append(device)
 
-        for device in completed_devices:
-            del active[device]
+            for device in completed_devices:
+                del active[device]
 
-        if active:
-            time.sleep(2)
+            if active:
+                time.sleep(2)
+    finally:
+        signal.signal(signal.SIGINT, previous_sigint_handler)
 
     return failures
+
+
+def system_guard_reason(args: argparse.Namespace) -> str | None:
+    snapshot = read_system_snapshot()
+    reasons: list[str] = []
+    if snapshot.load_ratio is not None and snapshot.load_ratio > float(args.guard_load_ratio_max):
+        reasons.append(
+            f"load_ratio {snapshot.load_ratio:.2f} > {float(args.guard_load_ratio_max):.2f}"
+        )
+    if (
+        snapshot.mem_available_pct is not None
+        and snapshot.mem_available_pct < float(args.guard_min_mem_available_pct)
+    ):
+        reasons.append(
+            "mem_available "
+            f"{snapshot.mem_available_pct:.1f}% < {float(args.guard_min_mem_available_pct):.1f}%"
+        )
+    if snapshot.swap_used_pct is not None and snapshot.swap_used_pct > float(args.guard_max_swap_used_pct):
+        reasons.append(
+            f"swap_used {snapshot.swap_used_pct:.1f}% > {float(args.guard_max_swap_used_pct):.1f}%"
+        )
+    if not reasons:
+        return None
+    return f"{'; '.join(reasons)} ({snapshot.compact_summary()})"
+
+
+def read_system_snapshot() -> SystemSnapshot:
+    cpu_count = os.cpu_count() or 1
+    try:
+        load1 = os.getloadavg()[0]
+        load_ratio = load1 / max(cpu_count, 1)
+    except OSError:
+        load1 = None
+        load_ratio = None
+
+    meminfo = read_proc_meminfo()
+    mem_total = meminfo.get("MemTotal")
+    mem_available = meminfo.get("MemAvailable")
+    if mem_total and mem_available is not None:
+        mem_available_pct = 100.0 * mem_available / mem_total
+    else:
+        mem_available_pct = None
+
+    swap_total = meminfo.get("SwapTotal")
+    swap_free = meminfo.get("SwapFree")
+    if swap_total and swap_total > 0 and swap_free is not None:
+        swap_used_pct = 100.0 * (swap_total - swap_free) / swap_total
+    elif swap_total == 0:
+        swap_used_pct = 0.0
+    else:
+        swap_used_pct = None
+
+    return SystemSnapshot(
+        load1=load1,
+        load_ratio=load_ratio,
+        cpu_count=cpu_count,
+        mem_available_pct=mem_available_pct,
+        swap_used_pct=swap_used_pct,
+    )
+
+
+def read_proc_meminfo() -> dict[str, int]:
+    meminfo_path = Path("/proc/meminfo")
+    if not meminfo_path.exists():
+        return {}
+    values: dict[str, int] = {}
+    with meminfo_path.open("r", encoding="utf-8") as file:
+        for line in file:
+            if ":" not in line:
+                continue
+            key, raw_value = line.split(":", 1)
+            fields = raw_value.strip().split()
+            if not fields:
+                continue
+            try:
+                values[key] = int(fields[0])
+            except ValueError:
+                continue
+    return values
+
+
+def stop_active_jobs(
+    active: dict[int, RunningJob],
+    args: argparse.Namespace,
+    *,
+    reason: str,
+) -> list[dict[str, str | int]]:
+    failures: list[dict[str, str | int]] = []
+    for device, job in list(active.items()):
+        item = job.plan_item
+        print(
+            f"[run_all_models] Terminating {format_job_progress(item)} on GPU {device} "
+            f"because system_guard triggered.",
+            flush=True,
+        )
+        terminate_process_tree(job.process, timeout=float(args.guard_terminate_timeout))
+        failures.append(
+            {
+                "model": f"{item.config_path.parent.name}:{item.fold.label}",
+                "returncode": job.process.returncode if job.process.returncode is not None else -15,
+                "reason": reason,
+            }
+        )
+        del active[device]
+    return failures
+
+
+def terminate_process_tree(process: subprocess.Popen, *, timeout: float) -> None:
+    if process.poll() is not None:
+        return
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    except Exception:
+        process.terminate()
+
+    try:
+        process.wait(timeout=timeout)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        return
+    except Exception:
+        process.kill()
+    process.wait()
 
 
 def build_job_plan(config_paths: list[Path], *, fold_selections: list[FoldSelection]) -> list[JobPlanItem]:
@@ -395,6 +615,8 @@ def build_command(
         command.extend(["--max-test-samples", str(args.max_test_samples)])
     if getattr(args, "batch_size_override", None) is not None:
         command.extend(["--batch-size-override", str(args.batch_size_override)])
+    if getattr(args, "num_workers_override", None) is not None:
+        command.extend(["--num-workers-override", str(args.num_workers_override)])
     if args.disable_pretrained:
         command.append("--disable-pretrained")
     return command

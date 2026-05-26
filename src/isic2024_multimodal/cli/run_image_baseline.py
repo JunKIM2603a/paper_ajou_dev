@@ -117,6 +117,12 @@ def parse_args() -> argparse.Namespace:
         help="Override dataset.batch_size without editing the model config.",
     )
     parser.add_argument(
+        "--num-workers-override",
+        type=int,
+        default=None,
+        help="Override dataset.num_workers without editing the model config.",
+    )
+    parser.add_argument(
         "--disable-pretrained",
         action="store_true",
         help="Disable pretrained/model hub weights for smoke testing or offline runs.",
@@ -181,6 +187,10 @@ def main() -> None:
         if args.batch_size_override <= 0:
             raise ValueError("--batch-size-override must be a positive integer.")
         config["dataset"]["batch_size"] = int(args.batch_size_override)
+    if args.num_workers_override is not None:
+        if args.num_workers_override < 0:
+            raise ValueError("--num-workers-override must be a non-negative integer.")
+        config["dataset"]["num_workers"] = int(args.num_workers_override)
     model_name = config["model"]["display_name"]
     image_size = int(config["dataset"].get("image_size", 224))
     batch_size = int(config["dataset"].get("batch_size", 16))
@@ -259,6 +269,7 @@ def main() -> None:
                     "cv_fold": args.cv_fold,
                     "batch_size": batch_size,
                     "batch_size_override": args.batch_size_override,
+                    "num_workers_override": args.num_workers_override,
                     "split_rows": {name: len(items) for name, items in splits.items()},
                     "patient_overlap_audit": split_protocol_audit["patient_overlap_audit"],
                     "triple_balance_audit": split_protocol_audit["triple_balance_audit"],
@@ -392,6 +403,7 @@ def main() -> None:
                 "seed": seed,
                 "disable_pretrained": args.disable_pretrained,
                 "batch_size_override": args.batch_size_override,
+                "num_workers_override": args.num_workers_override,
                 "max_trials": args.max_trials,
                 "trial_indices": json.dumps(args.trial_indices) if args.trial_indices is not None else None,
                 "epochs_override": args.epochs_override,

@@ -40,12 +40,12 @@ def resolve_isic2024_dataset_root(dataset_root: str | Path, *, require_image_dir
         candidate_roots.extend(
             child
             for child in dataset_root.iterdir()
-            if child.is_dir() and child.name in {"isic-2024-challenge", "ISIC2024"}
+            if child.is_dir() and child.name in {"isic_2024_challenge", "isic-2024-challenge", "ISIC2024"}
         )
         candidate_roots.extend(
             child
             for child in dataset_root.iterdir()
-            if child.is_dir() and "isic2024" in child.name.lower()
+            if child.is_dir() and ("isic2024" in child.name.lower() or "isic_2024" in child.name.lower())
         )
         candidate_roots.extend(
             child
