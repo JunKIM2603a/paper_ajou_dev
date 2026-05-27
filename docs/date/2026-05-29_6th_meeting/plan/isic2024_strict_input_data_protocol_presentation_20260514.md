@@ -1,30 +1,15 @@
-# ISIC2024 Strict Input 데이터 처리 발표 요약
+# ISIC2024 Strict Input 데이터 처리 
 
 작성일: 2026-05-18
 
-참조 노트북:
+참조 노트북: baseline 시험을 시작하기 전에 어떤 데이터를 어떤 조건으로 사용할지 고정하기 위한 문서
 
-- `notebooks/isic_2024/isic2024_strict_input_iddx_full_dataset_20260514.ipynb`
-- `notebooks/isic_2024/isic2024_strict_input_export_audit_20260514.ipynb`
+- `notebooks/isic_2024/isic2024_strict_input_iddx_full_dataset_20260514.ipynb`: 데이터 입력 계약 정의
+- `notebooks/isic_2024/isic2024_strict_input_export_audit_20260514.ipynb`: 실제 export 산출물이 계약을 지키는지 감사
 
-## 1. 목적
+## 1. 데이터 입력 계약
 
-두 노트북은 baseline 시험을 시작하기 전에 어떤 데이터를 어떤 조건으로 사용할지 고정하기 위한 문서다.
-
-- `isic2024_strict_input_iddx_full_dataset_20260514.ipynb`: 데이터 입력 계약 정의
-- `isic2024_strict_input_export_audit_20260514.ipynb`: 실제 export 산출물이 계약을 지키는지 감사
-
-핵심 목표는 성능 시험 전에 다음을 먼저 확정하는 것이다.
-
-```text
-image + ordinary inference-time tabular metadata -> malignant probability
-```
-
-즉, 현재 baseline 단계의 초점은 복잡한 candidate 방법이 아니라, 누수 없는 strict input과 patient-level split을 먼저 안정화하는 것이다.
-
-## 2. 데이터 입력 계약
-
-기본 데이터 pool은 ISIC2024 `train-metadata.csv` 전체다.
+기본 데이터 pool은 ISIC2024 `train-metadata.csv` 전체
 
 | 항목 | 값 |
 |---|---:|
@@ -34,21 +19,21 @@ image + ordinary inference-time tabular metadata -> malignant probability
 | malignant 비율 | 약 0.098% |
 | strict input feature | 39개 |
 
-`strict_input`은 추론 시점에도 사용할 수 있는 ordinary tabular metadata만 포함한다.
+`strict_input`은 추론 시점에도 사용할 수 있는 ordinary tabular metadata만 포함
 
 - 포함: `isic_id`, `patient_id`, `lesion_id`, `target`, strict metadata 39개
 - 제외: `iddx_full`, `iddx_1`-`iddx_5`, diagnosis/reference column, pathology-derived column, schema-only constant column
 - 결측 처리, scaling, encoding은 export 단계에서 하지 않고 fold별 training code에서만 fit한다.
 
-`iddx_full`은 baseline 입력이 아니다. 필요한 경우에도 train-only privileged supervision candidate sidecar로만 분리해서 관리한다.
+`iddx_full`은 baseline 입력이 아님
 
-## 3. 분할 프로토콜
+## 2. 분할 프로토콜
 
-기본 split은 patient-level Triple Stratified Nested CV다.
+기본 split은 patient-level Triple Stratified Nested CV
 
-여기서 Triple Stratified는 row를 무작위로 나누는 방식이 아니다. 먼저 `patient_id` 단위 profile을 만들고, 각 patient를 세 가지 기준으로 묶은 뒤 fold마다 비슷하게 배치한다.
+먼저 `patient_id` 단위 profile을 만들고, 각 patient를 세 가지 기준으로 묶은 뒤 fold마다 비슷하게 배치
 
-**Triple 기준 개요**
+**:star:Triple 기준 개요**
 
 | 번호 | 기준 | 왜 필요한가 |
 |---:|---|---|
@@ -105,7 +90,8 @@ triple_stratum = has_malignant | positive_row_bin | sample_count_bin
 | `sample_count_bin` 분포 | 209 / 208 / 208 / 208 / 209 |
 | unique triple stratum | 15 |
 
-Outer 5-fold의 `outer_test` 분포는 아래처럼 거의 같은 row 수와 positive 비율을 유지한다.
+:star:
+Outer 5-fold의 `outer_test` 분포는 아래처럼 거의 같은 row 수와 positive 비율을 유지한다. ([isic2024_strict_input_export_audit_20260514.ipynb ## 5. Nested CV split audit](../../../../notebooks/isic_2024/isic2024_strict_input_export_audit_20260514.ipynb))
 
 | outer fold | patient 수 | row 수 | positive row 수 | positive 비율 (%) | malignant patient 수 | sample bin 수 | triple strata 수 |
 |---:|---:|---:|---:|---:|---:|---:|---:|
@@ -121,6 +107,7 @@ Outer 5-fold의 `outer_test` 분포는 아래처럼 거의 같은 row 수와 pos
 | inner 4-fold balance score 최소 | 1.2402 |
 | inner 4-fold balance score 최대 | 2.2811 |
 
+:star:
 ```text
 official_train_pool
 (train-metadata.csv 전체: 401,059 rows / 1,042 patients)
@@ -156,8 +143,10 @@ official_train_pool
         +-- 모든 outer fold에 대해 같은 절차 반복
 ```
 
-현재 baseline runner의 실행 단위는 `(outer_fold=k, inner_fold=j)` 하나다. 이 실행은 `inner_train`으로 학습하고, `inner_validation`으로 선택하고, 선택된 설정을 다시 `inner_train`으로 학습한 뒤 `outer_test`를 평가한다.
+현재 baseline runner의 실행 단위는 `(outer_fold=k, inner_fold=j)` 하나다.
+이 실행은 `inner_train`으로 학습하고, `inner_validation`으로 선택하고, 선택된 설정을 다시 `inner_train`으로 학습한 뒤 `outer_test`를 평가한다.
 
+:star:
 ```text
 현재 구현:
 outer k, inner j 하나 선택
@@ -172,7 +161,7 @@ outer k, inner j 하나 선택
     full cv_train refit은 하지 않음
 ```
 
-따라서 현재 baseline 단계 결과는 `validation-selected nested summary`로 부르는 것이 정확하다. 20개 실행 결과를 그대로 평균하지 않고, outer fold별 validation-selected 대표 실행 5개를 요약한다.
+따라서 현재 baseline 단계 결과는 20개 실행 결과를 그대로 평균하지 않고, outer fold별 validation-selected 대표 실행 5개를 요약한다.
 
 ```text
 paper-final 후속 절차:
@@ -183,9 +172,7 @@ outer_fold k
     outer_test에서 한 번 평가
 ```
 
-이 paper-final refit은 최종 모델 선정 이후에 별도 수행해야 하는 이상적인 흐름이다.
-
-역할은 다음처럼 고정한다.
+역할
 
 | split role | 용도 |
 |---|---|
@@ -193,7 +180,8 @@ outer_fold k
 | `inner_validation` | model choice, hyperparameter, early stopping, threshold, calibration |
 | `outer_test` | fold별 최종 평가 전용 |
 
-`inner_validation`은 최종 평가용 데이터가 아니라, `outer_test`를 보기 전에 필요한 선택을 끝내기 위한 내부 검증 partition이다. 모델 학습과 전처리 fit은 `inner_train`에서만 수행하고, `inner_validation`은 학습된 모델의 validation probability와 metric을 이용해 선택 결정을 내리는 데 사용한다.
+`inner_validation`은 최종 평가용 데이터가 아니라, `outer_test`를 보기 전에 필요한 선택을 끝내기 위한 내부 검증 partition이다.
+모델 학습과 전처리 fit은 `inner_train`에서만 수행하고, `inner_validation`은 학습된 모델의 validation probability와 metric을 이용해 선택 결정을 내리는 데 사용한다.
 
 | 결정 항목 | `inner_validation`에서 하는 일 | 현재 baseline 해석 |
 |---|---|---|

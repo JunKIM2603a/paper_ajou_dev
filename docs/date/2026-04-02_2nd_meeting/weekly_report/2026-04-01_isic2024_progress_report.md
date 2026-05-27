@@ -34,9 +34,9 @@
 
 활용 가능한 기존 자료는 다음과 같다.
 
-- 프로젝트 전체 개요와 실행 경로: [README](../../README.md)
-- 데이터/모델 흐름 다이어그램: [program_diagram.md](../program_diagram.md)
-- 전환 계획 및 이전 정리 문서: [isic2024_transition_plan.md](../isic2024_transition_plan.md)
+- 프로젝트 전체 개요와 실행 경로: [README](../../../../README.md)
+- 데이터/모델 흐름 다이어그램: 이전 링크 `program_diagram.md`는 `docs/date/` 재배치 후 현재 저장소에 없음
+- 전환 계획 및 이전 정리 문서: 이전 링크 `isic2024_transition_plan.md`는 `docs/date/` 재배치 후 현재 저장소에 없음
 - 상세 EDA 보고서 생성 경로: `experiments/evidence/eda/isic_2024/eda_report.md` (자동생성 산출물, 현재 저장소에는 미포함)
 - feature set 추천 파일 생성 경로: `experiments/evidence/eda/isic_2024/feature_sets_recommended.json` (자동생성 산출물, 현재 저장소에는 미포함)
 
@@ -80,10 +80,10 @@
 
 관련 기존 자료는 다음과 같다.
 
-- 이미지 baseline 설정 폴더: [experiments/configs/image_baselines](../../experiments/configs/image_baselines)
+- 이미지 baseline 설정 폴더: [experiments/configs/image_baselines](../../../../experiments/configs/image_baselines)
 - 이미지 파이프라인 검증용 smoke 리포트 생성 경로: `experiments/outputs/image_smoke/mlflow_report.html` (자동생성 산출물, 현재 저장소에는 미포함)
 - 대표 이미지 결과 예시 생성 경로: `experiments/outputs/BioMedCLIP`, `experiments/outputs/ResNet-50` (자동생성 산출물, 현재 저장소에는 미포함)
-- `MedCLIP` 환경 주의사항: [README](../../README.md)
+- `MedCLIP` 환경 주의사항: [README](../../../../README.md)
 
 ## 3. 현재 기준 권장 설명 방식
 
@@ -145,7 +145,7 @@
 ### 6.4 화면에서 보여주기 좋은 순서
 
 - 먼저 현재 문서: [2026-04-01_isic2024_progress_report.md](./2026-04-01_isic2024_progress_report.md)
-- 필요하면 전체 구조 설명용 문서: [program_diagram.md](../program_diagram.md)
+- 필요하면 전체 구조 설명용 문서: 이전 링크 `program_diagram.md`는 `docs/date/` 재배치 후 현재 저장소에 없음
 - Tabular 결과를 보여줄 때 생성 경로: `experiments/tables/mlflow_report.html` (자동생성 산출물, 현재 저장소에는 미포함)
 - EDA 세부 설명이 필요할 때 생성 경로: `experiments/evidence/eda/isic_2024/eda_report.md` (자동생성 산출물, 현재 저장소에는 미포함)
 - Image는 현재 결과 예시만 간단히 보여줄 때 생성 경로: `experiments/outputs/BioMedCLIP`, `experiments/outputs/ResNet-50` (자동생성 산출물, 현재 저장소에는 미포함)

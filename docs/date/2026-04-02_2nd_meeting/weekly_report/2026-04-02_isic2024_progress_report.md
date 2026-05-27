@@ -25,7 +25,7 @@
   - 라벨, 이미지, 보조 정보는 `isic_id` 기준으로 연결됨
   - 문제 유형은 극단적 클래스 불균형 이진 분류
   - 따라서 정확도보다 `average precision`, `AUC`, `balanced accuracy`, `recall` 중심으로 해석하는 것이 적절함
-  - split: `train / val / internal test`로 나누며, 이때 같은 환자가 서로 다른 split에 섞이지 않도록 `split_groupsplit_group_id = patient_id`를 사용함
+  - split: `train / val / internal test`로 나누며, 이때 같은 환자가 서로 다른 split에 섞이지 않도록 `split_group_id = patient_id`를 사용함
 
 #### EDA의 핵심 목적 
 
@@ -39,8 +39,8 @@
 
 #### 추가 자료
 
-- 프로젝트 전체 개요와 실행 경로: [README](../../README.md)
-- 데이터/모델 흐름 다이어그램: [program_diagram.md](../program_diagram.md)
+- 프로젝트 전체 개요와 실행 경로: [README](../../../../README.md)
+- 데이터/모델 흐름 다이어그램: 이전 링크 `program_diagram.md`는 `docs/date/` 재배치 후 현재 저장소에 없음
 - 상세 EDA 보고서 생성 경로: `experiments/evidence/eda/isic_2024/eda_report.md`, `experiments/evidence/eda/isic_2024/isic2024_presentation_only_eda.ipynb` (자동생성 산출물, 현재 저장소에는 미포함)
 - feature set 추천 파일 생성 경로: `experiments/evidence/eda/isic_2024/feature_sets_recommended.json` (자동생성 산출물, 현재 저장소에는 미포함)
 
@@ -86,10 +86,10 @@
 
 관련 기존 자료는 다음과 같다.
 
-- 이미지 baseline 설정 폴더: [experiments/configs/image_baselines](../../experiments/configs/image_baselines)
+- 이미지 baseline 설정 폴더: [experiments/configs/image_baselines](../../../../experiments/configs/image_baselines)
 - 이미지 파이프라인 검증용 smoke 리포트 생성 경로: `experiments/outputs/image_smoke/mlflow_report.html` (자동생성 산출물, 현재 저장소에는 미포함)
 - 대표 이미지 결과 예시 생성 경로: `experiments/outputs/BioMedCLIP`, `experiments/outputs/ResNet-50` (자동생성 산출물, 현재 저장소에는 미포함)
-- `MedCLIP` 환경 주의사항: [README](../../README.md)
+- `MedCLIP` 환경 주의사항: [README](../../../../README.md)
 
 ## 3. 향후 진행 방향
 1. 가중치 초기화: fine-turning Best 모델에 load checkpoint
