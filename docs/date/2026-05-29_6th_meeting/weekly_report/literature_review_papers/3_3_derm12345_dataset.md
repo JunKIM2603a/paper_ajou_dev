@@ -41,10 +41,6 @@ PDF: [s41597-024-04104-3.pdf](../paper/s41597-024-04104-3.pdf)
 
 해석: 이 Table은 데이터 구성, 예시, 분포 특성 범주의 정보를 표 형태로 정리한다. 비교 축과 수치는 해당 논문의 핵심 근거를 보강하며, 특히 DERM12345의 수집 절차, taxonomy, class 구성과 공개 dermoscopy dataset 특성 관련 내용을 비교해 읽는 기준이 된다. ISIC2024 연구에서는 ISIC 계열 데이터와 외부 dermoscopy dataset의 class granularity 차이를 설명할 때 사용할 수 있다.
 
-## 우리 연구에서의 위치
-
-DERM12345는 binary malignant/benign을 넘어 피부 병변을 fine-grained subclass로 세분화하는 dataset reference이다. ISIC 2024 연구에서는 3D-TBP binary target의 한계를 설명하거나, 향후 subtype-aware evaluation의 필요성을 언급할 때 사용할 수 있다.
-
 ---
 
 ## 목표와 기여
@@ -55,8 +51,8 @@ DERM12345는 binary malignant/benign을 넘어 피부 병변을 fine-grained sub
 
 - 수집 기관: Türkiye 3개 기관
 - 기간: 2008-2021년
-- 규모: 1,627명 환자, 12,345개 high-resolution dermatoscopic image
-- Label taxonomy: 5 superclass, 15 main class, 40 subclass
+- 규모: 1,627명 환자, 12,345개의 고해상도 피부경 이미지
+- Label taxonomy: 5개의 상위 클래스, 15개의 주요 클래스, 40개의 하위 클래스(40개의 피부 병변 세부 분류)
 
 ## Imbalance 처리
 
