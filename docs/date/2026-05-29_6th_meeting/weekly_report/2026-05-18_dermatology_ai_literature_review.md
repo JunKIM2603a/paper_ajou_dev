@@ -12,7 +12,7 @@ keyword: foundation model, 3D-TBP dataset, multimodal image pair/metadata, imbal
 ISIC 2024 Kaggle Challenge는 3D Total Body Photography(3D-TBP)에서 추출한 피부 병변 crop image와 환자/병변 metadata를 함께 제공하는 binary malignant/benign classification 문제이다. 공식 train dataset은 SLICE-3D dataset이며, 총 401,059개 lesion tile로 구성된다.
 
 | 항목 | 개수 | 비율 |
-|---|---:|---:|
+|---|---|---|
 | Benign / target 0 | 400,666 | 99.902% |
 | Malignant / target 1 | 393 | 0.098% |
 | Total | 401,059 | 100% |

@@ -9,231 +9,48 @@ PDF: [s41598-025-98205-7.pdf](../paper/s41598-025-98205-7.pdf)
 
 ## 주요 Figure 및 Table
 
-**Table 1. 비교 항목과 핵심 수치 요약**
+**Table 1. 기존 연구 및 제안 모델 비교 분석**
 
+* 일반적으로 다양한 멀티 모달
+* 연산비용에서의 차별성
+* 
 ![Table 1](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/table_1.png)
 
-해석: 이 Table은 비교 항목과 핵심 수치 범주의 정보를 표 형태로 정리한다. 비교 축과 수치는 해당 논문의 핵심 근거를 보강하며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 비교해 읽는 기준이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Figure 1. 연구 설계와 모델/데이터 처리 흐름**
-
-![Figure 1](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/figure_1.png)
-
-해석: 이 Figure는 연구 설계와 모델/데이터 처리 흐름 범주를 시각적으로 보여준다. 원문 맥락에서는 해당 논문의 핵심 근거를 보강하는 자료이며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 이해하는 데 도움이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Table 2. 연구 설계와 모델/데이터 처리 흐름 요약**
-
-![Table 2](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/table_2.png)
-
-해석: 이 Table은 연구 설계와 모델/데이터 처리 흐름 범주의 정보를 표 형태로 정리한다. 비교 축과 수치는 해당 논문의 핵심 근거를 보강하며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 비교해 읽는 기준이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Table 4. 연구 설계와 모델/데이터 처리 흐름 요약**
+**Table 4. SkinEHDLF 아키텍쳐**
 
 ![Table 4](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/table_4.png)
 
-해석: 이 Table은 연구 설계와 모델/데이터 처리 흐름 범주의 정보를 표 형태로 정리한다. 비교 축과 수치는 해당 논문의 핵심 근거를 보강하며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 비교해 읽는 기준이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Figure 2. 연구 설계와 모델/데이터 처리 흐름**
+**Figure 2. SkinEHDLF hybrid model 아키텍쳐**
 
 ![Figure 2](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/figure_2.png)
 
-해석: 이 Figure는 연구 설계와 모델/데이터 처리 흐름 범주를 시각적으로 보여준다. 원문 맥락에서는 해당 논문의 핵심 근거를 보강하는 자료이며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 이해하는 데 도움이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Table 5. 연구 설계와 모델/데이터 처리 흐름 요약**
+**Table 5. 전처리**
 
 ![Table 5](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/table_5.png)
 
-해석: 이 Table은 연구 설계와 모델/데이터 처리 흐름 범주의 정보를 표 형태로 정리한다. 비교 축과 수치는 해당 논문의 핵심 근거를 보강하며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 비교해 읽는 기준이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Figure 3. 연구 설계와 모델/데이터 처리 흐름**
+**Figure 3. ConvNeXt Feature Extraction**
 
 ![Figure 3](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/figure_3.png)
 
-해석: 이 Figure는 연구 설계와 모델/데이터 처리 흐름 범주를 시각적으로 보여준다. 원문 맥락에서는 해당 논문의 핵심 근거를 보강하는 자료이며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 이해하는 데 도움이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Figure 4. 연구 설계와 모델/데이터 처리 흐름**
+**Figure 4. EfficientNetV2 Feature Extraction**
 
 ![Figure 4](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/figure_4.png)
 
-해석: 이 Figure는 연구 설계와 모델/데이터 처리 흐름 범주를 시각적으로 보여준다. 원문 맥락에서는 해당 논문의 핵심 근거를 보강하는 자료이며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 이해하는 데 도움이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Figure 5. 연구 설계와 모델/데이터 처리 흐름**
+**Figure 5.  Swin Transformer Feature Extraction**
 
 ![Figure 5](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/figure_5.png)
 
-해석: 이 Figure는 연구 설계와 모델/데이터 처리 흐름 범주를 시각적으로 보여준다. 원문 맥락에서는 해당 논문의 핵심 근거를 보강하는 자료이며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 이해하는 데 도움이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Table 6. 연구 설계와 모델/데이터 처리 흐름 요약**
+**Table 6. data split**
 
 ![Table 6](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/table_6.png)
 
-해석: 이 Table은 연구 설계와 모델/데이터 처리 흐름 범주의 정보를 표 형태로 정리한다. 비교 축과 수치는 해당 논문의 핵심 근거를 보강하며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 비교해 읽는 기준이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Table 7. 비교 항목과 핵심 수치 요약**
-
-![Table 7](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/table_7.png)
-
-해석: 이 Table은 비교 항목과 핵심 수치 범주의 정보를 표 형태로 정리한다. 비교 축과 수치는 해당 논문의 핵심 근거를 보강하며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 비교해 읽는 기준이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Figure 6. 성능 비교와 정량 평가 결과**
-
-![Figure 6](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/figure_6.png)
-
-해석: 이 Figure는 성능 비교와 정량 평가 결과 범주를 시각적으로 보여준다. 원문 맥락에서는 해당 논문의 핵심 근거를 보강하는 자료이며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 이해하는 데 도움이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Table 8. 성능 비교와 정량 평가 결과 요약**
+**Table 8. result: lesion type classification**
 
 ![Table 8](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/table_8.png)
 
-해석: 이 Table은 성능 비교와 정량 평가 결과 범주의 정보를 표 형태로 정리한다. 비교 축과 수치는 해당 논문의 핵심 근거를 보강하며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 비교해 읽는 기준이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Figure 7. 데이터 구성, 예시, 분포 특성**
-
-![Figure 7](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/figure_7.png)
-
-해석: 이 Figure는 데이터 구성, 예시, 분포 특성 범주를 시각적으로 보여준다. 원문 맥락에서는 해당 논문의 핵심 근거를 보강하는 자료이며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 이해하는 데 도움이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Table 9. 성능 비교와 정량 평가 결과 요약**
+**Figure 9. result: binary vs. Multi-class classification results**
 
 ![Table 9](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/table_9.png)
-
-해석: 이 Table은 성능 비교와 정량 평가 결과 범주의 정보를 표 형태로 정리한다. 비교 축과 수치는 해당 논문의 핵심 근거를 보강하며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 비교해 읽는 기준이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Figure 8. 성능 비교와 정량 평가 결과**
-
-![Figure 8](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/figure_8.png)
-
-해석: 이 Figure는 성능 비교와 정량 평가 결과 범주를 시각적으로 보여준다. 원문 맥락에서는 해당 논문의 핵심 근거를 보강하는 자료이며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 이해하는 데 도움이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Table 10. 성능 비교와 정량 평가 결과 요약**
-
-![Table 10](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/table_10.png)
-
-해석: 이 Table은 성능 비교와 정량 평가 결과 범주의 정보를 표 형태로 정리한다. 비교 축과 수치는 해당 논문의 핵심 근거를 보강하며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 비교해 읽는 기준이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Table 11. 성능 비교와 정량 평가 결과 요약**
-
-![Table 11](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/table_11.png)
-
-해석: 이 Table은 성능 비교와 정량 평가 결과 범주의 정보를 표 형태로 정리한다. 비교 축과 수치는 해당 논문의 핵심 근거를 보강하며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 비교해 읽는 기준이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Table 12. 데이터 구성, 예시, 분포 특성 요약**
-
-![Table 12](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/table_12.png)
-
-해석: 이 Table은 데이터 구성, 예시, 분포 특성 범주의 정보를 표 형태로 정리한다. 비교 축과 수치는 해당 논문의 핵심 근거를 보강하며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 비교해 읽는 기준이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Figure 9. 데이터 구성, 예시, 분포 특성**
-
-![Figure 9](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/figure_9.png)
-
-해석: 이 Figure는 데이터 구성, 예시, 분포 특성 범주를 시각적으로 보여준다. 원문 맥락에서는 해당 논문의 핵심 근거를 보강하는 자료이며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 이해하는 데 도움이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Table 12. 데이터 구성, 예시, 분포 특성 요약**
-
-![Table 12](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/table_12_part2.png)
-
-해석: 이 Table은 데이터 구성, 예시, 분포 특성 범주의 정보를 표 형태로 정리한다. 비교 축과 수치는 해당 논문의 핵심 근거를 보강하며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 비교해 읽는 기준이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Table 13. 성능 비교와 정량 평가 결과 요약**
-
-![Table 13](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/table_13.png)
-
-해석: 이 Table은 성능 비교와 정량 평가 결과 범주의 정보를 표 형태로 정리한다. 비교 축과 수치는 해당 논문의 핵심 근거를 보강하며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 비교해 읽는 기준이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Table 14. 성능 비교와 정량 평가 결과 요약**
-
-![Table 14](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/table_14.png)
-
-해석: 이 Table은 성능 비교와 정량 평가 결과 범주의 정보를 표 형태로 정리한다. 비교 축과 수치는 해당 논문의 핵심 근거를 보강하며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 비교해 읽는 기준이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Table 15. 데이터 구성, 예시, 분포 특성 요약**
-
-![Table 15](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/table_15.png)
-
-해석: 이 Table은 데이터 구성, 예시, 분포 특성 범주의 정보를 표 형태로 정리한다. 비교 축과 수치는 해당 논문의 핵심 근거를 보강하며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 비교해 읽는 기준이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Table 14. 성능 비교와 정량 평가 결과 요약**
-
-![Table 14](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/table_14_part2.png)
-
-해석: 이 Table은 성능 비교와 정량 평가 결과 범주의 정보를 표 형태로 정리한다. 비교 축과 수치는 해당 논문의 핵심 근거를 보강하며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 비교해 읽는 기준이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Figure 10. 성능 비교와 정량 평가 결과**
-
-![Figure 10](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/figure_10.png)
-
-해석: 이 Figure는 성능 비교와 정량 평가 결과 범주를 시각적으로 보여준다. 원문 맥락에서는 해당 논문의 핵심 근거를 보강하는 자료이며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 이해하는 데 도움이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Table 15. 데이터 구성, 예시, 분포 특성 요약**
-
-![Table 15](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/table_15_part2.png)
-
-해석: 이 Table은 데이터 구성, 예시, 분포 특성 범주의 정보를 표 형태로 정리한다. 비교 축과 수치는 해당 논문의 핵심 근거를 보강하며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 비교해 읽는 기준이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Figure 11. 데이터 구성, 예시, 분포 특성**
-
-![Figure 11](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/figure_11.png)
-
-해석: 이 Figure는 데이터 구성, 예시, 분포 특성 범주를 시각적으로 보여준다. 원문 맥락에서는 해당 논문의 핵심 근거를 보강하는 자료이며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 이해하는 데 도움이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Table 19. 성능 비교와 정량 평가 결과 요약**
-
-![Table 19](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/table_19.png)
-
-해석: 이 Table은 성능 비교와 정량 평가 결과 범주의 정보를 표 형태로 정리한다. 비교 축과 수치는 해당 논문의 핵심 근거를 보강하며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 비교해 읽는 기준이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Table 16. 성능 비교와 정량 평가 결과 요약**
-
-![Table 16](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/table_16.png)
-
-해석: 이 Table은 성능 비교와 정량 평가 결과 범주의 정보를 표 형태로 정리한다. 비교 축과 수치는 해당 논문의 핵심 근거를 보강하며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 비교해 읽는 기준이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Figure 12. 성능 비교와 정량 평가 결과**
-
-![Figure 12](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/figure_12.png)
-
-해석: 이 Figure는 성능 비교와 정량 평가 결과 범주를 시각적으로 보여준다. 원문 맥락에서는 해당 논문의 핵심 근거를 보강하는 자료이며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 이해하는 데 도움이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Table 17. 성능 비교와 정량 평가 결과 요약**
-
-![Table 17](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/table_17.png)
-
-해석: 이 Table은 성능 비교와 정량 평가 결과 범주의 정보를 표 형태로 정리한다. 비교 축과 수치는 해당 논문의 핵심 근거를 보강하며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 비교해 읽는 기준이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Table 18. 비교 항목과 핵심 수치 요약**
-
-![Table 18](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/table_18.png)
-
-해석: 이 Table은 비교 항목과 핵심 수치 범주의 정보를 표 형태로 정리한다. 비교 축과 수치는 해당 논문의 핵심 근거를 보강하며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 비교해 읽는 기준이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Figure 13. 성능 비교와 정량 평가 결과**
-
-![Figure 13](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/figure_13.png)
-
-해석: 이 Figure는 성능 비교와 정량 평가 결과 범주를 시각적으로 보여준다. 원문 맥락에서는 해당 논문의 핵심 근거를 보강하는 자료이며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 이해하는 데 도움이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Table 19. 성능 비교와 정량 평가 결과 요약**
-
-![Table 19](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/table_19_part2.png)
-
-해석: 이 Table은 성능 비교와 정량 평가 결과 범주의 정보를 표 형태로 정리한다. 비교 축과 수치는 해당 논문의 핵심 근거를 보강하며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 비교해 읽는 기준이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Figure 14. 성능 비교와 정량 평가 결과**
-
-![Figure 14](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/figure_14.png)
-
-해석: 이 Figure는 성능 비교와 정량 평가 결과 범주를 시각적으로 보여준다. 원문 맥락에서는 해당 논문의 핵심 근거를 보강하는 자료이며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 이해하는 데 도움이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-**Table 20. 성능 비교와 정량 평가 결과 요약**
-
-![Table 20](../paper/assets/3_2_skinehdlf_hybrid_deep_learning/table_20.png)
-
-해석: 이 Table은 성능 비교와 정량 평가 결과 범주의 정보를 표 형태로 정리한다. 비교 축과 수치는 해당 논문의 핵심 근거를 보강하며, 특히 ISIC 2024 기반 hybrid deep learning pipeline과 class imbalance 대응 실험 관련 내용을 비교해 읽는 기준이 된다. ISIC2024 연구에서는 극단적 class imbalance, augmentation, ensemble baseline을 비교할 때 참고할 수 있다.
-
-## 우리 연구에서의 위치
-
-ConvNeXt, EfficientNetV2, Swin Transformer를 결합하고 class-weighted loss를 사용하므로 image branch baseline, ensemble, imbalance handling 논의에 활용할 수 있다.
 
 ---
 
