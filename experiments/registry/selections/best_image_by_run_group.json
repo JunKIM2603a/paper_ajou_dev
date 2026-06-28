@@ -1,1 +1,16 @@
-{}
+{
+  "image_all_smoke_bs8": {
+    "model_family": "image_baselines",
+    "run_group_id": "image_all_smoke_bs8",
+    "dataset_id": "image_preprocessed_v1",
+    "config_path": "experiments/configs/suites/image_baselines.json",
+    "dataset_spec_path": "/home/junkim/paper_ajou_dev/experiments/configs/dataset_specs/image_preprocessed_v1.json",
+    "summary_path": "/home/junkim/paper_ajou_dev/experiments/outputs/smoke/image_all_smoke_bs8/image_baselines/ResNet50/ResNet50_trial_001/summary.json",
+    "artifact_path": "/home/junkim/paper_ajou_dev/experiments/outputs/smoke/image_all_smoke_bs8/image_baselines/ResNet50/ResNet50_trial_001/best_model.pt",
+    "model_name": "ResNet50",
+    "validation_metric_name": "pauc_above_tpr80",
+    "validation_metric": 0.19055118110236216,
+    "selected_threshold": 0.5952157378196716,
+    "updated_at": "2026-05-21 22:40:30"
+  }
+}
