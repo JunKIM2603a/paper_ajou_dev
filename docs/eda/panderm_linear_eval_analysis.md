@@ -29,7 +29,7 @@ PanDerm Linear Evaluation은 다음 과정으로 진행됩니다.
 | 기반 모델 | PyTorch `nn.Linear` (LogisticRegression 구현) |
 | 손실 함수 | `CrossEntropyLoss` (표준, 클래스 가중치 없음) |
 | 최적화 | `LBFGS` + `strong_wolfe` line search |
-| 정규화 강도 | `C = (feat_dim × num_classes) / 100` |
+| 정규화 강도 | [`C = (feat_dim × num_classes) / 100`](../../PanDerm/classification/panderm_model/downstream/eval_features/linear_probe.py#L113) (C는 규제 강도의 역수; feat_dim·num_classes에 비례해 규제 완화) |
 | 훈련 데이터 | train + val 합산 (`combine_trainval=True`) |
 
 > [!WARNING]
@@ -40,7 +40,7 @@ PanDerm Linear Evaluation은 다음 과정으로 진행됩니다.
 
 ## 1. 지표 계산 방식 — `get_eval_metrics` 함수
 
-실제로 사용되는 함수는 `metrics.py`의 `get_eval_metrics()` (부트스트랩 없는 버전)입니다.
+실제로 사용되는 함수는 `metrics.py`의 [`get_eval_metrics()`](../../PanDerm/classification/panderm_model/downstream/eval_features/metrics.py#L303) (부트스트랩 없는 버전)입니다.
 
 ```python
 # metrics.py: get_eval_metrics() (L.303-384)
@@ -63,6 +63,8 @@ auc_pr = average_precision_score(targets_all, probs_all, average='macro')
 ```
 
 ### 1-1) 분류 헤드 출력 형태 (다중 분류 vs 이진 분류)
+
+> 소스: [linear_probe.py L.232–237](../../PanDerm/classification/panderm_model/downstream/eval_features/linear_probe.py#L232)
 
 ```python
 # linear_probe.py: test_linear_probe() (L.232-237)
@@ -204,7 +206,7 @@ Test 1개 샘플 오분류 = Recall ±10~17%p 변동
 | **5: OLP** | **0.30** | **0.43** | **10** |
 | 6: OT | 0.83 | 0.71 | 6 |
 
-**주요 오분류 패턴**:
+**주요 오분류 패턴** ([confusion matrix 분석 노트북](../../notebooks/PanDerm/Linear%20Evaluation/panderm_linear_eval_analysis_20260628.ipynb)):
 - OLP → OT: 3건 (30%) — OT로 혼동
 - OLP → OC: 2건 (20%) — OC로 혼동
 - OLP 총 오진율: 70% (10개 중 7개 오분류)
@@ -293,8 +295,8 @@ criterion = nn.CrossEntropyLoss(weight=class_weights)
 
 | 파일 | 내용 |
 |---|---|
-| `figures/label_imbalance_focus.png` | 레이블 불균형 bar chart (aptos2019, Oral_Diseases) |
-| `figures/classwise_performance_heatmap_focus.png` | 클래스별 P/R/F1 히트맵 (RdYlGn 색상) |
-| `figures/confusion_matrix_normalized_focus.png` | 정규화 Confusion Matrix (행 기준) |
-| `figures/class_specific_aupr_focus.png` | Class-specific AUPR 막대 그래프 (Macro/Weighted 기준선 포함) |
-| `figures/acc_vs_bacc_gap_focus.png` | Accuracy vs Balanced Accuracy 갭 시각화 |
+| [figures/label_imbalance_focus.png](../../PanDerm/Linear%20Evaluation/figures/label_imbalance_focus.png) | 레이블 불균형 bar chart (aptos2019, Oral_Diseases) |
+| [figures/classwise_performance_heatmap_focus.png](../../PanDerm/Linear%20Evaluation/figures/classwise_performance_heatmap_focus.png) | 클래스별 P/R/F1 히트맵 (RdYlGn 색상) |
+| [figures/confusion_matrix_normalized_focus.png](../../PanDerm/Linear%20Evaluation/figures/confusion_matrix_normalized_focus.png) | 정규화 Confusion Matrix (행 기준) |
+| [figures/class_specific_aupr_focus.png](../../PanDerm/Linear%20Evaluation/figures/class_specific_aupr_focus.png) | Class-specific AUPR 막대 그래프 (Macro/Weighted 기준선 포함) |
+| [figures/acc_vs_bacc_gap_focus.png](../../PanDerm/Linear%20Evaluation/figures/acc_vs_bacc_gap_focus.png) | Accuracy vs Balanced Accuracy 갭 시각화 |
