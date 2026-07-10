@@ -40,6 +40,7 @@ WARMUP="${WARMUP:-10}"
 LR="${LR:-5e-4}"
 SEED="${SEED:-0}"
 GPU="${GPU:-0}"
+NUM_WORKERS="${NUM_WORKERS:-8}"
 
 if [ "${SMOKE:-0}" = "1" ]; then
   EPOCHS=1; WARMUP=0
@@ -69,7 +70,7 @@ conda run -n PanDerm --no-capture-output python run_class_finetuning.py \
   --mixup 0.8 --cutmix 1.0 \
   --weights --monitor recall \
   --sin_pos_emb --imagenet_default_mean_and_std --no_auto_resume --TTA \
-  --num_workers 8 \
+  --num_workers "$NUM_WORKERS" \
   --exp_name "${DATASET} full ft" --wandb_name "${DATASET}_full_ft_s${SEED}" \
   --output_dir "$OUT" \
   --csv_path "$CSV" \
