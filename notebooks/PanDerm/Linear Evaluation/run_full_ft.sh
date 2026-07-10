@@ -58,7 +58,7 @@ echo "DATASET=$DATASET NB_CLASSES=$NB_CLASSES BATCH=$BATCH ACCUM=$ACCUM EPOCHS=$
 echo "output=$OUT"
 
 WANDB_MODE=offline CUDA_VISIBLE_DEVICES="$GPU" \
-/home/ubuntu/miniconda3/envs/PanDerm/bin/python run_class_finetuning.py \
+conda run -n PanDerm --no-capture-output python run_class_finetuning.py \
   --model PanDerm_Large_FT \
   --pretrained_checkpoint "$CKPT" \
   --nb_classes "$NB_CLASSES" \
