@@ -500,6 +500,159 @@ def run_lora_experiment(dataset_key, variant, *, lora_r=8, lora_alpha=16,
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 선택적 파라미터 미세조정 PEFT — BitFit / LN-tuning (§2-3 6방법 확장)
+#   LoRA-pure 와 **forward 동일**(frozen 백본 + 마지막 CLS + linear head).
+#   차이는 "백본의 어떤 파라미터를 unfreeze 하느냐"뿐 → PanDermLoRAMultiLayer 상속으로
+#   forward/state_dict/train 로직을 그대로 재사용하고 __init__ 만 교체한다.
+#     - bitfit    : name.endswith("bias") 인 백본 파라미터만 학습(q_bias/v_bias 포함,
+#                   relative_position_bias_table 자동 제외).
+#     - ln_tuning : nn.LayerNorm 모듈의 weight/bias 만 학습(block norm1/norm2 + 최종 norm).
+#   head(fusion LayerNorm + linear)는 모든 방법에서 동일하게 학습(분류 head 이므로).
+# ─────────────────────────────────────────────────────────────────────────────
+PEFT_METHODS = {
+    "bitfit":    dict(suffix="bitfit_lp",    label="BitFit (bias-only)"),
+    "ln_tuning": dict(suffix="ln_tuning_lp", label="LN-tuning (LayerNorm-only)"),
+}
+
+
+def select_peft_params(backbone, method):
+    """백본에서 method 에 해당하는 학습 대상 파라미터 이름 리스트를 반환."""
+    if method == "bitfit":
+        return [n for n, _ in backbone.named_parameters() if n.endswith("bias")]
+    if method == "ln_tuning":
+        ln_names = set()
+        for mod_name, m in backbone.named_modules():
+            if isinstance(m, nn.LayerNorm):
+                for pn, _ in m.named_parameters(recurse=False):
+                    ln_names.add(f"{mod_name}.{pn}" if mod_name else pn)
+        return [n for n, _ in backbone.named_parameters() if n in ln_names]
+    raise ValueError(f"알 수 없는 PEFT method: {method} (bitfit|ln_tuning)")
+
+
+class PanDermSelectiveFT(PanDermLoRAMultiLayer):
+    """frozen PanDerm 백본 + 선택적 파라미터 unfreeze(BitFit/LN-tuning) + 융합 head.
+
+    LoRA 어댑터 주입을 하지 않으므로 백본 블록은 **원본 forward** 로 동작한다.
+    forward/train/trainable_state_dict/load_trainable_state_dict 는 부모(LoRA) 것을 그대로 재사용
+    (변형은 fusion_layers=[23] pure 로 LoRA-pure 와 apples-to-apples).
+    """
+
+    def __init__(self, backbone, fusion_layers, num_classes, method,
+                 use_grad_checkpoint=True, head_dropout=0.2):
+        nn.Module.__init__(self)  # 부모 __init__(LoRA 주입) 우회
+        self.backbone = backbone
+        self.fusion_layers = sorted(fusion_layers)
+        self.max_layer = self.fusion_layers[-1]
+        self.use_grad_checkpoint = use_grad_checkpoint
+        self.method = method
+        embed_dim = backbone.embed_dim
+
+        for p in self.backbone.parameters():
+            p.requires_grad = False
+
+        self.adapted_param_names = select_peft_params(self.backbone, method)
+        sel = set(self.adapted_param_names)
+        self.backbone_adapted_params = [p for n, p in self.backbone.named_parameters() if n in sel]
+        for p in self.backbone_adapted_params:
+            p.requires_grad = True
+
+        # head 구조는 LoRA-pure 와 동일: fusion 레이어별 학습 LN + linear head
+        self.layer_norms = nn.ModuleList([nn.LayerNorm(embed_dim, eps=1e-6) for _ in self.fusion_layers])
+        self.dropout = nn.Dropout(head_dropout)
+        self.head = nn.Linear(embed_dim * len(self.fusion_layers), num_classes)
+
+        self.backbone.eval()
+
+    def trainable_parameter_groups(self, head_lr=1e-3, lora_lr=1e-4, weight_decay=1e-4):
+        # lora_lr 인자명은 부모 train 루프 호환용 — 여기선 "백본 어댑트 파라미터 lr" 의미
+        head_params = list(self.layer_norms.parameters()) + list(self.head.parameters())
+        return [
+            {"params": head_params, "lr": head_lr, "weight_decay": weight_decay},
+            {"params": self.backbone_adapted_params, "lr": lora_lr, "weight_decay": weight_decay},
+        ]
+
+
+def run_peft_experiment(dataset_key, method, *, batch_size=8, accum_steps=4, epochs=40,
+                        patience=10, head_lr=1e-3, adapt_lr=1e-4, use_grad_checkpoint=True,
+                        seed=0, save=True, verbose=True):
+    """한 (데이터셋 × BitFit|LN-tuning) 실험을 end-to-end 수행.
+
+    LoRA 실험과 **동일한 저장 규약**을 따라 비교 노트북/collect 스크립트가 그대로 읽는다:
+      OUTPUT_ROOT/{ds}_{suffix}/{ds}_{method}_test_predictions.csv  (true/pred/prob_*)
+    """
+    assert dataset_key in DATASETS, dataset_key
+    assert method in PEFT_METHODS, method
+    cfg = DATASETS[dataset_key]
+    minfo = PEFT_METHODS[method]
+    set_seed(seed)
+    device = get_device()
+    K = cfg["num_classes"]
+
+    fusion_layers = [23]  # pure(마지막 CLS) — LoRA-pure 와 apples-to-apples
+
+    backbone, _ = load_backbone()
+    model = PanDermSelectiveFT(
+        backbone, fusion_layers, K, method, use_grad_checkpoint=use_grad_checkpoint,
+    ).to(device)
+
+    df_all, loaders = build_loaders(cfg, batch_size=batch_size)
+    class_weights = compute_class_weights(df_all, cfg, device)
+
+    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    total = sum(p.numel() for p in model.parameters())
+    pct = 100 * trainable / total
+    if verbose:
+        print(f"[{dataset_key} · {method}] adapted_tensors={len(model.adapted_param_names)} "
+              f"trainable={trainable:,} ({pct:.3f}%)")
+
+    best_state, best_val_bacc, history = train_lora(
+        model, loaders, class_weights, device, epochs=epochs, accum_steps=accum_steps,
+        head_lr=head_lr, lora_lr=adapt_lr, patience=patience, verbose=verbose)
+
+    model.load_trainable_state_dict(best_state)
+    y_true, y_pred, probs = predict(model, loaders[2], device)
+    metrics = compute_metrics(y_true, y_pred, probs, K)
+    ci = bootstrap_ci(y_true, y_pred, probs, K, seed=seed)
+    baseline = load_baseline_row(cfg)
+
+    result = {
+        "dataset": dataset_key, "method": method, "label": minfo["label"],
+        "fusion_layers": fusion_layers, "best_val_bacc": best_val_bacc,
+        "trainable_params": trainable, "total_params": total, "trainable_pct": pct,
+        "metrics": metrics, "ci": ci, "baseline": baseline,
+    }
+
+    if save:
+        result_dir = OUTPUT_ROOT / f"{dataset_key}_{minfo['suffix']}"
+        os.makedirs(result_dir, exist_ok=True)
+        pd.DataFrame(history).to_csv(result_dir / "training_history.csv", index=False)
+        torch.save(best_state, result_dir / "best_trainable_state_dict.pt")
+        comp = pd.DataFrame([
+            {"method": "baseline (frozen CLS + linear probe)", **baseline},
+            {"method": minfo["label"], "bacc": metrics["bacc"], "auroc": metrics["auroc"],
+             "aupr": metrics["aupr"], "acc": metrics["acc"], "weighted_f1": metrics["weighted_f1"]},
+        ]).set_index("method").round(4)
+        comp.to_csv(result_dir / "comparison_vs_baseline.csv")
+        pred_df = pd.DataFrame({"true_label": y_true, "predicted_label": y_pred})
+        for c in range(K):
+            pred_df[f"probability_class_{c}"] = probs[:, c]
+        pred_df.to_csv(result_dir / f"{dataset_key}_{method}_test_predictions.csv", index=False)
+        # collect 스크립트가 trainable% 를 읽도록 메타 저장
+        import json as _json
+        (result_dir / "meta.json").write_text(_json.dumps({
+            "dataset": dataset_key, "method": method, "label": minfo["label"],
+            "trainable_params": int(trainable), "total_params": int(total),
+            "trainable_pct": round(pct, 4), "best_val_bacc": round(float(best_val_bacc), 4),
+            "seed": seed, "epochs": epochs,
+        }, ensure_ascii=False, indent=2))
+        result["result_dir"] = str(result_dir)
+        if verbose:
+            print(f"저장: {result_dir}")
+
+    return result
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # self-test: baseline 재현(±0.02) — frozen 마지막 CLS + linear probe
 # ─────────────────────────────────────────────────────────────────────────────
 def reproduce_baseline(dataset_key, seed=0, verbose=True):
