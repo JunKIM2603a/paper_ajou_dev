@@ -10,7 +10,7 @@
 ## 0. 한 줄 요약 (내 판단)
 
 - 손실은 **태스크별로 다르게 간다**: aptos(순서형 0~4)는 **CORAL/CORN + QWK**, Oral(명목형 7클래스)은 **LDAM-DRW / logit adjustment**. **focal은 baseline으로만** 쓴다 — 의료 다중분류에서 이득이 불안정하다는 근거가 반복적으로 나온다.
-- 소표본에서 손실 교체 이득은 작고 들쭉날쭉하다 → **CI + 다중 시드 없이는 "개선"이라고 쓰지 않는다.**
+- 소표본에서 손실 교체 이득은 작고 들쑥날쑥하다 → **CI + 다중 시드 없이는 "개선"이라고 쓰지 않는다.**
 - 내 novelty는 PEFTDiff와 **3축에서 다르다**(레이어까지 선택 / LogME·LEEP 사용 / 의료 FM 저자원 OOD). TE 자체의 저자원 신뢰성은 아직 덜 검증된 영역이라, 이게 하위 기여가 된다.
 
 ---
@@ -19,7 +19,7 @@
 
 ### 1-1. Focal loss — baseline로만 쓴다
 - **Lin, Goyal, Girshick, He, Dollár, "Focal Loss for Dense Object Detection," ICCV 2017** (arXiv:1708.02002). CE에 (1−p_t)^γ modulating factor를 붙여 쉬운 샘플 기여를 낮추고 어려운 샘플에 집중. 원래 **객체탐지의 전경-배경 불균형**용이지 다중분류용이 아니다 — 이 점은 논문에 명시할 것.
-- **Cui et al., "Class-Balanced Loss Based on Effective Number of Samples," CVPR 2019.** 유효 샘플 수 E_n=(1−β^n)/(1−β)로 클래스 재가중(**class-balanced focal**). "의료진단 95% 건강 / 5% 질병"을 직접 예시로 듦. **이득이 극심한 불균형에서만 크고 완만하면 급감** → Oral 극소수 클래스(OLP)엔 유효, 덜 치우친 클래스엔 미미할 것으로 예상.
+- **Cui et al., "Class-Balanced Loss Based on Effective Number of Samples," CVPR 2019.** 유효 샘플 수 E_n=(1−β^n)/(1−β)로 클래스 재가중(**class-balanced focal**). 논문 본문·Fig.1은 **iNaturalist 롱테일**을 예시로 삼는다. **이득이 극심한 불균형에서만 크고 완만하면 급감** → Oral 극소수 클래스(OLP)엔 유효, 덜 치우친 클래스엔 미미할 것으로 예상. ⚠️ 흔히 인용되는 "의료 95%/5%" 예시는 **논문에 없다**(발표 슬라이드 전용) → **인용하지 않는다**.
 - ⚠️ **한계 근거(정직하게 넣을 것):** *LMFLoss* (arXiv:2212.12741)에서 focal이 ISIC-2019에서 **일반 CE보다 F1이 낮게 나온** 경우 보고. 큰 백본(EfficientNetV2/ResNet50)에서 CE·focal 모두 저조. PLOS ONE(journal.pone.0261307)도 "단일 손실이 지배적이지 않고 CE가 강한 baseline"이라는 결론.
 - **내 결론:** focal은 γ/α 튜닝·오라벨에 민감. baseline으로 CI와 함께 보고, 헤드라인 손실로 쓰지 않는다.
 
@@ -28,7 +28,7 @@
 - **CORN — Shi, Cao, Raschka, "…Rank-Consistent Ordinal Regression Based on Conditional Probabilities"** (arXiv:2111.08851). CORAL의 가중치 공유 제약을 조건부확률(chain rule)로 제거 → **CORAL 대비 성능 상당 개선**.
 - **DR 특화 근거:**
   - CORAL cumulative-link 헤드로 **aptos2019 검증셋 QWK 0.88**(외부 Messidor-2 0.68) 보고 — arXiv:2604.17341.
-  - 불확실성 인지 순서형 DR 연구: 순서형 모델이 "비순서형 baseline 대비 recall과 kappa를 일관되게 개선" — arXiv:2602.10315.
+  - 불확실성 인지 순서형 DR 연구: 순서형 모델이 "recall과 kappa를 일관되게 개선" — arXiv:2602.10315(**2026 preprint**, 본문 §V 확인. ⚠️ 단 Table II 비교군은 순서형 변형이라 "vs 비순서형"은 서술로만 제시).
   - QWK가 DR 표준인 이유: 예측-정답 등급 거리를 **제곱으로 벌함**. accuracy/F1/AUC는 순서성과 오차 크기를 무시. (DR|GRADUATE arXiv:1910.11777; QWK transfer/ensemble PMC11323616.)
 - ⚠️ QWK 0.88~0.9대 최고 수치는 **preprint** 다수. 인용 전 검증.
 - **내 결론:** aptos는 CORAL부터, 여유 되면 CORN. 주 지표 QWK.
